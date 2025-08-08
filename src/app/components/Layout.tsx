@@ -20,9 +20,9 @@ export default function Layout({ children }: LayoutProps) {
 				<div className='container mx-auto px-4 py-6'>
 					<div className='flex justify-between items-center'>
 						<div>
-							<h1 className='text-3xl font-bold text-foreground'>CSV Finance Tracker</h1>
+							<h1 className='text-3xl font-bold text-foreground'>Max Personal Finance</h1>
 							<p className='text-muted-foreground mt-2'>
-								Import and visualize your monthly bank CSV files
+								Import and visualize your personal finance data
 							</p>
 						</div>
 						<nav className='flex space-x-4'>

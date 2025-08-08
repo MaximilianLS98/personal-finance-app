@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-	title: 'CSV Finance Tracker',
-	description: 'Import and visualize your monthly bank CSV files',
+	title: 'Max Personal Finance',
+	description: 'Import and visualize your personal finance data',
 };
 
 export default function RootLayout({

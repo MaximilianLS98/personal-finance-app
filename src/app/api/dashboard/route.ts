@@ -5,7 +5,18 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createTransactionRepository } from '@/lib/database';
-import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, addDays, addWeeks, addMonths, isAfter } from 'date-fns';
+import {
+	format,
+	startOfDay,
+	endOfDay,
+	startOfWeek,
+	endOfWeek,
+	startOfMonth,
+	addDays,
+	addWeeks,
+	addMonths,
+	isAfter,
+} from 'date-fns';
 import type { ErrorResponse } from '@/lib/types';
 
 interface DashboardData {
@@ -30,13 +41,16 @@ interface DashboardData {
 		averagePerInterval: number;
 		intervalCount: number;
 	}>;
+	oldestDataDate?: string;
 }
 
 /**
  * GET /api/dashboard - Get dashboard chart data
  * Query params: from (ISO date), to (ISO date), interval (day|week|month)
  */
-export async function GET(request: NextRequest): Promise<NextResponse<DashboardData | ErrorResponse>> {
+export async function GET(
+	request: NextRequest,
+): Promise<NextResponse<DashboardData | ErrorResponse>> {
 	try {
 		const url = new URL(request.url);
 		const fromParam = url.searchParams.get('from');
@@ -60,18 +74,28 @@ export async function GET(request: NextRequest): Promise<NextResponse<DashboardD
 
 		// Get all transactions within date range
 		const transactions = await transactionRepository.findAll();
-		const filteredTransactions = transactions.filter(transaction => {
+
+		// Find the oldest transaction date for navigation limits
+		const oldestTransactionDate =
+			transactions.length > 0
+				? transactions.reduce((oldest, transaction) => {
+						const transactionDate = new Date(transaction.date);
+						return transactionDate < oldest ? transactionDate : oldest;
+					}, new Date(transactions[0].date))
+				: null;
+
+		const filteredTransactions = transactions.filter((transaction) => {
 			const transactionDate = new Date(transaction.date);
-			
+
 			if (fromDate && transactionDate < fromDate) return false;
 			if (toDate && transactionDate > toDate) return false;
-			
+
 			return true;
 		});
 
 		// Get categories for mapping
 		const categories = await transactionRepository.getCategories();
-		const categoryMap = new Map(categories.map(cat => [cat.id, cat]));
+		const categoryMap = new Map(categories.map((cat) => [cat.id, cat]));
 
 		// Helper function to get interval key and format
 		const getIntervalKey = (date: Date, interval: 'day' | 'week' | 'month'): string => {
@@ -103,17 +127,17 @@ export async function GET(request: NextRequest): Promise<NextResponse<DashboardD
 
 		// Calculate expense/income over time (group by interval)
 		const intervalData = new Map<string, { income: number; expenses: number }>();
-		
-		filteredTransactions.forEach(transaction => {
+
+		filteredTransactions.forEach((transaction) => {
 			const dateKey = getIntervalKey(new Date(transaction.date), interval);
 			const existing = intervalData.get(dateKey) || { income: 0, expenses: 0 };
-			
+
 			if (transaction.type === 'income') {
 				existing.income += Math.abs(transaction.amount);
 			} else if (transaction.type === 'expense') {
 				existing.expenses += Math.abs(transaction.amount);
 			}
-			
+
 			intervalData.set(dateKey, existing);
 		});
 
@@ -132,7 +156,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<DashboardD
 			while (!isAfter(currentDate, endDate)) {
 				const dateKey = getIntervalKey(currentDate, interval);
 				const data = intervalData.get(dateKey) || { income: 0, expenses: 0 };
-				
+
 				expenseIncomeOverTime.push({
 					date: getDisplayDate(dateKey, interval),
 					income: data.income,
@@ -155,11 +179,12 @@ export async function GET(request: NextRequest): Promise<NextResponse<DashboardD
 			}
 		} else {
 			// Fallback for when no date range is specified - sort by actual date, not display string
-			const sortedEntries = Array.from(intervalData.entries())
-				.sort(([dateKeyA], [dateKeyB]) => {
+			const sortedEntries = Array.from(intervalData.entries()).sort(
+				([dateKeyA], [dateKeyB]) => {
 					// Sort by the actual date key (yyyy-mm-dd format) not the display date
 					return dateKeyA.localeCompare(dateKeyB);
-				});
+				},
+			);
 
 			sortedEntries.forEach(([dateKey, data]) => {
 				expenseIncomeOverTime.push({
@@ -173,10 +198,10 @@ export async function GET(request: NextRequest): Promise<NextResponse<DashboardD
 
 		// Calculate category breakdown (only expenses for now)
 		const categoryData = new Map<string, { amount: number; count: number }>();
-		
+
 		filteredTransactions
-			.filter(transaction => transaction.type === 'expense' && transaction.categoryId)
-			.forEach(transaction => {
+			.filter((transaction) => transaction.type === 'expense' && transaction.categoryId)
+			.forEach((transaction) => {
 				const categoryId = transaction.categoryId!;
 				const existing = categoryData.get(categoryId) || { amount: 0, count: 0 };
 				existing.amount += Math.abs(transaction.amount);
@@ -198,10 +223,10 @@ export async function GET(request: NextRequest): Promise<NextResponse<DashboardD
 			.sort((a, b) => b.amount - a.amount);
 
 		// Calculate top 3 category averages
-		const topCategoryAverages = categoryBreakdown.slice(0, 3).map(category => {
+		const topCategoryAverages = categoryBreakdown.slice(0, 3).map((category) => {
 			// Calculate the number of intervals in the date range
 			let intervalCount = 1;
-			
+
 			if (fromDate && toDate) {
 				const startDate = new Date(fromDate);
 				const endDate = new Date(toDate);
@@ -245,6 +270,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<DashboardD
 			expenseIncomeOverTime,
 			categoryBreakdown,
 			topCategoryAverages,
+			oldestDataDate: oldestTransactionDate?.toISOString(),
 		});
 	} catch (error) {
 		console.error('Failed to get dashboard data:', error);
@@ -254,7 +280,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<DashboardD
 				message: 'Failed to load dashboard data',
 				details: error instanceof Error ? error.message : 'Unknown error',
 			} as ErrorResponse,
-			{ status: 500 }
+			{ status: 500 },
 		);
 	}
 }
