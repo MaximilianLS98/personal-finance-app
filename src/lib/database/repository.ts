@@ -3,7 +3,7 @@
  */
 
 import type { Transaction, FinancialSummary, Category, CategoryRule } from '../types';
-import type { CreateManyResult, DuplicateInfo } from './types';
+import type { CreateManyResult, DuplicateInfo, PaginationOptions, PaginatedResult } from './types';
 import { DatabaseErrorType } from './types';
 import { DatabaseConnectionError, getConnectionManager } from './connection';
 
@@ -15,6 +15,7 @@ export interface TransactionRepository {
 	create(transaction: Omit<Transaction, 'id'>): Promise<Transaction>;
 	createMany(transactions: Omit<Transaction, 'id'>[]): Promise<CreateManyResult>;
 	findAll(): Promise<Transaction[]>;
+	findWithPagination(options: PaginationOptions): Promise<PaginatedResult<Transaction>>;
 	findById(id: string): Promise<Transaction | null>;
 	findByDateRange(startDate: Date, endDate: Date): Promise<Transaction[]>;
 	update(id: string, transaction: Partial<Omit<Transaction, 'id'>>): Promise<Transaction | null>;
@@ -309,6 +310,120 @@ export class SQLiteTransactionRepository implements TransactionRepository {
 			throw new DatabaseConnectionError(
 				DatabaseErrorType.TRANSACTION_FAILED,
 				`Failed to fetch transactions: ${
+					error instanceof Error ? error.message : 'Unknown error'
+				}`,
+				'SELECT FROM transactions',
+			);
+		}
+	}
+
+	/**
+	 * Find transactions with pagination, filtering, and sorting
+	 */
+	async findWithPagination(options: PaginationOptions): Promise<PaginatedResult<Transaction>> {
+		try {
+			const db = this.ensureConnection();
+			const {
+				page = 1,
+				limit = 25,
+				sortBy = 'date',
+				sortOrder = 'DESC',
+				dateRange,
+				transactionType = 'all',
+				searchTerm
+			} = options;
+
+			// Calculate offset
+			const offset = (page - 1) * limit;
+
+			// Build WHERE clause
+			const conditions: string[] = [];
+			const params: unknown[] = [];
+
+			// Date range filter
+			if (dateRange?.from) {
+				conditions.push('t.date >= ?');
+				params.push(dateRange.from.toISOString());
+			}
+			if (dateRange?.to) {
+				conditions.push('t.date <= ?');
+				params.push(dateRange.to.toISOString());
+			}
+
+			// Transaction type filter
+			if (transactionType !== 'all') {
+				conditions.push('t.type = ?');
+				params.push(transactionType);
+			}
+
+			// Search term filter
+			if (searchTerm && searchTerm.trim()) {
+				conditions.push('t.description LIKE ?');
+				params.push(`%${searchTerm.trim()}%`);
+			}
+
+			const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+			// Build ORDER BY clause
+			const validSortFields = ['date', 'description', 'amount', 'type'];
+			const sortField = validSortFields.includes(sortBy) ? sortBy : 'date';
+			const orderByClause = `ORDER BY t.${sortField} ${sortOrder}, t.created_at ${sortOrder}`;
+
+			// Get total count
+			const countStmt = db.prepare(`
+				SELECT COUNT(*) as total
+				FROM transactions t
+				${whereClause}
+			`);
+			const { total } = countStmt.get(...params) as { total: number };
+
+			// Get paginated results
+			const dataStmt = db.prepare(`
+				SELECT t.id, t.date, t.description, t.amount, t.type, t.category_id
+				FROM transactions t
+				${whereClause}
+				${orderByClause}
+				LIMIT ? OFFSET ?
+			`);
+			
+			const rows = dataStmt.all(...params, limit, offset) as Array<{
+				id: string;
+				date: string;
+				description: string;
+				amount: number;
+				type: 'income' | 'expense' | 'transfer';
+				category_id: string | null;
+			}>;
+
+			const transactions = rows.map((row) => ({
+				id: row.id,
+				date: new Date(row.date),
+				description: row.description,
+				amount: row.amount,
+				type: row.type,
+				categoryId: row.category_id || undefined,
+			}));
+
+			// Calculate pagination metadata
+			const totalPages = Math.ceil(total / limit);
+			const hasNextPage = page < totalPages;
+			const hasPreviousPage = page > 1;
+
+			return {
+				data: transactions,
+				pagination: {
+					currentPage: page,
+					limit,
+					total,
+					totalPages,
+					hasNextPage,
+					hasPreviousPage,
+				},
+			};
+		} catch (error) {
+			throw new DatabaseConnectionError(
+				DatabaseErrorType.TRANSACTION_FAILED,
+				`Failed to fetch paginated transactions: ${
 					error instanceof Error ? error.message : 'Unknown error'
 				}`,
 				'SELECT FROM transactions',

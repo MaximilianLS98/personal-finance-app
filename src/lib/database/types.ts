@@ -5,6 +5,52 @@
 import type { Transaction, FinancialSummary } from '../types';
 
 /**
+ * Pagination options for database queries
+ */
+export interface PaginationOptions {
+	/** Current page number (1-based) */
+	page: number;
+	/** Number of items per page */
+	limit: number;
+	/** Optional sorting field */
+	sortBy?: string;
+	/** Sort direction */
+	sortOrder?: 'ASC' | 'DESC';
+	/** Optional date range filter */
+	dateRange?: {
+		from?: Date;
+		to?: Date;
+	};
+	/** Optional transaction type filter */
+	transactionType?: 'all' | 'income' | 'expense' | 'transfer';
+	/** Optional search term */
+	searchTerm?: string;
+}
+
+/**
+ * Paginated result wrapper
+ */
+export interface PaginatedResult<T> {
+	/** Array of items for current page */
+	data: T[];
+	/** Pagination metadata */
+	pagination: {
+		/** Current page number */
+		currentPage: number;
+		/** Items per page */
+		limit: number;
+		/** Total number of items */
+		total: number;
+		/** Total number of pages */
+		totalPages: number;
+		/** Whether there is a next page */
+		hasNextPage: boolean;
+		/** Whether there is a previous page */
+		hasPreviousPage: boolean;
+	};
+}
+
+/**
  * Database configuration options
  */
 export interface DatabaseConfig {
