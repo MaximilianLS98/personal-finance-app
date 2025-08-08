@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useCallback, useMemo } from 'react';
 import Layout from '../components/Layout';
 import FileUpload from '../components/FileUpload';
 import FinancialSummary from '../components/FinancialSummary';
@@ -8,96 +8,31 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { Transaction, FinancialSummary as FinancialSummaryType } from '@/lib/types';
-
-interface AppState {
-	transactions: Transaction[];
-	summary: FinancialSummaryType | null;
-	isLoadingSummary: boolean;
-	uploadError: string | null;
-	summaryError: string | null;
-	hasUploadedData: boolean;
-	lastUploadFileName: string | null;
-}
+import { Transaction } from '@/lib/types';
+import { useSummaryQuery, useUploadMutation } from '@/lib/queries';
 
 export default function Home() {
-	const [state, setState] = useState<AppState>({
-		transactions: [],
-		summary: null,
-		isLoadingSummary: false,
-		uploadError: null,
-		summaryError: null,
-		hasUploadedData: false,
-		lastUploadFileName: null,
-	});
+	const { data: summary, isLoading, error, refetch, isError } = useSummaryQuery();
+	const upload = useUploadMutation();
 
-	// Fetch financial summary from API
-	const fetchSummary = useCallback(async () => {
-		setState((prev) => ({ ...prev, isLoadingSummary: true, summaryError: null }));
+	const uploadStatus = useMemo(() => {
+		if (upload.isPending) return { text: 'Uploading...', type: 'info' as const };
+		if (upload.isError)
+			return {
+				text: (upload.error as Error)?.message || 'Upload failed',
+				type: 'error' as const,
+			};
+		if (upload.isSuccess) return { text: 'Upload successful', type: 'success' as const };
+		return null;
+	}, [upload.isPending, upload.isError, upload.isSuccess, upload.error]);
 
-		try {
-			const response = await fetch('/api/summary');
-			const result = await response.json();
-
-			if (!response.ok) {
-				throw new Error(result.message || 'Failed to fetch summary');
-			}
-
-			setState((prev) => ({
-				...prev,
-				summary: result.data,
-				isLoadingSummary: false,
-			}));
-		} catch (error) {
-			const errorMessage = error instanceof Error ? error.message : 'Failed to load summary';
-			setState((prev) => ({
-				...prev,
-				summaryError: errorMessage,
-				isLoadingSummary: false,
-			}));
-		}
-	}, []);
-
-	// Handle successful file upload
 	const handleUploadSuccess = useCallback(
-		async (data: { transactions: Transaction[]; summary: FinancialSummaryType }) => {
-			setState((prev) => ({
-				...prev,
-				transactions: data.transactions,
-				uploadError: null,
-				hasUploadedData: true,
-				lastUploadFileName: null, // Will be set by FileUpload component
-			}));
-
-			// Fetch updated summary after successful upload
-			await fetchSummary();
+		async (data: { transactions: Transaction[]; summary: any }) => {
+			// Server will have updated data; ensure summary is up to date
+			await refetch();
 		},
-		[fetchSummary],
+		[refetch],
 	);
-
-	// Handle upload error
-	const handleUploadError = useCallback((error: string) => {
-		setState((prev) => ({
-			...prev,
-			uploadError: error,
-			hasUploadedData: false,
-		}));
-	}, []);
-
-	// Clear upload error
-	const clearUploadError = useCallback(() => {
-		setState((prev) => ({ ...prev, uploadError: null }));
-	}, []);
-
-	// Clear summary error and retry
-	const retrySummary = useCallback(() => {
-		fetchSummary();
-	}, [fetchSummary]);
-
-	// Load summary on component mount if there's existing data
-	useEffect(() => {
-		fetchSummary();
-	}, [fetchSummary]);
 
 	return (
 		<Layout>
@@ -110,30 +45,18 @@ export default function Home() {
 					</p>
 				</div>
 
-				{/* Upload Error Alert */}
-				{state.uploadError && (
+				{/* Upload Alert */}
+				{uploadStatus?.type === 'error' && (
 					<Alert variant='destructive'>
 						<AlertCircle className='h-4 w-4' />
-						<AlertDescription className='flex items-center justify-between'>
-							<span>{state.uploadError}</span>
-							<Button
-								variant='outline'
-								size='sm'
-								onClick={clearUploadError}
-								className='ml-4'>
-								Dismiss
-							</Button>
-						</AlertDescription>
+						<AlertDescription>{uploadStatus.text}</AlertDescription>
 					</Alert>
 				)}
-
-				{/* Success Alert */}
-				{state.hasUploadedData && !state.uploadError && (
+				{uploadStatus?.type === 'success' && (
 					<Alert className='border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950'>
 						<CheckCircle2 className='h-4 w-4 text-green-600' />
 						<AlertDescription className='text-green-800 dark:text-green-200'>
-							CSV file uploaded successfully! {state.transactions.length} transactions
-							processed.
+							CSV file uploaded successfully!
 						</AlertDescription>
 					</Alert>
 				)}
@@ -149,7 +72,7 @@ export default function Home() {
 						<CardContent>
 							<FileUpload
 								onUploadSuccess={handleUploadSuccess}
-								onUploadError={handleUploadError}
+								onUploadError={() => void 0}
 							/>
 						</CardContent>
 					</Card>
@@ -162,42 +85,15 @@ export default function Home() {
 						</CardHeader>
 						<CardContent>
 							<div className='space-y-2'>
+								{/* This could be extended with more client-side stats if needed */}
 								<div className='flex justify-between'>
 									<span className='text-sm text-muted-foreground'>
-										Transactions:
+										Summary Available:
 									</span>
 									<span className='text-sm font-medium'>
-										{state.transactions.length}
+										{summary ? 'Yes' : isLoading ? 'Loading…' : 'No'}
 									</span>
 								</div>
-								{state.summary && (
-									<>
-										<div className='flex justify-between'>
-											<span className='text-sm text-muted-foreground'>
-												Income Transactions:
-											</span>
-											<span className='text-sm font-medium text-green-600'>
-												{
-													state.transactions.filter(
-														(t) => t.type === 'income',
-													).length
-												}
-											</span>
-										</div>
-										<div className='flex justify-between'>
-											<span className='text-sm text-muted-foreground'>
-												Expense Transactions:
-											</span>
-											<span className='text-sm font-medium text-red-600'>
-												{
-													state.transactions.filter(
-														(t) => t.type === 'expense',
-													).length
-												}
-											</span>
-										</div>
-									</>
-								)}
 							</div>
 						</CardContent>
 					</Card>
@@ -207,14 +103,14 @@ export default function Home() {
 				<div className='space-y-4'>
 					<div className='flex items-center justify-between'>
 						<h3 className='text-xl font-semibold'>Financial Summary</h3>
-						{state.summaryError && (
+						{isError && (
 							<Button
 								variant='outline'
 								size='sm'
-								onClick={retrySummary}
-								disabled={state.isLoadingSummary}>
+								onClick={() => refetch()}
+								disabled={isLoading}>
 								<RefreshCw
-									className={`h-4 w-4 mr-2 ${state.isLoadingSummary ? 'animate-spin' : ''}`}
+									className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`}
 								/>
 								Retry
 							</Button>
@@ -222,21 +118,15 @@ export default function Home() {
 					</div>
 
 					{/* Summary Error Alert */}
-					{state.summaryError && (
+					{isError && (
 						<Alert variant='destructive'>
 							<AlertCircle className='h-4 w-4' />
-							<AlertDescription>
-								Failed to load financial summary: {state.summaryError}
-							</AlertDescription>
+							<AlertDescription>Failed to load financial summary</AlertDescription>
 						</Alert>
 					)}
 
 					{/* Financial Summary Component */}
-					<FinancialSummary
-						summary={state.summary || undefined}
-						isLoading={state.isLoadingSummary}
-						error={state.summaryError || undefined}
-					/>
+					<FinancialSummary summary={summary || undefined} isLoading={isLoading} />
 				</div>
 			</div>
 		</Layout>

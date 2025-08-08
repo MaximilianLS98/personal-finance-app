@@ -52,8 +52,8 @@ export function calculateFinancialSummary(transactions: Transaction[]): Financia
  */
 export function formatCurrency(
 	amount: number,
-	currency: string = 'USD',
-	locale: string = 'en-US',
+	currency: string = 'NOK',
+	locale: string = 'nb-NO',
 ): string {
 	return new Intl.NumberFormat(locale, {
 		style: 'currency',
@@ -69,7 +69,7 @@ export function formatCurrency(
  * @param locale Locale for formatting (default: 'nb-NO' for Norwegian)
  * @returns Formatted number string with thousand separators
  */
-export function formatAmount(amount: number, locale: string = 'en-US'): string {
+export function formatAmount(amount: number, locale: string = 'nb-NO'): string {
 	return new Intl.NumberFormat(locale, {
 		minimumFractionDigits: 2,
 		maximumFractionDigits: 2,

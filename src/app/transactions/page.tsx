@@ -35,7 +35,6 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import Layout from '@/app/components/Layout';
 import FileUpload from '@/app/components/FileUpload';
-import CategorySelector from '@/components/CategorySelector';
 import SimpleCategorySelector from '@/components/SimpleCategorySelector';
 import { Transaction, Category, CategorySuggestion } from '@/lib/types';
 import { getTransactionTypeStyle, getTransactionTypeLabel } from '@/lib/transaction-utils';
@@ -73,6 +72,19 @@ import {
 	isBefore,
 	isWithinInterval,
 } from 'date-fns';
+import {
+	useCategoriesQuery,
+	useDeleteTransactionMutation,
+	useTransactionsQuery,
+	useUpdateTransactionMutation,
+	prefetchTransactions,
+	useSuggestCategoryMutation,
+	useSuggestBulkMutation,
+	useLearnFromActionMutation,
+} from '@/lib/queries';
+import { useTransactionsFilters } from '@/lib/stores/filters';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCurrencySettings } from '@/app/providers';
 
 interface EditTransaction {
 	id: string;
@@ -84,8 +96,8 @@ interface EditTransaction {
 }
 
 interface DateRange {
-	from: Date | undefined;
-	to: Date | undefined;
+	from?: Date;
+	to?: Date;
 }
 
 interface FilterState {
@@ -167,456 +179,92 @@ const PREFETCH_CONFIG = {
 };
 
 export default function TransactionsPage() {
-	const [transactions, setTransactions] = useState<Transaction[]>([]);
-	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState<string | null>(null);
-	const [totalCount, setTotalCount] = useState(0);
-	const [prefetchedPages, setPrefetchedPages] = useState<Map<number, Transaction[]>>(new Map());
 	const [editingTransaction, setEditingTransaction] = useState<EditTransaction | null>(null);
 	const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 	const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
 	const [deleteError, setDeleteError] = useState<string | null>(null);
 	const [editError, setEditError] = useState<string | null>(null);
 
-	// Category state
-	const [categories, setCategories] = useState<Category[]>([]);
+	// AI suggestion state
 	const [suggestions, setSuggestions] = useState<Record<string, CategorySuggestion | null>>({});
 	const [loadingSuggestions, setLoadingSuggestions] = useState<Set<string>>(new Set());
 	const [isBulkSuggesting, setIsBulkSuggesting] = useState(false);
 	const [isAcceptingAllSuggestions, setIsAcceptingAllSuggestions] = useState(false);
 
-	// Filter state
-	const [filters, setFilters] = useState<FilterState>({
-		dateRange: { from: undefined, to: undefined },
-		transactionType: 'all',
-		searchTerm: '',
-		preset: 'all',
-	});
-	const [isFilterOpen, setIsFilterOpen] = useState(false);
+	const queryClient = useQueryClient();
+	const { data: categories = [] } = useCategoriesQuery();
+	const {
+		dateRange,
+		transactionType,
+		searchTerm,
+		preset,
+		sortField,
+		sortDirection,
+		page,
+		pageSize,
+		setState,
+	} = useTransactionsFilters();
 
-	// Pagination state
-	const [pagination, setPagination] = useState<PaginationState>({
-		currentPage: 1,
-		pageSize: 50,
-	});
+	const currentParams = {
+		page,
+		limit: pageSize,
+		sortBy: sortField ?? undefined,
+		sortOrder: (sortDirection || 'desc').toUpperCase() as 'ASC' | 'DESC',
+		type: transactionType,
+		search: searchTerm || undefined,
+		from: dateRange.from,
+		to: dateRange.to,
+	};
 
-	// Sort state
-	const [sort, setSort] = useState<SortState>({
-		field: 'date',
-		direction: 'desc', // Default to newest first
-	});
+	const { data: txData, isLoading, isError, error } = useTransactionsQuery(currentParams);
 
-	// Fetch transactions on component mount
+	type TxResponse = { success: boolean; data: Transaction[]; pagination: { total: number } };
+	const transactions = (txData as TxResponse | undefined)?.data ?? [];
+	const totalCount = (txData as TxResponse | undefined)?.pagination?.total ?? 0;
+	const totalPages = Math.ceil(totalCount / pageSize) || 1;
+
+	// Prefetch adjacent pages when page or filters/sort change
 	useEffect(() => {
-		fetchTransactions(1, false); // Start with page 1, don't use cache on initial load
-	}, []);
-
-	// Reset pagination and refetch when filters or sort change
-	useEffect(() => {
-		setPagination((prev) => ({ ...prev, currentPage: 1 }));
-		setPrefetchedPages(new Map()); // Clear cache when filters/sort change
-		fetchTransactions(1, false); // Refetch from page 1 without cache
-	}, [filters, sort]);
-
-	// Pagination calculations (server-side)
-	const totalPages = Math.ceil(totalCount / pagination.pageSize);
-	const paginatedTransactions = transactions; // Server already returns paginated data
-
-	// Active filters count
-	const activeFiltersCount = useMemo(() => {
-		let count = 0;
-		if (filters.preset !== 'all') count++;
-		if (filters.transactionType !== 'all') count++;
-		if (filters.searchTerm) count++;
-		return count;
-	}, [filters]);
-
-	// Sort handler
-	const handleSort = (field: SortField) => {
-		setSort((prevSort) => {
-			if (prevSort.field === field) {
-				// Toggle direction if same field
-				return {
-					field,
-					direction: prevSort.direction === 'asc' ? 'desc' : 'asc',
-				};
-			} else {
-				// New field, default to descending for amount, ascending for others
-				return {
-					field,
-					direction: field === 'amount' ? 'desc' : 'asc',
-				};
-			}
-		});
-		// Note: Cache clearing and refetch will be handled by the useEffect above
-	};
-
-	const fetchTransactions = useCallback(
-		async (page: number = 1, useCache: boolean = true, customPageSize?: number) => {
-			try {
-				setLoading(true);
-				setError(null);
-
-				// Check if we have cached data for this page
-				if (useCache && prefetchedPages.has(page)) {
-					const cachedData = prefetchedPages.get(page)!;
-					setTransactions(cachedData);
-					setLoading(false);
-
-					// Still prefetch adjacent pages even when using cache
-					const mockPaginationInfo = {
-						hasNextPage: page < totalPages,
-						hasPreviousPage: page > 1,
-						totalPages: totalPages,
-					};
-					prefetchAdjacentPages(page, mockPaginationInfo, customPageSize);
-					return;
-				}
-
-				// Build query parameters
-				const pageSize = customPageSize || pagination.pageSize;
-				const params = new URLSearchParams({
-					page: page.toString(),
-					limit: pageSize.toString(),
-				});
-
-				// Add sorting
-				if (sort.field) {
-					params.append('sortBy', sort.field);
-					params.append('sortOrder', sort.direction.toUpperCase());
-				}
-
-				// Add filters
-				if (filters.dateRange.from) {
-					params.append('from', filters.dateRange.from.toISOString());
-				}
-				if (filters.dateRange.to) {
-					params.append('to', filters.dateRange.to.toISOString());
-				}
-				if (filters.transactionType !== 'all') {
-					params.append('type', filters.transactionType);
-				}
-				if (filters.searchTerm.trim()) {
-					params.append('search', filters.searchTerm.trim());
-				}
-
-				// Fetch both transactions and categories in parallel
-				const [transactionsResponse, categoriesResponse] = await Promise.all([
-					fetch(`/api/transactions?${params.toString()}`),
-					fetch('/api/categories'),
-				]);
-
-				const [transactionsData, categoriesData] = await Promise.all([
-					transactionsResponse.json(),
-					categoriesResponse.json(),
-				]);
-
-				if (!transactionsResponse.ok) {
-					throw new Error(transactionsData.message || 'Failed to fetch transactions');
-				}
-
-				if (!categoriesResponse.ok) {
-					throw new Error('Failed to fetch categories');
-				}
-
-				// Update state with paginated data
-				setTransactions(transactionsData.data || []);
-				setTotalCount(transactionsData.pagination?.total || 0);
-				setCategories(categoriesData || []);
-
-				// Cache the current page
-				setPrefetchedPages((prev) => {
-					const updated = new Map(prev);
-					updated.set(page, transactionsData.data || []);
-					return updated;
-				});
-
-				// Prefetch adjacent pages for smooth navigation
-				prefetchAdjacentPages(page, transactionsData.pagination, customPageSize);
-			} catch (err) {
-				setError(err instanceof Error ? err.message : 'Unknown error');
-			} finally {
-				setLoading(false);
-			}
-		},
-		[
-			pagination.pageSize,
-			sort.field,
-			sort.direction,
-			filters.dateRange.from,
-			filters.dateRange.to,
-			filters.transactionType,
-			filters.searchTerm,
-			prefetchedPages,
-		],
-	);
-
-	const prefetchPage = async (page: number, customPageSize?: number) => {
-		try {
-			// Don't prefetch if we already have the data
-			if (prefetchedPages.has(page)) return;
-
-			const pageSize = customPageSize || pagination.pageSize;
-			const params = new URLSearchParams({
-				page: page.toString(),
-				limit: pageSize.toString(),
-			});
-
-			// Add current filters to prefetch
-			if (sort.field) {
-				params.append('sortBy', sort.field);
-				params.append('sortOrder', sort.direction.toUpperCase());
-			}
-			if (filters.dateRange.from) {
-				params.append('from', filters.dateRange.from.toISOString());
-			}
-			if (filters.dateRange.to) {
-				params.append('to', filters.dateRange.to.toISOString());
-			}
-			if (filters.transactionType !== 'all') {
-				params.append('type', filters.transactionType);
-			}
-			if (filters.searchTerm.trim()) {
-				params.append('search', filters.searchTerm.trim());
-			}
-
-			const response = await fetch(`/api/transactions?${params.toString()}`);
-			const data = await response.json();
-
-			if (response.ok && data.data) {
-				setPrefetchedPages((prev) => {
-					const updated = new Map(prev);
-					updated.set(page, data.data);
-					return updated;
-				});
-			}
-		} catch (error) {
-			// Silent fail for prefetching
-			console.warn('Failed to prefetch page:', page, error);
+		const nextPage = page + 1;
+		const prevPage = page - 1;
+		if (nextPage <= totalPages) {
+			prefetchTransactions(queryClient, { ...currentParams, page: nextPage });
 		}
-	};
-
-	const prefetchAdjacentPages = (
-		currentPage: number,
-		paginationInfo?: { hasNextPage: boolean; hasPreviousPage: boolean; totalPages: number },
-		customPageSize?: number,
-	) => {
-		const { maxCacheSize, adjacentPages } = PREFETCH_CONFIG;
-
-		// Calculate which pages to prefetch based on configuration
-		const pagesToPrefetch: number[] = [];
-
-		// Prefetch previous pages
-		for (let i = 1; i <= adjacentPages; i++) {
-			const prevPage = currentPage - i;
-			if (prevPage >= 1) {
-				pagesToPrefetch.push(prevPage);
-			}
+		if (prevPage >= 1) {
+			prefetchTransactions(queryClient, { ...currentParams, page: prevPage });
 		}
+	}, [
+		page,
+		pageSize,
+		sortField,
+		sortDirection,
+		dateRange.from,
+		dateRange.to,
+		transactionType,
+		searchTerm,
+		totalPages,
+	]);
 
-		// Prefetch next pages
-		for (let i = 1; i <= adjacentPages; i++) {
-			const nextPage = currentPage + i;
-			if (nextPage <= (paginationInfo?.totalPages || currentPage + 1)) {
-				pagesToPrefetch.push(nextPage);
-			}
-		}
+	const updateTx = useUpdateTransactionMutation();
+	const deleteTx = useDeleteTransactionMutation();
 
-		// Prefetch adjacent pages
-		pagesToPrefetch.forEach((page) => {
-			if (!prefetchedPages.has(page)) {
-				console.log(
-					`🚀 Prefetching page ${page} (adjacent to current page ${currentPage})`,
-				);
-				prefetchPage(page, customPageSize);
-			}
-		});
-
-		// Clean up old cached pages to prevent memory bloat
-		if (prefetchedPages.size > maxCacheSize) {
-			console.log(
-				`🧹 Cache cleanup: ${prefetchedPages.size} pages in cache, max allowed: ${maxCacheSize}`,
-			);
-			const pagesToKeep = new Set([currentPage]);
-
-			// Add adjacent pages to keep
-			for (let i = 1; i <= adjacentPages; i++) {
-				const prevPage = currentPage - i;
-				const nextPage = currentPage + i;
-
-				if (prevPage >= 1) pagesToKeep.add(prevPage);
-				if (nextPage <= (paginationInfo?.totalPages || currentPage + 1)) {
-					pagesToKeep.add(nextPage);
-				}
-			}
-
-			setPrefetchedPages((prev) => {
-				const updated = new Map();
-				// Keep current and adjacent pages
-				for (const [page, data] of prev.entries()) {
-					if (pagesToKeep.has(page)) {
-						updated.set(page, data);
-					}
-				}
-				return updated;
-			});
-		}
-	};
-
-	const handleEdit = (transaction: Transaction) => {
-		setEditingTransaction({
-			id: transaction.id,
-			date: new Date(transaction.date).toISOString().split('T')[0], // Format for input[type="date"]
-			description: transaction.description,
-			amount: Math.abs(transaction.amount).toString(),
-			type: transaction.type,
-			categoryId: transaction.categoryId,
-		});
-		setEditError(null);
-		setIsEditDialogOpen(true);
-	};
-
-	const handleSaveEdit = async () => {
-		if (!editingTransaction) return;
-
-		try {
-			setEditError(null);
-
-			const updates = {
-				date: new Date(editingTransaction.date),
-				description: editingTransaction.description,
-				amount:
-					editingTransaction.type === 'expense'
-						? -Math.abs(Number(editingTransaction.amount))
-						: editingTransaction.type === 'transfer'
-						? Number(editingTransaction.amount) // Keep original sign for transfers
-						: Math.abs(Number(editingTransaction.amount)), // Positive for income
-				type: editingTransaction.type,
-				categoryId: editingTransaction.categoryId,
-			};
-
-			const response = await fetch(`/api/transactions/${editingTransaction.id}`, {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(updates),
-			});
-
-			const data = await response.json();
-
-			if (!response.ok) {
-				throw new Error(data.message || 'Failed to update transaction');
-			}
-
-			// Refresh transactions list
-			await fetchTransactions();
-			setIsEditDialogOpen(false);
-			setEditingTransaction(null);
-		} catch (err) {
-			setEditError(err instanceof Error ? err.message : 'Unknown error');
-		}
-	};
-
-	const handleDelete = async (id: string) => {
-		if (!confirm('Are you sure you want to delete this transaction?')) {
-			return;
-		}
-
-		try {
-			setDeleteError(null);
-
-			const response = await fetch(`/api/transactions/${id}`, {
-				method: 'DELETE',
-			});
-
-			const data = await response.json();
-
-			if (!response.ok) {
-				throw new Error(data.message || 'Failed to delete transaction');
-			}
-
-			// Refresh transactions list
-			await fetchTransactions();
-		} catch (err) {
-			setDeleteError(err instanceof Error ? err.message : 'Unknown error');
-		}
-	};
-
-	const handleUploadSuccess = async () => {
-		// Refresh transactions after successful upload
-		await fetchTransactions();
-		setIsUploadDialogOpen(false);
-	};
-
-	const handleUpdateTransactionCategory = async (
-		transactionId: string,
-		categoryId: string | undefined,
-	) => {
-		// Store original value for potential revert
-		const originalTransaction = transactions.find((t) => t.id === transactionId);
-		const originalCategoryId = originalTransaction?.categoryId;
-
-		// Optimistic update - update UI immediately
-		setTransactions((prevTransactions) =>
-			prevTransactions.map((transaction) =>
-				transaction.id === transactionId ? { ...transaction, categoryId } : transaction,
-			),
-		);
-
-		try {
-			// Background API call
-			const response = await fetch(`/api/transactions/${transactionId}`, {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ categoryId }),
-			});
-
-			if (!response.ok) {
-				// Revert optimistic update on failure
-				setTransactions((prevTransactions) =>
-					prevTransactions.map((transaction) =>
-						transaction.id === transactionId
-							? { ...transaction, categoryId: originalCategoryId }
-							: transaction,
-					),
-				);
-				throw new Error('Failed to update transaction category');
-			}
-		} catch (error) {
-			console.error('Error updating transaction category:', error);
-			// Revert optimistic update on error
-			setTransactions((prevTransactions) =>
-				prevTransactions.map((transaction) =>
-					transaction.id === transactionId
-						? { ...transaction, categoryId: originalCategoryId }
-						: transaction,
-				),
-			);
-		}
-	};
+	// AI suggestion mutations
+	const suggestOne = useSuggestCategoryMutation();
+	const suggestBulk = useSuggestBulkMutation();
+	const learnFromAction = useLearnFromActionMutation();
 
 	const handleGetSuggestion = async (transactionId: string, description: string) => {
 		setLoadingSuggestions((prev) => new Set(prev).add(transactionId));
-
 		try {
-			const response = await fetch('/api/categories/suggest', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({ description }),
-			});
-
-			if (response.ok) {
-				const suggestion = await response.json();
-				setSuggestions((prev) => ({ ...prev, [transactionId]: suggestion }));
-			}
-		} catch (error) {
-			console.error('Error getting suggestion:', error);
+			const suggestion = await suggestOne.mutateAsync(description);
+			setSuggestions((prev) => ({ ...prev, [transactionId]: suggestion }));
+		} catch (err) {
+			console.warn('Failed to get suggestion', err);
 		} finally {
 			setLoadingSuggestions((prev) => {
-				const newSet = new Set(prev);
-				newSet.delete(transactionId);
-				return newSet;
+				const set = new Set(prev);
+				set.delete(transactionId);
+				return set;
 			});
 		}
 	};
@@ -627,201 +275,182 @@ export default function TransactionsPage() {
 		categoryId: string | undefined,
 	) => {
 		try {
-			// Store suggestion before clearing it
+			await updateTx.mutateAsync({ id: transactionId, updates: { categoryId } });
 			const suggestion = suggestions[transactionId];
-
-			// Clear the suggestion immediately for better UX
-			setSuggestions((prev) => {
-				const newSuggestions = { ...prev };
-				delete newSuggestions[transactionId];
-				return newSuggestions;
-			});
-
-			// Update the transaction with optimistic update
-			await handleUpdateTransactionCategory(transactionId, categoryId);
-
-			// Learn from the action if there was a suggestion (run in background)
 			if (suggestion && categoryId) {
 				const wasCorrectSuggestion = suggestion.category.id === categoryId;
-
-				// Don't await this - let it run in background
-				fetch('/api/categories/learn', {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify({
-						description,
-						categoryId,
-						wasCorrectSuggestion,
-					}),
-				}).catch((error) => {
-					console.error('Error learning from user action:', error);
-				});
+				// fire-and-forget learning
+				learnFromAction.mutate({ description, categoryId, wasCorrectSuggestion });
 			}
-		} catch (error) {
-			console.error('Error updating category:', error);
+			// Clear applied suggestion for cleaner UI
+			setSuggestions((prev) => {
+				const next = { ...prev };
+				delete next[transactionId];
+				return next;
+			});
+		} catch (err) {
+			console.error('Error updating category', err);
 		}
 	};
 
 	const handleBulkSuggestions = async () => {
-		// Only suggest for uncategorized transactions that are visible
-		const uncategorizedTransactions = paginatedTransactions.filter((t) => !t.categoryId);
-
-		if (uncategorizedTransactions.length === 0) {
-			return;
-		}
-
+		const uncategorized = transactions.filter((t) => !t.categoryId);
+		if (uncategorized.length === 0) return;
 		setIsBulkSuggesting(true);
-
 		try {
-			const response = await fetch('/api/categories/suggest-bulk', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					transactions: uncategorizedTransactions.map((t) => ({
-						id: t.id,
-						description: t.description,
-					})),
-				}),
-			});
-
-			if (response.ok) {
-				const data = await response.json();
-				setSuggestions((prev) => ({ ...prev, ...data.suggestions }));
-
-				// Count how many suggestions were found
-				const suggestionsCount = Object.values(data.suggestions).filter(
-					(s) => s !== null,
-				).length;
-				if (suggestionsCount > 0) {
-					// You could add a toast notification here if you want
-					console.log(`Found ${suggestionsCount} category suggestions`);
-				}
-			}
-		} catch (error) {
-			console.error('Error getting bulk suggestions:', error);
+			const payload = uncategorized.map((t) => ({ id: t.id, description: t.description }));
+			const result = await suggestBulk.mutateAsync(payload);
+			setSuggestions((prev) => ({ ...prev, ...result.suggestions }));
+		} catch (err) {
+			console.warn('Bulk suggestions failed', err);
 		} finally {
 			setIsBulkSuggesting(false);
 		}
 	};
 
 	const handleAcceptAllSuggestions = async () => {
-		// Get all transactions that have suggestions
-		const transactionsWithSuggestions = paginatedTransactions.filter(
-			(t) => suggestions[t.id] && !t.categoryId,
-		);
-
-		if (transactionsWithSuggestions.length === 0) {
-			return;
-		}
-
+		const withSuggestions = transactions.filter((t) => suggestions[t.id] && !t.categoryId);
+		if (withSuggestions.length === 0) return;
 		setIsAcceptingAllSuggestions(true);
-
 		try {
-			// Apply all suggestions in parallel
-			const updatePromises = transactionsWithSuggestions.map(async (transaction) => {
-				const suggestion = suggestions[transaction.id];
-				if (suggestion) {
-					return handleUpdateTransactionCategory(transaction.id, suggestion.category.id);
-				}
-			});
-
-			await Promise.all(updatePromises);
-
-			// Clear the suggestions that were accepted
+			await Promise.all(
+				withSuggestions.map((t) => {
+					const sug = suggestions[t.id]!;
+					return updateTx.mutateAsync({
+						id: t.id,
+						updates: { categoryId: sug.category.id },
+					});
+				}),
+			);
+			// clear accepted suggestions
 			setSuggestions((prev) => {
-				const newSuggestions = { ...prev };
-				transactionsWithSuggestions.forEach((t) => {
-					delete newSuggestions[t.id];
-				});
-				return newSuggestions;
+				const next = { ...prev };
+				withSuggestions.forEach((t) => delete next[t.id]);
+				return next;
 			});
-		} catch (error) {
-			console.error('Error accepting all suggestions:', error);
+		} catch (err) {
+			console.error('Accept all suggestions failed', err);
 		} finally {
 			setIsAcceptingAllSuggestions(false);
 		}
 	};
 
-	// Filter handlers
+	const activeFiltersCount = useMemo(() => {
+		let count = 0;
+		if (preset !== 'all') count++;
+		if (transactionType !== 'all') count++;
+		if (searchTerm) count++;
+		return count;
+	}, [preset, transactionType, searchTerm]);
+
+	const handleSort = (field: SortField) => {
+		setState((prev) => {
+			if (prev.sortField === field) {
+				return {
+					...prev,
+					sortField: field,
+					sortDirection: prev.sortDirection === 'asc' ? 'desc' : 'asc',
+					page: 1,
+				};
+			}
+			return {
+				...prev,
+				sortField: field,
+				sortDirection: field === 'amount' ? 'desc' : 'asc',
+				page: 1,
+			};
+		});
+	};
+
+	const handleSaveEdit = async () => {
+		if (!editingTransaction) return;
+		try {
+			setEditError(null);
+			const updates = {
+				date: new Date(editingTransaction.date),
+				description: editingTransaction.description,
+				amount:
+					editingTransaction.type === 'expense'
+						? -Math.abs(Number(editingTransaction.amount))
+						: editingTransaction.type === 'transfer'
+							? Number(editingTransaction.amount)
+							: Math.abs(Number(editingTransaction.amount)),
+				type: editingTransaction.type,
+				categoryId: editingTransaction.categoryId,
+			};
+			await updateTx.mutateAsync({ id: editingTransaction.id, updates });
+			setIsEditDialogOpen(false);
+			setEditingTransaction(null);
+		} catch (err) {
+			setEditError(err instanceof Error ? err.message : 'Unknown error');
+		}
+	};
+
+	const handleDelete = async (id: string) => {
+		if (!confirm('Are you sure you want to delete this transaction?')) return;
+		try {
+			setDeleteError(null);
+			await deleteTx.mutateAsync(id);
+		} catch (err) {
+			setDeleteError(err instanceof Error ? err.message : 'Unknown error');
+		}
+	};
+
+	const handleUpdateTransactionCategory = async (
+		transactionId: string,
+		categoryId: string | undefined,
+	) => {
+		try {
+			await updateTx.mutateAsync({ id: transactionId, updates: { categoryId } });
+		} catch (error) {
+			console.error('Error updating transaction category:', error);
+		}
+	};
+
 	const handleDateRangeChange = (range: DateRange) => {
-		setFilters((prev) => ({
-			...prev,
-			dateRange: range,
-			preset: 'custom',
-		}));
+		setState((prev) => ({ ...prev, dateRange: range, preset: 'custom', page: 1 }));
 	};
 
-	const handleSearchChange = (searchTerm: string) => {
-		setFilters((prev) => ({
-			...prev,
-			searchTerm,
-		}));
-	};
+	const handleSearchChange = (value: string) =>
+		setState((prev) => ({ ...prev, searchTerm: value, page: 1 }));
 
-	const handleTypeFilterChange = (type: 'all' | 'income' | 'expense' | 'transfer') => {
-		setFilters((prev) => ({
-			...prev,
-			transactionType: type,
-		}));
-	};
+	const handleTypeFilterChange = (type: 'all' | 'income' | 'expense' | 'transfer') =>
+		setState((prev) => ({ ...prev, transactionType: type, page: 1 }));
 
-	const handlePresetChange = (preset: string) => {
-		const dateRange = DATE_PRESETS[preset as keyof typeof DATE_PRESETS]?.getValue() || {
+	const handlePresetChange = (presetKey: string) => {
+		const dateRange = DATE_PRESETS[presetKey as keyof typeof DATE_PRESETS]?.getValue() || {
 			from: undefined,
 			to: undefined,
 		};
-		setFilters((prev) => ({
-			...prev,
-			preset: preset as keyof typeof DATE_PRESETS,
-			dateRange,
-		}));
+		setState((prev) => ({ ...prev, preset: presetKey, dateRange, page: 1 }));
 	};
 
-	const clearAllFilters = () => {
-		setFilters({
+	const clearAllFilters = () =>
+		setState((prev) => ({
+			...prev,
 			dateRange: { from: undefined, to: undefined },
 			transactionType: 'all',
 			searchTerm: '',
 			preset: 'all',
-		});
-	};
-
-	// Pagination handlers
-	const handlePageChange = (page: number) => {
-		const newPage = Math.max(1, Math.min(page, totalPages));
-		setPagination((prev) => ({
-			...prev,
-			currentPage: newPage,
+			page: 1,
 		}));
-		// Fetch new page
-		fetchTransactions(newPage);
-	};
 
-	const handlePageSizeChange = (pageSize: number) => {
-		setPagination({
-			currentPage: 1, // Reset to first page when changing page size
-			pageSize,
-		});
-		// Clear cache and fetch first page with new page size
-		setPrefetchedPages(new Map());
-		fetchTransactions(1, false, pageSize);
-	};
+	const handlePageChange = (nextPage: number) =>
+		setState((prev) => ({ ...prev, page: Math.max(1, Math.min(nextPage, totalPages)) }));
+	const handlePageSizeChange = (size: number) =>
+		setState((prev) => ({ ...prev, page: 1, pageSize: size }));
 
-	const canGoPrevious = pagination.currentPage > 1;
-	const canGoNext = pagination.currentPage < totalPages;
+	const canGoPrevious = page > 1;
+	const canGoNext = page < totalPages;
 
-	const formatCurrency = (amount: number) => {
-		return new Intl.NumberFormat('en-US', {
+	const { currency: appCurrency, locale: appLocale } = useCurrencySettings();
+
+	const formatCurrency = (amount: number, currencyOverride?: string) =>
+		new Intl.NumberFormat(appLocale, {
 			style: 'currency',
-			currency: 'USD',
+			currency: currencyOverride ?? appCurrency,
 		}).format(Math.abs(amount));
-	};
 
-	// Sortable header component
 	const SortableHeader = ({
 		field,
 		children,
@@ -831,32 +460,21 @@ export default function TransactionsPage() {
 		children: React.ReactNode;
 		className?: string;
 	}) => {
-		const isActive = sort.field === field;
-		const direction = isActive ? sort.direction : null;
-
+		const isActive = sortField === field;
+		const direction = isActive ? sortDirection : null;
 		return (
 			<TableHead
-				className={`${field ? 'cursor-pointer select-none hover:bg-gray-50' : ''} ${
-					isActive ? 'bg-blue-50' : ''
-				} ${className}`}
+				className={`${field ? 'cursor-pointer select-none hover:bg-accent/40' : ''} ${isActive ? 'bg-accent/30 text-foreground' : ''} ${className}`}
 				onClick={() => field && handleSort(field)}>
 				<div className='flex items-center gap-1'>
 					<span className={isActive ? 'text-blue-900 font-medium' : ''}>{children}</span>
 					{field && (
 						<div className='flex flex-col opacity-60 hover:opacity-100'>
 							<ChevronUp
-								className={`h-3 w-3 ${
-									isActive && direction === 'asc'
-										? 'text-blue-600'
-										: 'text-gray-400'
-								}`}
+								className={`h-3 w-3 ${isActive && direction === 'asc' ? 'text-primary' : 'text-muted-foreground'}`}
 							/>
 							<ChevronDown
-								className={`h-3 w-3 -mt-1 ${
-									isActive && direction === 'desc'
-										? 'text-blue-600'
-										: 'text-gray-400'
-								}`}
+								className={`h-3 w-3 -mt-1 ${isActive && direction === 'desc' ? 'text-primary' : 'text-muted-foreground'}`}
 							/>
 						</div>
 					)}
@@ -865,13 +483,12 @@ export default function TransactionsPage() {
 		);
 	};
 
-	const formatDate = (date: Date | string) => {
-		return new Intl.DateTimeFormat('en-US', {
+	const formatDate = (date: Date | string) =>
+		new Intl.DateTimeFormat('en-US', {
 			year: 'numeric',
 			month: 'short',
 			day: 'numeric',
 		}).format(new Date(date));
-	};
 
 	return (
 		<Layout>
@@ -879,8 +496,8 @@ export default function TransactionsPage() {
 				{/* Header */}
 				<div className='flex justify-between items-center'>
 					<div>
-						<h1 className='text-3xl font-bold text-gray-900'>Transactions</h1>
-						<p className='text-gray-600 mt-2'>
+						<h1 className='text-3xl font-bold text-foreground'>Transactions</h1>
+						<p className='text-muted-foreground mt-2'>
 							View and manage all your uploaded transactions ({transactions.length} of{' '}
 							{totalCount})
 						</p>
@@ -906,7 +523,6 @@ export default function TransactionsPage() {
 							)}
 						</Button>
 
-						{/* Accept All Suggestions Button */}
 						{(() => {
 							const suggestionsToAccept = transactions.filter(
 								(t) => suggestions[t.id] && !t.categoryId,
@@ -949,8 +565,8 @@ export default function TransactionsPage() {
 									</DialogDescription>
 								</DialogHeader>
 								<FileUpload
-									onUploadSuccess={handleUploadSuccess}
-									onUploadError={(error) => setError(error)}
+									onUploadSuccess={() => setIsUploadDialogOpen(false)}
+									onUploadError={(e) => setDeleteError(e)}
 								/>
 							</DialogContent>
 						</Dialog>
@@ -986,7 +602,7 @@ export default function TransactionsPage() {
 								<Input
 									id='search'
 									placeholder='Search by description...'
-									value={filters.searchTerm}
+									value={searchTerm}
 									onChange={(e) => handleSearchChange(e.target.value)}
 									className='mt-1'
 								/>
@@ -994,7 +610,7 @@ export default function TransactionsPage() {
 							<div className='min-w-[150px]'>
 								<Label htmlFor='type-filter'>Transaction Type</Label>
 								<Select
-									value={filters.transactionType}
+									value={transactionType}
 									onValueChange={handleTypeFilterChange}>
 									<SelectTrigger className='mt-1'>
 										<SelectValue />
@@ -1013,21 +629,21 @@ export default function TransactionsPage() {
 						<div className='flex gap-4 flex-wrap items-end'>
 							<div className='min-w-[200px]'>
 								<Label htmlFor='date-preset'>Date Range</Label>
-								<Select value={filters.preset} onValueChange={handlePresetChange}>
+								<Select value={preset} onValueChange={handlePresetChange}>
 									<SelectTrigger className='mt-1'>
 										<SelectValue />
 									</SelectTrigger>
 									<SelectContent>
-										{Object.entries(DATE_PRESETS).map(([key, preset]) => (
+										{Object.entries(DATE_PRESETS).map(([key, p]) => (
 											<SelectItem key={key} value={key}>
-												{preset.label}
+												{p.label}
 											</SelectItem>
 										))}
 									</SelectContent>
 								</Select>
 							</div>
 
-							{filters.preset === 'custom' && (
+							{preset === 'custom' && (
 								<>
 									<div className='min-w-[150px]'>
 										<Label>From Date</Label>
@@ -1037,21 +653,18 @@ export default function TransactionsPage() {
 													variant='outline'
 													className='mt-1 w-full justify-start text-left font-normal'>
 													<CalendarIcon className='mr-2 h-4 w-4' />
-													{filters.dateRange.from
-														? format(
-																filters.dateRange.from,
-																'MMM dd, yyyy',
-														  )
+													{dateRange.from
+														? format(dateRange.from, 'MMM dd, yyyy')
 														: 'Pick a date'}
 												</Button>
 											</PopoverTrigger>
 											<PopoverContent className='w-auto p-0'>
 												<Calendar
 													mode='single'
-													selected={filters.dateRange.from}
+													selected={dateRange.from}
 													onSelect={(date) =>
 														handleDateRangeChange({
-															...filters.dateRange,
+															...dateRange,
 															from: date,
 														})
 													}
@@ -1068,21 +681,18 @@ export default function TransactionsPage() {
 													variant='outline'
 													className='mt-1 w-full justify-start text-left font-normal'>
 													<CalendarIcon className='mr-2 h-4 w-4' />
-													{filters.dateRange.to
-														? format(
-																filters.dateRange.to,
-																'MMM dd, yyyy',
-														  )
+													{dateRange.to
+														? format(dateRange.to, 'MMM dd, yyyy')
 														: 'Pick a date'}
 												</Button>
 											</PopoverTrigger>
 											<PopoverContent className='w-auto p-0'>
 												<Calendar
 													mode='single'
-													selected={filters.dateRange.to}
+													selected={dateRange.to}
 													onSelect={(date) =>
 														handleDateRangeChange({
-															...filters.dateRange,
+															...dateRange,
 															to: date,
 														})
 													}
@@ -1096,32 +706,32 @@ export default function TransactionsPage() {
 						</div>
 
 						{/* Active Filters Summary */}
-						{(filters.dateRange.from ||
-							filters.dateRange.to ||
-							filters.transactionType !== 'all' ||
-							filters.searchTerm) && (
+						{(dateRange.from ||
+							dateRange.to ||
+							transactionType !== 'all' ||
+							searchTerm) && (
 							<div className='flex flex-wrap gap-2 pt-2 border-t'>
-								<span className='text-sm font-medium text-gray-600'>
+								<span className='text-sm font-medium text-muted-foreground'>
 									Active filters:
 								</span>
-								{filters.searchTerm && (
+								{searchTerm && (
 									<span className='bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs'>
-										Search: "{filters.searchTerm}"
+										Search: "{searchTerm}"
 									</span>
 								)}
-								{filters.transactionType !== 'all' && (
+								{transactionType !== 'all' && (
 									<span className='bg-green-100 text-green-800 px-2 py-1 rounded text-xs'>
-										Type: {filters.transactionType}
+										Type: {transactionType}
 									</span>
 								)}
-								{filters.dateRange.from && (
+								{dateRange.from && (
 									<span className='bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs'>
-										From: {format(filters.dateRange.from, 'MMM dd, yyyy')}
+										From: {format(dateRange.from, 'MMM dd, yyyy')}
 									</span>
 								)}
-								{filters.dateRange.to && (
+								{dateRange.to && (
 									<span className='bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs'>
-										To: {format(filters.dateRange.to, 'MMM dd, yyyy')}
+										To: {format(dateRange.to, 'MMM dd, yyyy')}
 									</span>
 								)}
 							</div>
@@ -1130,15 +740,11 @@ export default function TransactionsPage() {
 				</Card>
 
 				{/* Error Alerts */}
-				{error && (
+				{(isError || deleteError) && (
 					<Alert variant='destructive'>
-						<AlertDescription>{error}</AlertDescription>
-					</Alert>
-				)}
-
-				{deleteError && (
-					<Alert variant='destructive'>
-						<AlertDescription>Delete Error: {deleteError}</AlertDescription>
+						<AlertDescription>
+							{(error as Error)?.message || deleteError}
+						</AlertDescription>
 					</Alert>
 				)}
 
@@ -1152,10 +758,10 @@ export default function TransactionsPage() {
 						</CardTitle>
 					</CardHeader>
 					<CardContent>
-						{loading ? (
+						{isLoading ? (
 							<div className='text-center py-8'>Loading transactions...</div>
 						) : transactions.length === 0 ? (
-							<div className='text-center py-8 text-gray-500'>
+							<div className='text-center py-8 text-muted-foreground'>
 								No transactions found. Upload a CSV file to get started.
 							</div>
 						) : (
@@ -1182,7 +788,7 @@ export default function TransactionsPage() {
 									</TableRow>
 								</TableHeader>
 								<TableBody>
-									{paginatedTransactions.map((transaction) => (
+									{transactions.map((transaction) => (
 										<TableRow key={transaction.id}>
 											<TableCell className='font-medium'>
 												{formatDate(transaction.date)}
@@ -1214,31 +820,42 @@ export default function TransactionsPage() {
 											</TableCell>
 											<TableCell>
 												<span
-													className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-														getTransactionTypeStyle(transaction.type)
-															.badgeClass
-													}`}>
+													className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getTransactionTypeStyle(transaction.type).badgeClass}`}>
 													{getTransactionTypeLabel(transaction.type)}
 												</span>
 											</TableCell>
 											<TableCell
-												className={`text-right font-medium ${
-													getTransactionTypeStyle(transaction.type)
-														.amountClass
-												}`}>
+												className={`text-right font-medium ${getTransactionTypeStyle(transaction.type).amountClass}`}>
 												{transaction.type === 'income'
 													? '+'
 													: transaction.type === 'transfer'
-													? '±'
-													: '-'}
-												{formatCurrency(transaction.amount)}
+														? '±'
+														: '-'}
+												{formatCurrency(
+													transaction.amount,
+													transaction.currency,
+												)}
 											</TableCell>
 											<TableCell className='text-right'>
 												<div className='flex justify-end space-x-2'>
 													<Button
 														variant='outline'
 														size='sm'
-														onClick={() => handleEdit(transaction)}>
+														onClick={() =>
+															setEditingTransaction({
+																id: transaction.id,
+																date: new Date(transaction.date)
+																	.toISOString()
+																	.split('T')[0],
+																description:
+																	transaction.description,
+																amount: Math.abs(
+																	transaction.amount,
+																).toString(),
+																type: transaction.type,
+																categoryId: transaction.categoryId,
+															})
+														}>
 														<Pencil className='h-4 w-4' />
 													</Button>
 													<Button
@@ -1261,15 +878,10 @@ export default function TransactionsPage() {
 						{transactions.length > 0 && (
 							<div className='flex items-center justify-between mt-6 pt-4 border-t'>
 								<div className='flex items-center space-x-2'>
-									<span className='text-sm text-gray-700'>
+									<span className='text-sm text-muted-foreground'>
 										{(() => {
-											const startIndex =
-												(pagination.currentPage - 1) * pagination.pageSize +
-												1;
-											const endIndex = Math.min(
-												pagination.currentPage * pagination.pageSize,
-												totalCount,
-											);
+											const startIndex = (page - 1) * pageSize + 1;
+											const endIndex = Math.min(page * pageSize, totalCount);
 											return `Showing ${startIndex} to ${endIndex} of ${totalCount} transactions`;
 										})()}
 									</span>
@@ -1278,9 +890,9 @@ export default function TransactionsPage() {
 								<div className='flex items-center space-x-4'>
 									{/* Page Size Selector */}
 									<div className='flex items-center space-x-2'>
-										<span className='text-sm text-gray-700'>Show:</span>
+										<span className='text-sm text-muted-foreground'>Show:</span>
 										<Select
-											value={pagination.pageSize.toString()}
+											value={pageSize.toString()}
 											onValueChange={(value) =>
 												handlePageSizeChange(Number(value))
 											}>
@@ -1310,21 +922,17 @@ export default function TransactionsPage() {
 											<Button
 												variant='outline'
 												size='sm'
-												onClick={() =>
-													handlePageChange(pagination.currentPage - 1)
-												}
+												onClick={() => handlePageChange(page - 1)}
 												disabled={!canGoPrevious}>
 												<ChevronLeft className='h-4 w-4' />
 											</Button>
-											<span className='text-sm text-gray-700 min-w-[100px] text-center'>
-												Page {pagination.currentPage} of {totalPages}
+											<span className='text-sm text-muted-foreground min-w-[100px] text-center'>
+												Page {page} of {totalPages}
 											</span>
 											<Button
 												variant='outline'
 												size='sm'
-												onClick={() =>
-													handlePageChange(pagination.currentPage + 1)
-												}
+												onClick={() => handlePageChange(page + 1)}
 												disabled={!canGoNext}>
 												<ChevronRight className='h-4 w-4' />
 											</Button>

@@ -1,7 +1,20 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { parseCSV, validateCSVContent } from '@/lib/csv-parser';
 import { ErrorResponse } from '@/lib/types';
 import { createTransactionRepository } from '@/lib/database';
+
+function json(data: any, init?: { status?: number }) {
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-var-requires
+		const { NextResponse } = require('next/server');
+		return NextResponse.json(data, init);
+	} catch {
+		return {
+			json: async () => data,
+			status: init?.status ?? 200,
+			ok: (init?.status ?? 200) < 400,
+		};
+	}
+}
 
 /**
  * Maximum file size for CSV uploads (5MB)
@@ -21,7 +34,7 @@ const ALLOWED_MIME_TYPES = [
 /**
  * POST /api/upload - Handle CSV file upload and processing
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: any) {
 	try {
 		// Parse form data
 		const formData = await request.formData();
@@ -29,7 +42,7 @@ export async function POST(request: NextRequest) {
 
 		// Validate file presence
 		if (!file) {
-			return NextResponse.json(
+			return json(
 				{
 					error: 'MISSING_FILE',
 					message: 'No file provided in the request',
@@ -40,7 +53,7 @@ export async function POST(request: NextRequest) {
 
 		// Validate file size
 		if (file.size > MAX_FILE_SIZE) {
-			return NextResponse.json(
+			return json(
 				{
 					error: 'FILE_TOO_LARGE',
 					message: `File size exceeds maximum limit of ${MAX_FILE_SIZE / (1024 * 1024)}MB`,
@@ -52,7 +65,7 @@ export async function POST(request: NextRequest) {
 
 		// Validate file type
 		if (!ALLOWED_MIME_TYPES.includes(file.type) && !file.name?.toLowerCase().endsWith('.csv')) {
-			return NextResponse.json(
+			return json(
 				{
 					error: 'INVALID_FILE_TYPE',
 					message: 'File must be a CSV file',
@@ -67,7 +80,7 @@ export async function POST(request: NextRequest) {
 		try {
 			csvContent = await file.text();
 		} catch (error) {
-			return NextResponse.json(
+			return json(
 				{
 					error: 'FILE_READ_ERROR',
 					message: 'Failed to read file content',
@@ -80,7 +93,7 @@ export async function POST(request: NextRequest) {
 		// Validate CSV content
 		const contentValidation = validateCSVContent(csvContent);
 		if (!contentValidation.isValid) {
-			return NextResponse.json(
+			return json(
 				{
 					error: 'INVALID_CSV_CONTENT',
 					message: contentValidation.error || 'Invalid CSV content',
@@ -94,7 +107,7 @@ export async function POST(request: NextRequest) {
 
 		// Check if parsing was successful
 		if (parseResult.errors.length > 0 && parseResult.transactions.length === 0) {
-			return NextResponse.json(
+			return json(
 				{
 					error: 'CSV_PARSE_ERROR',
 					message: 'Failed to parse CSV file',
@@ -108,14 +121,16 @@ export async function POST(request: NextRequest) {
 		const repository = createTransactionRepository();
 		try {
 			await repository.initialize();
-			
+
 			// Create transactions without ID field for database insertion
 			// eslint-disable-next-line @typescript-eslint/no-unused-vars
-			const transactionsForDb = parseResult.transactions.map(({ id, ...transaction }) => transaction);
+			const transactionsForDb = parseResult.transactions.map(
+				({ id, ...transaction }) => transaction,
+			);
 			const dbResult = await repository.createMany(transactionsForDb);
 
 			// Return successful response with database result
-			return NextResponse.json(
+			return json(
 				{
 					success: true,
 					data: {
@@ -136,9 +151,8 @@ export async function POST(request: NextRequest) {
 			);
 		} catch (dbError) {
 			console.error('Database error during upload:', dbError);
-			
-			// Return database error response
-			return NextResponse.json(
+
+			return json(
 				{
 					error: 'DATABASE_ERROR',
 					message: 'Failed to store transactions in database',
@@ -152,7 +166,7 @@ export async function POST(request: NextRequest) {
 	} catch (error) {
 		console.error('Upload API error:', error);
 
-		return NextResponse.json(
+		return json(
 			{
 				error: 'INTERNAL_SERVER_ERROR',
 				message: 'An unexpected error occurred while processing the file',

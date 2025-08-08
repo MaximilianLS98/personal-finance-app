@@ -10,6 +10,7 @@ import {
 } from '../../components/ui/card';
 import { FinancialSummary as FinancialSummaryType } from '../../lib/types';
 import { formatCurrency } from '../../lib/financial-calculator';
+import { useCurrencySettings } from '../providers';
 
 interface FinancialSummaryProps {
 	/** Financial summary data to display */
@@ -141,6 +142,7 @@ interface SummaryCardProps {
  * Individual summary card component for displaying financial metrics
  */
 function SummaryCard({ title, amount, description, variant, isNet = false }: SummaryCardProps) {
+	const { currency, locale } = useCurrencySettings();
 	// Determine card styling based on variant
 	const getCardStyles = () => {
 		switch (variant) {
@@ -186,7 +188,7 @@ function SummaryCard({ title, amount, description, variant, isNet = false }: Sum
 			<CardContent>
 				<div className={`text-2xl font-bold ${getAmountColor()}`}>
 					{isNet && amount > 0 ? '+' : ''}
-					{formatCurrency(amount)}
+					{formatCurrency(amount, currency, locale)}
 				</div>
 			</CardContent>
 		</Card>

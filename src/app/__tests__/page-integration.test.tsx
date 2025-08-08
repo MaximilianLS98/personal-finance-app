@@ -91,9 +91,9 @@ describe('Home Page Integration', () => {
 
 			// Wait for summary to load
 			await waitFor(() => {
-				expect(screen.getByText('$5,800.00')).toBeInTheDocument(); // Total income
-				expect(screen.getByText('$1,350.00')).toBeInTheDocument(); // Total expenses
-				expect(screen.getByText('+$4,450.00')).toBeInTheDocument(); // Net amount
+				expect(screen.getByText(/5\s?800,00/)).toBeInTheDocument(); // Total income NOK
+				expect(screen.getByText(/1\s?350,00/)).toBeInTheDocument(); // Total expenses NOK
+				expect(screen.getByText(/\+\s?4\s?450,00/)).toBeInTheDocument(); // Net amount NOK
 			});
 
 			// Check summary header
@@ -127,7 +127,7 @@ describe('Home Page Integration', () => {
 
 			// Wait for successful retry
 			await waitFor(() => {
-				expect(screen.getByText('$5,800.00')).toBeInTheDocument();
+				expect(screen.getByText(/5\s?800,00/)).toBeInTheDocument();
 			});
 
 			// Verify API was called twice
@@ -294,7 +294,7 @@ describe('Home Page Integration', () => {
 
 			// Wait for data to load
 			await waitFor(() => {
-				expect(screen.getByText('$5,800.00')).toBeInTheDocument();
+				expect(screen.getByText(/5\s?800,00/)).toBeInTheDocument();
 			});
 
 			// Check that all components reflect the same data

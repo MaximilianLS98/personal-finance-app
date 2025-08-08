@@ -7,11 +7,11 @@
  * These are typically transfers between the user's own accounts
  */
 const REVOLUT_PATTERNS = [
-	/REVOLUT\*\*\d+/i,                    // REVOLUT**2775
-	/CRV\*REVOLUT\*\*\d+/i,              // CRV*REVOLUT**3832
-	/REVOLUT.*\*\*\d+/i,                  // Any REVOLUT variant with **numbers
-	/^REVOLUT/i,                          // Starts with REVOLUT
-	/\bREVOLUT\b/i,                       // REVOLUT as a whole word
+	/REVOLUT\*\*\d+/i, // REVOLUT**2775
+	/CRV\*REVOLUT\*\*\d+/i, // CRV*REVOLUT**3832
+	/REVOLUT.*\*\*\d+/i, // Any REVOLUT variant with **numbers
+	/^REVOLUT/i, // Starts with REVOLUT
+	/\bREVOLUT\b/i, // REVOLUT as a whole word
 ];
 
 /**
@@ -20,9 +20,9 @@ const REVOLUT_PATTERNS = [
  */
 const INTERNAL_TRANSFER_PATTERNS = [
 	...REVOLUT_PATTERNS,
-	/PAYPAL\s+TRANSFER/i,                 // PayPal transfers
-	/WISE\s+TRANSFER/i,                   // Wise (formerly TransferWise)
-	/INTERNAL\s+TRANSFER/i,               // Generic internal transfer
+	/PAYPAL\s+TRANSFER/i, // PayPal transfers
+	/WISE\s+TRANSFER/i, // Wise (formerly TransferWise)
+	/INTERNAL\s+TRANSFER/i, // Generic internal transfer
 ];
 
 /**
@@ -35,7 +35,7 @@ export function isRevolutTransfer(description: string): boolean {
 		return false;
 	}
 
-	return REVOLUT_PATTERNS.some(pattern => pattern.test(description.trim()));
+	return REVOLUT_PATTERNS.some((pattern) => pattern.test(description.trim()));
 }
 
 /**
@@ -48,7 +48,7 @@ export function isInternalTransfer(description: string): boolean {
 		return false;
 	}
 
-	return INTERNAL_TRANSFER_PATTERNS.some(pattern => pattern.test(description.trim()));
+	return INTERNAL_TRANSFER_PATTERNS.some((pattern) => pattern.test(description.trim()));
 }
 
 /**
@@ -57,7 +57,10 @@ export function isInternalTransfer(description: string): boolean {
  * @param description - The transaction description
  * @returns The appropriate transaction type
  */
-export function determineTransactionType(amount: number, description: string): 'income' | 'expense' | 'transfer' {
+export function determineTransactionType(
+	amount: number,
+	description: string,
+): 'income' | 'expense' | 'transfer' {
 	// First check if it's an internal transfer
 	if (isInternalTransfer(description)) {
 		return 'transfer';
@@ -98,22 +101,22 @@ export function getTransactionTypeStyle(type: 'income' | 'expense' | 'transfer')
 		case 'income':
 			return {
 				badgeClass: 'bg-green-100 text-green-800',
-				amountClass: 'text-green-600'
+				amountClass: 'text-green-600',
 			};
 		case 'expense':
 			return {
 				badgeClass: 'bg-red-100 text-red-800',
-				amountClass: 'text-red-600'
+				amountClass: 'text-red-600',
 			};
 		case 'transfer':
 			return {
 				badgeClass: 'bg-blue-100 text-blue-800',
-				amountClass: 'text-blue-600'
+				amountClass: 'text-blue-600',
 			};
 		default:
 			return {
-				badgeClass: 'bg-gray-100 text-gray-800',
-				amountClass: 'text-gray-600'
+				badgeClass: 'bg-muted text-muted-foreground',
+				amountClass: 'text-muted-foreground',
 			};
 	}
 }

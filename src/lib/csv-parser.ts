@@ -249,6 +249,12 @@ function parseTransactionRow(
 		throw new Error(`Invalid amount format: ${amountStr}`);
 	}
 
+	// Optional currency column
+	const currency =
+		columnIndices.currency !== undefined && row[columnIndices.currency]
+			? row[columnIndices.currency].trim()
+			: undefined;
+
 	// Categorize transaction type using enhanced detection
 	const type = determineTransactionType(amount, description);
 
@@ -260,6 +266,7 @@ function parseTransactionRow(
 		date,
 		description,
 		amount,
+		currency,
 		type,
 	};
 }
@@ -366,7 +373,6 @@ function parseAmount(amountStr: string): number {
 
 	return parseFloat(cleaned);
 }
-
 
 /**
  * Generates a unique ID for a transaction based on its properties

@@ -35,14 +35,17 @@ export interface TransactionRepository {
 		icon: string;
 		parentId?: string;
 	}): Promise<Category>;
-	updateCategory(id: string, updates: {
-		name?: string;
-		description?: string;
-		color?: string;
-		icon?: string;
-		parentId?: string;
-		isActive?: boolean;
-	}): Promise<Category | null>;
+	updateCategory(
+		id: string,
+		updates: {
+			name?: string;
+			description?: string;
+			color?: string;
+			icon?: string;
+			parentId?: string;
+			isActive?: boolean;
+		},
+	): Promise<Category | null>;
 	deleteCategory(id: string): Promise<boolean>;
 	getCategoryRules(): Promise<CategoryRule[]>;
 	createCategoryRule(rule: {
@@ -107,8 +110,8 @@ export class SQLiteTransactionRepository implements TransactionRepository {
 			const now = new Date().toISOString();
 
 			const stmt = db.prepare(`
-				INSERT INTO transactions (id, date, description, amount, type, category_id, created_at, updated_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+				INSERT INTO transactions (id, date, description, amount, type, currency, category_id, created_at, updated_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 			`);
 
 			stmt.run(
@@ -117,6 +120,7 @@ export class SQLiteTransactionRepository implements TransactionRepository {
 				transaction.description,
 				transaction.amount,
 				transaction.type,
+				transaction.currency || null,
 				transaction.categoryId || null,
 				now,
 				now,
@@ -176,8 +180,8 @@ export class SQLiteTransactionRepository implements TransactionRepository {
 			// Use database transaction for atomicity
 			const result = db.transaction(() => {
 				const stmt = db.prepare(`
-					INSERT INTO transactions (id, date, description, amount, type, category_id, created_at, updated_at)
-					VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+					INSERT INTO transactions (id, date, description, amount, type, currency, category_id, created_at, updated_at)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 				`);
 
 				const now = new Date().toISOString();
@@ -215,6 +219,7 @@ export class SQLiteTransactionRepository implements TransactionRepository {
 							transaction.description,
 							transaction.amount,
 							transaction.type,
+							transaction.currency || null,
 							transaction.categoryId || null,
 							now,
 							now,
@@ -284,7 +289,7 @@ export class SQLiteTransactionRepository implements TransactionRepository {
 		try {
 			const db = this.ensureConnection();
 			const stmt = db.prepare(`
-				SELECT t.id, t.date, t.description, t.amount, t.type, t.category_id
+				SELECT t.id, t.date, t.description, t.amount, t.type, t.currency, t.category_id
 				FROM transactions t
 				ORDER BY t.date DESC, t.created_at DESC
 			`);
@@ -294,6 +299,7 @@ export class SQLiteTransactionRepository implements TransactionRepository {
 				date: string;
 				description: string;
 				amount: number;
+				currency: string | null;
 				type: 'income' | 'expense' | 'transfer';
 				category_id: string | null;
 			}>;
@@ -303,6 +309,7 @@ export class SQLiteTransactionRepository implements TransactionRepository {
 				date: new Date(row.date),
 				description: row.description,
 				amount: row.amount,
+				currency: row.currency || undefined,
 				type: row.type,
 				categoryId: row.category_id || undefined,
 			}));
@@ -330,7 +337,7 @@ export class SQLiteTransactionRepository implements TransactionRepository {
 				sortOrder = 'DESC',
 				dateRange,
 				transactionType = 'all',
-				searchTerm
+				searchTerm,
 			} = options;
 
 			// Calculate offset
@@ -379,18 +386,19 @@ export class SQLiteTransactionRepository implements TransactionRepository {
 
 			// Get paginated results
 			const dataStmt = db.prepare(`
-				SELECT t.id, t.date, t.description, t.amount, t.type, t.category_id
+				SELECT t.id, t.date, t.description, t.amount, t.type, t.currency, t.category_id
 				FROM transactions t
 				${whereClause}
 				${orderByClause}
 				LIMIT ? OFFSET ?
 			`);
-			
+
 			const rows = dataStmt.all(...params, limit, offset) as Array<{
 				id: string;
 				date: string;
 				description: string;
 				amount: number;
+				currency: string | null;
 				type: 'income' | 'expense' | 'transfer';
 				category_id: string | null;
 			}>;
@@ -400,6 +408,7 @@ export class SQLiteTransactionRepository implements TransactionRepository {
 				date: new Date(row.date),
 				description: row.description,
 				amount: row.amount,
+				currency: row.currency || undefined,
 				type: row.type,
 				categoryId: row.category_id || undefined,
 			}));
@@ -438,7 +447,7 @@ export class SQLiteTransactionRepository implements TransactionRepository {
 		try {
 			const db = this.ensureConnection();
 			const stmt = db.prepare(`
-				SELECT t.id, t.date, t.description, t.amount, t.type, t.category_id
+				SELECT t.id, t.date, t.description, t.amount, t.type, t.currency, t.category_id
 				FROM transactions t
 				WHERE t.id = ?
 			`);
@@ -448,6 +457,7 @@ export class SQLiteTransactionRepository implements TransactionRepository {
 				date: string;
 				description: string;
 				amount: number;
+				currency: string | null;
 				type: 'income' | 'expense' | 'transfer';
 				category_id: string | null;
 			} | null;
@@ -461,6 +471,7 @@ export class SQLiteTransactionRepository implements TransactionRepository {
 				date: new Date(row.date),
 				description: row.description,
 				amount: row.amount,
+				currency: row.currency || undefined,
 				type: row.type,
 				categoryId: row.category_id || undefined,
 			};
@@ -483,7 +494,7 @@ export class SQLiteTransactionRepository implements TransactionRepository {
 		try {
 			const db = this.ensureConnection();
 			const stmt = db.prepare(`
-				SELECT t.id, t.date, t.description, t.amount, t.type, t.category_id
+				SELECT t.id, t.date, t.description, t.amount, t.type, t.currency, t.category_id
 				FROM transactions t
 				WHERE t.date >= ? AND t.date <= ?
 				ORDER BY t.date DESC, t.created_at DESC
@@ -679,7 +690,10 @@ export class SQLiteTransactionRepository implements TransactionRepository {
 	/**
 	 * Update an existing transaction
 	 */
-	async update(id: string, updates: Partial<Omit<Transaction, 'id'>>): Promise<Transaction | null> {
+	async update(
+		id: string,
+		updates: Partial<Omit<Transaction, 'id'>>,
+	): Promise<Transaction | null> {
 		try {
 			const db = this.ensureConnection();
 
@@ -1040,14 +1054,17 @@ export class SQLiteTransactionRepository implements TransactionRepository {
 	/**
 	 * Update an existing category
 	 */
-	async updateCategory(id: string, updates: {
-		name?: string;
-		description?: string;
-		color?: string;
-		icon?: string;
-		parentId?: string;
-		isActive?: boolean;
-	}): Promise<Category | null> {
+	async updateCategory(
+		id: string,
+		updates: {
+			name?: string;
+			description?: string;
+			color?: string;
+			icon?: string;
+			parentId?: string;
+			isActive?: boolean;
+		},
+	): Promise<Category | null> {
 		try {
 			const db = this.ensureConnection();
 
@@ -1122,7 +1139,9 @@ export class SQLiteTransactionRepository implements TransactionRepository {
 		try {
 			const db = this.ensureConnection();
 
-			const stmt = db.prepare('UPDATE categories SET is_active = 0, updated_at = ? WHERE id = ?');
+			const stmt = db.prepare(
+				'UPDATE categories SET is_active = 0, updated_at = ? WHERE id = ?',
+			);
 			const result = stmt.run(new Date().toISOString(), id);
 
 			// Check if any rows were affected

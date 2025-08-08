@@ -10,14 +10,14 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@/components/ui/select';
-import {
-	Popover,
-	PopoverContent,
-	PopoverTrigger,
-} from '@/components/ui/popover';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Sparkles, Check, X } from 'lucide-react';
 import type { Category, CategorySuggestion } from '@/lib/types';
+import {
+	useCategoriesQuery,
+	useSuggestCategoryMutation,
+	useLearnFromActionMutation,
+} from '@/lib/queries';
 
 interface CategorySelectorProps {
 	description: string;
@@ -26,95 +26,57 @@ interface CategorySelectorProps {
 	disabled?: boolean;
 }
 
-export default function CategorySelector({ 
-	description, 
-	currentCategoryId, 
-	onCategoryChange, 
-	disabled = false 
+export default function CategorySelector({
+	description,
+	currentCategoryId,
+	onCategoryChange,
+	disabled = false,
 }: CategorySelectorProps) {
-	const [categories, setCategories] = useState<Category[]>([]);
+	const { data: categories = [], isLoading: isLoadingCategories, error } = useCategoriesQuery();
+	const suggest = useSuggestCategoryMutation();
+	const learn = useLearnFromActionMutation();
+
 	const [suggestion, setSuggestion] = useState<CategorySuggestion | null>(null);
 	const [isLoadingSuggestion, setIsLoadingSuggestion] = useState(false);
 	const [showSuggestion, setShowSuggestion] = useState(false);
-	const [error, setError] = useState<string | null>(null);
-
-	// Fetch categories on component mount
-	useEffect(() => {
-		fetchCategories();
-	}, []);
 
 	// Get suggestion when description changes
 	useEffect(() => {
-		if (description && !currentCategoryId) {
-			getSuggestion();
-		}
+		let cancelled = false;
+		const run = async () => {
+			if (description && !currentCategoryId) {
+				setIsLoadingSuggestion(true);
+				try {
+					const result = await suggest.mutateAsync(description);
+					if (!cancelled && result) {
+						setSuggestion(result);
+						setShowSuggestion(true);
+					}
+				} finally {
+					if (!cancelled) setIsLoadingSuggestion(false);
+				}
+			} else {
+				setShowSuggestion(false);
+				setSuggestion(null);
+			}
+		};
+		run();
+		return () => {
+			cancelled = true;
+		};
 	}, [description, currentCategoryId]);
-
-	const fetchCategories = async () => {
-		try {
-			const response = await fetch('/api/categories');
-			if (!response.ok) {
-				throw new Error('Failed to fetch categories');
-			}
-			const data = await response.json();
-			setCategories(data);
-		} catch (error) {
-			console.error('Error fetching categories:', error);
-			setError('Failed to load categories');
-		}
-	};
-
-	const getSuggestion = async () => {
-		if (!description.trim()) return;
-		
-		setIsLoadingSuggestion(true);
-		try {
-			const response = await fetch('/api/categories/suggest', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({ description }),
-			});
-
-			if (!response.ok) {
-				throw new Error('Failed to get suggestion');
-			}
-
-			const suggestionData = await response.json();
-			if (suggestionData) {
-				setSuggestion(suggestionData);
-				setShowSuggestion(true);
-			}
-		} catch (error) {
-			console.error('Error getting suggestion:', error);
-		} finally {
-			setIsLoadingSuggestion(false);
-		}
-	};
 
 	const handleSuggestionAccept = async () => {
 		if (!suggestion) return;
-		
 		try {
-			// Learn from the user action
-			await fetch('/api/categories/learn', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					description,
-					categoryId: suggestion.category.id,
-					wasCorrectSuggestion: true,
-				}),
+			await learn.mutateAsync({
+				description,
+				categoryId: suggestion.category.id,
+				wasCorrectSuggestion: true,
 			});
-
 			onCategoryChange(suggestion.category.id, true);
 			setShowSuggestion(false);
-		} catch (error) {
-			console.error('Error accepting suggestion:', error);
-		}
+		} catch {}
 	};
 
 	const handleSuggestionReject = () => {
@@ -123,50 +85,40 @@ export default function CategorySelector({
 
 	const handleManualSelection = async (categoryId: string) => {
 		try {
-			// Convert special "__none__" value to undefined
-			const actualCategoryId = categoryId === "__none__" ? undefined : categoryId;
-
-			// If we had a suggestion and user chose differently, learn from it
+			const actualCategoryId = categoryId === '__none__' ? undefined : categoryId;
 			if (suggestion && actualCategoryId && actualCategoryId !== suggestion.category.id) {
-				await fetch('/api/categories/learn', {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify({
-						description,
-						categoryId: actualCategoryId,
-						wasCorrectSuggestion: false,
-					}),
+				await learn.mutateAsync({
+					description,
+					categoryId: actualCategoryId,
+					wasCorrectSuggestion: false,
 				});
 			}
-
 			onCategoryChange(actualCategoryId, false);
 			setShowSuggestion(false);
-		} catch (error) {
-			console.error('Error with manual selection:', error);
-		}
+		} catch {}
 	};
 
-	const currentCategory = categories.find(cat => cat.id === currentCategoryId);
+	const currentCategory = categories.find((cat) => cat.id === currentCategoryId);
 
 	if (error) {
 		return (
 			<Alert>
-				<AlertDescription>{error}</AlertDescription>
+				<AlertDescription>Failed to load categories</AlertDescription>
 			</Alert>
 		);
 	}
 
 	return (
-		<div className="space-y-2">
+		<div className='space-y-2'>
 			{/* Current Category Display */}
 			{currentCategory && (
-				<div className="flex items-center gap-2">
-					<Badge 
-						variant="secondary" 
-						style={{ backgroundColor: currentCategory.color + '20', color: currentCategory.color }}
-					>
+				<div className='flex items-center gap-2'>
+					<Badge
+						variant='secondary'
+						style={{
+							backgroundColor: currentCategory.color + '20',
+							color: currentCategory.color,
+						}}>
 						{currentCategory.name}
 					</Badge>
 				</div>
@@ -174,34 +126,32 @@ export default function CategorySelector({
 
 			{/* AI Suggestion */}
 			{showSuggestion && suggestion && !currentCategoryId && (
-				<Alert className="border-blue-200 bg-blue-50">
-					<Sparkles className="h-4 w-4 text-blue-600" />
-					<AlertDescription className="flex items-center justify-between">
-						<div className="flex items-center gap-2">
-							<span className="text-sm">
+				<Alert className='border-blue-200 bg-blue-50'>
+					<Sparkles className='h-4 w-4 text-blue-600' />
+					<AlertDescription className='flex items-center justify-between'>
+						<div className='flex items-center gap-2'>
+							<span className='text-sm'>
 								Suggested: <strong>{suggestion.category.name}</strong>
 							</span>
-							<Badge variant="outline" className="text-xs">
+							<Badge variant='outline' className='text-xs'>
 								{Math.round(suggestion.confidence * 100)}% confident
 							</Badge>
 						</div>
-						<div className="flex gap-1">
+						<div className='flex gap-1'>
 							<Button
-								size="sm"
-								variant="ghost"
+								size='sm'
+								variant='ghost'
 								onClick={handleSuggestionAccept}
 								disabled={disabled}
-								className="h-6 px-2 text-green-600 hover:text-green-700"
-							>
-								<Check className="h-3 w-3" />
+								className='h-6 px-2 text-green-600 hover:text-green-700'>
+								<Check className='h-3 w-3' />
 							</Button>
 							<Button
-								size="sm"
-								variant="ghost"
+								size='sm'
+								variant='ghost'
 								onClick={handleSuggestionReject}
-								className="h-6 px-2 text-gray-600 hover:text-gray-700"
-							>
-								<X className="h-3 w-3" />
+								className='h-6 px-2 text-muted-foreground hover:text-foreground'>
+								<X className='h-3 w-3' />
 							</Button>
 						</div>
 					</AlertDescription>
@@ -210,9 +160,9 @@ export default function CategorySelector({
 
 			{/* Loading Suggestion */}
 			{isLoadingSuggestion && (
-				<Alert className="border-gray-200 bg-gray-50">
-					<Sparkles className="h-4 w-4 text-gray-600 animate-pulse" />
-					<AlertDescription className="text-sm text-gray-600">
+				<Alert className='border-input bg-muted'>
+					<Sparkles className='h-4 w-4 text-muted-foreground animate-pulse' />
+					<AlertDescription className='text-sm text-muted-foreground'>
 						Getting category suggestion...
 					</AlertDescription>
 				</Alert>
@@ -220,20 +170,19 @@ export default function CategorySelector({
 
 			{/* Category Selector */}
 			<Select
-				value={currentCategoryId || "__none__"}
+				value={currentCategoryId || '__none__'}
 				onValueChange={handleManualSelection}
-				disabled={disabled}
-			>
-				<SelectTrigger className="w-full">
-					<SelectValue placeholder="Select a category..." />
+				disabled={disabled || isLoadingCategories}>
+				<SelectTrigger className='w-full'>
+					<SelectValue placeholder='Select a category...' />
 				</SelectTrigger>
 				<SelectContent>
-					<SelectItem value="__none__">No Category</SelectItem>
+					<SelectItem value='__none__'>No Category</SelectItem>
 					{categories.map((category) => (
 						<SelectItem key={category.id} value={category.id}>
-							<div className="flex items-center gap-2">
+							<div className='flex items-center gap-2'>
 								<div
-									className="w-3 h-3 rounded-full"
+									className='w-3 h-3 rounded-full'
 									style={{ backgroundColor: category.color }}
 								/>
 								{category.name}

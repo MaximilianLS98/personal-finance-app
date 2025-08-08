@@ -224,7 +224,7 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 
 					{state.isUploading && (
 						<div className='w-full max-w-xs mt-4'>
-							<div className='bg-gray-200 rounded-full h-2 dark:bg-gray-700'>
+							<div className='bg-input rounded-full h-2 dark:bg-input/60'>
 								<div
 									className='bg-blue-600 h-2 rounded-full transition-all duration-300'
 									style={{ width: `${state.uploadProgress}%` }}

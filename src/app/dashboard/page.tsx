@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -51,41 +51,13 @@ import {
 	ChevronLeft,
 	ChevronRight,
 } from 'lucide-react';
+import { useDashboardQuery } from '@/lib/queries';
+import { useDashboardFilters } from '@/lib/stores/filters';
+import { useCurrencySettings } from '@/app/providers';
 
 interface DateRange {
 	from: Date | undefined;
 	to: Date | undefined;
-}
-
-interface FilterState {
-	dateRange: DateRange;
-	preset: string;
-	interval: 'day' | 'week' | 'month';
-}
-
-interface DashboardData {
-	expenseIncomeOverTime: Array<{
-		date: string;
-		income: number;
-		expenses: number;
-		net: number;
-	}>;
-	categoryBreakdown: Array<{
-		categoryId: string;
-		categoryName: string;
-		categoryColor: string;
-		amount: number;
-		count: number;
-	}>;
-	topCategoryAverages: Array<{
-		categoryId: string;
-		categoryName: string;
-		categoryColor: string;
-		totalAmount: number;
-		averagePerInterval: number;
-		intervalCount: number;
-	}>;
-	oldestDataDate?: string;
 }
 
 const DATE_PRESETS = {
@@ -136,15 +108,11 @@ const DATE_PRESETS = {
 		getValue: () => ({ from: startOfYear(new Date()), to: endOfYear(new Date()) }),
 	},
 	custom: { label: 'Custom Range', getValue: () => ({ from: undefined, to: undefined }) },
-};
+} as const;
 
-// Helper function to get smart default interval based on date range
-const getSmartInterval = (
-	preset: string,
-	fromDate?: Date,
-	toDate?: Date,
-): 'day' | 'week' | 'month' => {
-	// For preset-based selection
+type Interval = 'day' | 'week' | 'month';
+
+const getSmartInterval = (preset: string, fromDate?: Date, toDate?: Date): Interval => {
 	if (preset && preset !== 'custom') {
 		switch (preset) {
 			case 'all':
@@ -164,164 +132,101 @@ const getSmartInterval = (
 				return 'day';
 		}
 	}
-
-	// For custom date ranges, calculate based on duration
 	if (fromDate && toDate) {
 		const diffInDays = Math.abs(toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24);
 		if (diffInDays > 180) return 'month';
 		if (diffInDays > 30) return 'week';
 		return 'day';
 	}
-
 	return 'day';
 };
 
 export default function DashboardPage() {
-	const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
-	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState<string | null>(null);
-	const [filters, setFilters] = useState<FilterState>({
-		dateRange: {
-			from: startOfMonth(new Date()),
-			to: endOfMonth(new Date()),
-		},
-		preset: 'thisMonth',
-		interval: 'week', // Default to weekly grouping for current month
+	const { dateRange, preset, interval, setFilters } = useDashboardFilters();
+	const [oldestDataDate, setOldestDataDate] = useState<Date | null>(null);
+	const { currency: appCurrency, locale: appLocale } = useCurrencySettings();
+
+	const formatCurrency = (amount: number, currencyOverride?: string) =>
+		new Intl.NumberFormat(appLocale, {
+			style: 'currency',
+			currency: currencyOverride ?? appCurrency,
+		}).format(Math.abs(amount));
+
+	const {
+		data,
+		isLoading,
+		isError,
+		error: rqError,
+	} = useDashboardQuery({
+		from: dateRange.from,
+		to: dateRange.to,
+		interval: interval,
 	});
 
-	// State to track the oldest available data for navigation limits
-	const [oldestDataDate, setOldestDataDate] = useState<Date | null>(null);
-
-	// Fetch dashboard data
-	const fetchDashboardData = useCallback(async () => {
-		setLoading(true);
-		setError(null);
-
-		try {
-			const params = new URLSearchParams();
-			if (filters.dateRange.from) {
-				params.append('from', filters.dateRange.from.toISOString());
-			}
-			if (filters.dateRange.to) {
-				params.append('to', filters.dateRange.to.toISOString());
-			}
-			params.append('interval', filters.interval);
-
-			const response = await fetch(`/api/dashboard?${params.toString()}`);
-			const result = await response.json();
-
-			if (!response.ok) {
-				throw new Error(result.message || 'Failed to fetch dashboard data');
-			}
-
-			setDashboardData(result);
-
-			// Set oldest data date if available in the response
-			if (result.oldestDataDate) {
-				setOldestDataDate(new Date(result.oldestDataDate));
-			}
-		} catch (error) {
-			console.error('Error fetching dashboard data:', error);
-			setError(error instanceof Error ? error.message : 'Failed to load dashboard data');
-		} finally {
-			setLoading(false);
+	// Set oldest data date memoized when data changes
+	useMemo(() => {
+		if ((data as any)?.oldestDataDate) {
+			setOldestDataDate(new Date((data as any).oldestDataDate));
 		}
-	}, [filters.dateRange.from, filters.dateRange.to, filters.interval]);
+	}, [data]);
 
-	// Load data when filters change
-	useEffect(() => {
-		fetchDashboardData();
-	}, [fetchDashboardData]);
-
-	// Handle preset change
-	const handlePresetChange = (preset: string) => {
-		const presetConfig = DATE_PRESETS[preset as keyof typeof DATE_PRESETS];
-		if (presetConfig) {
-			const dateRange = presetConfig.getValue();
-			const smartInterval = getSmartInterval(preset, dateRange.from, dateRange.to);
-			setFilters({
-				preset,
-				dateRange,
-				interval: smartInterval,
-			});
-		}
+	const handlePresetChange = (nextPreset: string) => {
+		const presetConfig = DATE_PRESETS[nextPreset as keyof typeof DATE_PRESETS];
+		if (!presetConfig) return;
+		const nextRange = presetConfig.getValue();
+		const smart = getSmartInterval(nextPreset, nextRange.from, nextRange.to);
+		setFilters(() => ({
+			dateRange: nextRange,
+			preset: nextPreset,
+			interval: smart,
+			setFilters,
+		}));
 	};
 
-	// Handle custom date range change
 	const handleDateRangeChange = (range: DateRange) => {
-		const smartInterval = getSmartInterval('custom', range.from, range.to);
-		setFilters({
-			...filters,
-			preset: 'custom',
-			dateRange: range,
-			interval: smartInterval,
-		});
+		const smart = getSmartInterval('custom', range.from, range.to);
+		setFilters((prev) => ({ ...prev, dateRange: range, preset: 'custom', interval: smart }));
 	};
 
-	// Handle interval change
-	const handleIntervalChange = (interval: 'day' | 'week' | 'month') => {
-		setFilters({
-			...filters,
-			interval,
-		});
+	const handleIntervalChange = (next: Interval) => {
+		setFilters((prev) => ({ ...prev, interval: next }));
 	};
 
-	// Navigation functions for date range
 	const navigateToPreviousPeriod = () => {
-		if (!filters.dateRange.from || !filters.dateRange.to) return;
-
-		const fromDate = subMonths(filters.dateRange.from, 1);
-		const toDate = subMonths(filters.dateRange.to, 1);
-
-		// Check if we're going beyond the oldest data
+		if (!dateRange.from || !dateRange.to) return;
+		const fromDate = subMonths(dateRange.from, 1);
+		const toDate = subMonths(dateRange.to, 1);
 		if (oldestDataDate && isBefore(fromDate, oldestDataDate)) return;
-
-		setFilters({
-			...filters,
+		setFilters((prev) => ({
+			...prev,
 			preset: 'custom',
 			dateRange: { from: fromDate, to: toDate },
-		});
+		}));
 	};
 
 	const navigateToNextPeriod = () => {
-		if (!filters.dateRange.from || !filters.dateRange.to) return;
-
-		const fromDate = addMonths(filters.dateRange.from, 1);
-		const toDate = addMonths(filters.dateRange.to, 1);
-
-		// Check if we're going into the future
+		if (!dateRange.from || !dateRange.to) return;
+		const fromDate = addMonths(dateRange.from, 1);
+		const toDate = addMonths(dateRange.to, 1);
 		if (isAfter(fromDate, new Date())) return;
-
-		setFilters({
-			...filters,
+		setFilters((prev) => ({
+			...prev,
 			preset: 'custom',
 			dateRange: { from: fromDate, to: toDate },
-		});
+		}));
 	};
 
-	// Check if navigation buttons should be disabled
 	const canNavigatePrevious =
-		filters.dateRange.from &&
-		oldestDataDate &&
-		!isBefore(subMonths(filters.dateRange.from, 1), oldestDataDate);
-	const canNavigateNext =
-		filters.dateRange.from && !isAfter(addMonths(filters.dateRange.from, 1), new Date());
+		dateRange.from && oldestDataDate && !isBefore(subMonths(dateRange.from, 1), oldestDataDate);
+	const canNavigateNext = dateRange.from && !isAfter(addMonths(dateRange.from, 1), new Date());
 
-	// Format the current date range for display
 	const getDateRangeDisplay = () => {
-		if (!filters.dateRange.from || !filters.dateRange.to) return 'Select Date Range';
-
-		const fromMonth = format(filters.dateRange.from, 'MMMM yyyy');
-		const toMonth = format(filters.dateRange.to, 'MMMM yyyy');
-
-		if (fromMonth === toMonth) {
-			return fromMonth;
-		}
-
-		return `${fromMonth} - ${toMonth}`;
+		if (!dateRange.from || !dateRange.to) return 'Select Date Range';
+		const fromMonth = format(dateRange.from, 'MMMM yyyy');
+		const toMonth = format(dateRange.to, 'MMMM yyyy');
+		return fromMonth === toMonth ? fromMonth : `${fromMonth} - ${toMonth}`;
 	};
 
-	// Custom tooltip for line chart
 	const LineChartTooltip = ({
 		active,
 		payload,
@@ -337,7 +242,7 @@ export default function DashboardPage() {
 					<p className='text-sm font-medium'>{label}</p>
 					{payload.map((entry, index) => (
 						<p key={index} className='text-sm' style={{ color: entry.color }}>
-							{entry.dataKey}: ${Math.abs(entry.value).toFixed(2)}
+							{entry.dataKey}: {formatCurrency(entry.value)}
 						</p>
 					))}
 				</div>
@@ -346,7 +251,6 @@ export default function DashboardPage() {
 		return null;
 	};
 
-	// Custom tooltip for bar chart
 	const BarChartTooltip = ({
 		active,
 		payload,
@@ -360,7 +264,7 @@ export default function DashboardPage() {
 			return (
 				<div className='bg-background border border-border rounded-lg p-3 shadow-lg'>
 					<p className='text-sm font-medium'>{label}</p>
-					<p className='text-sm'>Amount: ${payload[0].value.toFixed(2)}</p>
+					<p className='text-sm'>Amount: {formatCurrency(payload[0].value)}</p>
 					<p className='text-sm'>Transactions: {payload[0].payload.count}</p>
 				</div>
 			);
@@ -368,35 +272,20 @@ export default function DashboardPage() {
 		return null;
 	};
 
-	// Prepare data for charts
 	const chartData = useMemo(() => {
-		if (!dashboardData) return { lineData: [], barData: [] };
-
-		// Use the data as-is since the API already formats the dates correctly based on interval
-		const lineData = dashboardData.expenseIncomeOverTime;
-
-		// Format bar chart data (top 10 categories)
-		const barData = dashboardData.categoryBreakdown.slice(0, 10);
-
+		if (!data) return { lineData: [], barData: [] };
+		const lineData = (data as any).expenseIncomeOverTime ?? [];
+		const barData = (data as any).categoryBreakdown?.slice(0, 10) ?? [];
 		return { lineData, barData };
-	}, [dashboardData]);
+	}, [data]);
 
-	// Calculate summary stats
 	const summaryStats = useMemo(() => {
-		if (!dashboardData) return { totalIncome: 0, totalExpenses: 0, netAmount: 0 };
-
-		const totalIncome = dashboardData.expenseIncomeOverTime.reduce(
-			(sum, item) => sum + item.income,
-			0,
-		);
-		const totalExpenses = dashboardData.expenseIncomeOverTime.reduce(
-			(sum, item) => sum + item.expenses,
-			0,
-		);
-		const netAmount = totalIncome - totalExpenses;
-
-		return { totalIncome, totalExpenses, netAmount };
-	}, [dashboardData]);
+		if (!data) return { totalIncome: 0, totalExpenses: 0, netAmount: 0 };
+		const over = (data as any).expenseIncomeOverTime ?? [];
+		const totalIncome = over.reduce((sum: number, item: any) => sum + item.income, 0);
+		const totalExpenses = over.reduce((sum: number, item: any) => sum + item.expenses, 0);
+		return { totalIncome, totalExpenses, netAmount: totalIncome - totalExpenses };
+	}, [data]);
 
 	return (
 		<Layout>
@@ -425,11 +314,11 @@ export default function DashboardPage() {
 
 					<div className='text-center'>
 						<h3 className='text-xl font-semibold'>{getDateRangeDisplay()}</h3>
-						<p className='text-xs text-muted-foreground mt-1'>
+						<p className='text-xs text-muted-foreground'>
 							Grouped by{' '}
-							{filters.interval === 'day'
+							{interval === 'day'
 								? 'Daily'
-								: filters.interval === 'week'
+								: interval === 'week'
 									? 'Weekly'
 									: 'Monthly'}
 						</p>
@@ -459,14 +348,14 @@ export default function DashboardPage() {
 							{/* Preset Selector */}
 							<div className='flex items-center gap-2'>
 								<label className='text-sm font-medium'>Quick Select:</label>
-								<Select value={filters.preset} onValueChange={handlePresetChange}>
+								<Select value={preset} onValueChange={handlePresetChange}>
 									<SelectTrigger className='w-48'>
 										<SelectValue />
 									</SelectTrigger>
 									<SelectContent>
-										{Object.entries(DATE_PRESETS).map(([key, preset]) => (
+										{Object.entries(DATE_PRESETS).map(([key, p]) => (
 											<SelectItem key={key} value={key}>
-												{preset.label}
+												{p.label}
 											</SelectItem>
 										))}
 									</SelectContent>
@@ -476,9 +365,7 @@ export default function DashboardPage() {
 							{/* Time Interval Selector */}
 							<div className='flex items-center gap-2'>
 								<label className='text-sm font-medium'>Group by:</label>
-								<Select
-									value={filters.interval}
-									onValueChange={handleIntervalChange}>
+								<Select value={interval} onValueChange={handleIntervalChange}>
 									<SelectTrigger className='w-32'>
 										<SelectValue />
 									</SelectTrigger>
@@ -499,19 +386,20 @@ export default function DashboardPage() {
 											variant='outline'
 											className='w-48 justify-start text-left font-normal'>
 											<CalendarIcon className='mr-2 h-4 w-4' />
-											{filters.dateRange.from
-												? format(filters.dateRange.from, 'MMM dd, yyyy')
+											{dateRange.from
+												? format(dateRange.from, 'MMM dd, yyyy')
 												: 'Pick a date'}
 										</Button>
 									</PopoverTrigger>
 									<PopoverContent className='w-auto p-0'>
 										<Calendar
 											mode='single'
-											selected={filters.dateRange.from}
+											selected={dateRange.from}
 											onSelect={(date) =>
 												handleDateRangeChange({
-													...filters.dateRange,
+													...dateRange,
 													from: date,
+													to: dateRange.to,
 												})
 											}
 											initialFocus
@@ -528,19 +416,20 @@ export default function DashboardPage() {
 											variant='outline'
 											className='w-48 justify-start text-left font-normal'>
 											<CalendarIcon className='mr-2 h-4 w-4' />
-											{filters.dateRange.to
-												? format(filters.dateRange.to, 'MMM dd, yyyy')
+											{dateRange.to
+												? format(dateRange.to, 'MMM dd, yyyy')
 												: 'Pick a date'}
 										</Button>
 									</PopoverTrigger>
 									<PopoverContent className='w-auto p-0'>
 										<Calendar
 											mode='single'
-											selected={filters.dateRange.to}
+											selected={dateRange.to}
 											onSelect={(date) =>
 												handleDateRangeChange({
-													...filters.dateRange,
+													...dateRange,
 													to: date,
+													from: dateRange.from,
 												})
 											}
 											initialFocus
@@ -551,28 +440,26 @@ export default function DashboardPage() {
 						</div>
 
 						{/* Active Filters Display */}
-						{(filters.dateRange.from ||
-							filters.dateRange.to ||
-							filters.preset !== 'all') && (
+						{(dateRange.from || dateRange.to || preset !== 'all') && (
 							<div className='mt-4 flex flex-wrap gap-2'>
 								<span className='text-sm text-muted-foreground'>
 									Active filters:
 								</span>
-								{filters.dateRange.from && (
+								{dateRange.from && (
 									<span className='text-sm bg-secondary px-2 py-1 rounded'>
-										From: {format(filters.dateRange.from, 'MMM dd, yyyy')}
+										From: {format(dateRange.from, 'MMM dd, yyyy')}
 									</span>
 								)}
-								{filters.dateRange.to && (
+								{dateRange.to && (
 									<span className='text-sm bg-secondary px-2 py-1 rounded'>
-										To: {format(filters.dateRange.to, 'MMM dd, yyyy')}
+										To: {format(dateRange.to, 'MMM dd, yyyy')}
 									</span>
 								)}
 								<span className='text-sm bg-primary/10 text-primary px-2 py-1 rounded'>
 									Grouping:{' '}
-									{filters.interval === 'day'
+									{interval === 'day'
 										? 'Daily'
-										: filters.interval === 'week'
+										: interval === 'week'
 											? 'Weekly'
 											: 'Monthly'}
 								</span>
@@ -582,15 +469,17 @@ export default function DashboardPage() {
 				</Card>
 
 				{/* Error Alert */}
-				{error && (
+				{isError && (
 					<Alert variant='destructive'>
 						<AlertCircle className='h-4 w-4' />
-						<AlertDescription>{error}</AlertDescription>
+						<AlertDescription>
+							{(rqError as Error)?.message || 'Failed to load dashboard data'}
+						</AlertDescription>
 					</Alert>
 				)}
 
 				{/* Summary Stats */}
-				{!loading && dashboardData && (
+				{!isLoading && data && (
 					<div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
 						<Card>
 							<CardContent className='p-6'>
@@ -600,7 +489,7 @@ export default function DashboardPage() {
 											Total Income
 										</p>
 										<p className='text-2xl font-bold text-green-600'>
-											${summaryStats.totalIncome.toFixed(2)}
+											{formatCurrency(summaryStats.totalIncome)}
 										</p>
 									</div>
 									<TrendingUp className='h-8 w-8 text-green-600' />
@@ -615,7 +504,7 @@ export default function DashboardPage() {
 											Total Expenses
 										</p>
 										<p className='text-2xl font-bold text-red-600'>
-											${summaryStats.totalExpenses.toFixed(2)}
+											{formatCurrency(summaryStats.totalExpenses)}
 										</p>
 									</div>
 									<TrendingUp className='h-8 w-8 text-red-600 rotate-180' />
@@ -631,7 +520,7 @@ export default function DashboardPage() {
 										</p>
 										<p
 											className={`text-2xl font-bold ${summaryStats.netAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-											${summaryStats.netAmount.toFixed(2)}
+											{formatCurrency(summaryStats.netAmount)}
 										</p>
 									</div>
 									<TrendingUp
@@ -644,7 +533,7 @@ export default function DashboardPage() {
 				)}
 
 				{/* Top Category Averages */}
-				{!loading && dashboardData && dashboardData.topCategoryAverages.length > 0 && (
+				{!isLoading && data && (data as any).topCategoryAverages?.length > 0 && (
 					<Card>
 						<CardHeader>
 							<CardTitle className='flex items-center gap-2'>
@@ -653,9 +542,9 @@ export default function DashboardPage() {
 							</CardTitle>
 							<p className='text-sm text-muted-foreground'>
 								Average spending per{' '}
-								{filters.interval === 'day'
+								{interval === 'day'
 									? 'day'
-									: filters.interval === 'week'
+									: interval === 'week'
 										? 'week'
 										: 'month'}{' '}
 								for your highest spending categories
@@ -663,59 +552,68 @@ export default function DashboardPage() {
 						</CardHeader>
 						<CardContent>
 							<div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
-								{dashboardData.topCategoryAverages.map((category, index) => (
-									<div
-										key={category.categoryId}
-										className='p-4 border rounded-lg'>
-										<div className='flex items-center gap-3 mb-2'>
-											<div
-												className='w-4 h-4 rounded-full'
-												style={{ backgroundColor: category.categoryColor }}
-											/>
-											<span className='font-medium text-sm'>
-												{category.categoryName}
-											</span>
-											<span className='text-xs bg-secondary px-2 py-1 rounded'>
-												#{index + 1}
-											</span>
-										</div>
-										<div className='space-y-2'>
-											<div>
-												<p className='text-xs text-muted-foreground'>
-													Average per{' '}
-													{filters.interval === 'day'
-														? 'day'
-														: filters.interval === 'week'
-															? 'week'
-															: 'month'}
-												</p>
-												<p
-													className='text-lg font-bold'
-													style={{ color: category.categoryColor }}>
-													${category.averagePerInterval.toFixed(2)}
-												</p>
+								{(data as any).topCategoryAverages.map(
+									(category: any, index: number) => (
+										<div
+											key={category.categoryId}
+											className='p-4 border rounded-lg'>
+											<div className='flex items-center gap-3 mb-2'>
+												<div
+													className='w-4 h-4 rounded-full'
+													style={{
+														backgroundColor: category.categoryColor,
+													}}
+												/>
+												<span className='font-medium text-sm'>
+													{category.categoryName}
+												</span>
+												<span className='text-xs bg-secondary px-2 py-1 rounded'>
+													#{index + 1}
+												</span>
 											</div>
-											<div className='text-xs text-muted-foreground'>
-												<p>Total: ${category.totalAmount.toFixed(2)}</p>
-												<p>
-													Over {category.intervalCount}{' '}
-													{filters.interval === 'day'
-														? 'days'
-														: filters.interval === 'week'
-															? 'weeks'
-															: 'months'}
-												</p>
+											<div className='space-y-2'>
+												<div>
+													<p className='text-xs text-muted-foreground'>
+														Average per{' '}
+														{interval === 'day'
+															? 'day'
+															: interval === 'week'
+																? 'week'
+																: 'month'}
+													</p>
+													<p
+														className='text-lg font-bold'
+														style={{ color: category.categoryColor }}>
+														{formatCurrency(
+															category.averagePerInterval,
+														)}
+													</p>
+												</div>
+												<div className='text-xs text-muted-foreground'>
+													<p>
+														Total:{' '}
+														{formatCurrency(category.totalAmount)}
+													</p>
+													<p>
+														Over {category.intervalCount}{' '}
+														{interval === 'day'
+															? 'days'
+															: interval === 'week'
+																? 'weeks'
+																: 'months'}
+													</p>
+												</div>
 											</div>
 										</div>
-									</div>
-								))}
+									),
+								)}
 							</div>
 						</CardContent>
 					</Card>
 				)}
 
 				{/* Charts */}
-				{loading ? (
+				{isLoading ? (
 					<div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
 						<Card>
 							<CardHeader>
@@ -738,7 +636,7 @@ export default function DashboardPage() {
 							</CardContent>
 						</Card>
 					</div>
-				) : dashboardData ? (
+				) : data ? (
 					<div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
 						{/* Line Chart - Income vs Expenses Over Time */}
 						<Card>

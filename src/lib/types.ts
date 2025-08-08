@@ -14,6 +14,8 @@ export interface Transaction {
 	description: string;
 	/** Transaction amount (positive for income, negative for expenses) */
 	amount: number;
+	/** Optional ISO 4217 currency code (e.g., 'NOK', 'USD') parsed from CSV if available */
+	currency?: string;
 	/** Type of transaction based on amount or detected patterns */
 	type: 'income' | 'expense' | 'transfer';
 	/** Category ID for expense categorization */

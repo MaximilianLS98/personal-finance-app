@@ -7,11 +7,12 @@ import type { Migration } from '../types';
 import { migration001 } from './001_initial';
 import { migration002 } from './002_add_transfer_type';
 import { migration003 } from './003_add_categories';
+import { migration004 } from './004_add_currency';
 
 /**
  * Registry of all available migrations in order
  */
-export const migrations: Migration[] = [migration001, migration002, migration003];
+export const migrations: Migration[] = [migration001, migration002, migration003, migration004];
 
 /**
  * Migration runner class for managing database schema evolution
