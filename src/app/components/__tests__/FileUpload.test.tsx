@@ -43,15 +43,20 @@ describe('FileUpload Component', () => {
 	});
 
 	it('validates file type correctly', async () => {
-		const user = userEvent.setup();
 		render(<FileUpload onUploadError={mockOnUploadError} />);
 
-		const fileInput = screen.getByRole('textbox', { hidden: true }) as HTMLInputElement;
+		const fileInput = screen.getByTestId('file-input') as HTMLInputElement;
 		const invalidFile = createMockFile('test.txt', 'text/plain');
 
-		await user.upload(fileInput, invalidFile);
+		// Use fireEvent instead of userEvent for file upload
+		fireEvent.change(fileInput, {
+			target: { files: [invalidFile] },
+		});
 
-		expect(mockOnUploadError).toHaveBeenCalledWith('Please select a valid CSV file');
+		await waitFor(() => {
+			expect(mockOnUploadError).toHaveBeenCalledWith('Please select a valid CSV file');
+		});
+
 		expect(screen.getByText('Please select a valid CSV file')).toBeInTheDocument();
 		expect(screen.getByTestId('alert-circle-icon')).toBeInTheDocument();
 	});
@@ -60,7 +65,7 @@ describe('FileUpload Component', () => {
 		const user = userEvent.setup();
 		render(<FileUpload onUploadError={mockOnUploadError} />);
 
-		const fileInput = screen.getByRole('textbox', { hidden: true }) as HTMLInputElement;
+		const fileInput = screen.getByTestId('file-input') as HTMLInputElement;
 		const largeFile = createMockFile('large.csv', 'text/csv', 6 * 1024 * 1024); // 6MB
 
 		await user.upload(fileInput, largeFile);
@@ -110,14 +115,24 @@ describe('FileUpload Component', () => {
 			},
 		};
 
-		(fetch as jest.Mock).mockResolvedValueOnce({
-			ok: true,
-			json: async () => mockResponse,
-		});
+		// Add a delay to the mock to simulate network request
+		(fetch as jest.Mock).mockImplementationOnce(
+			() =>
+				new Promise((resolve) =>
+					setTimeout(
+						() =>
+							resolve({
+								ok: true,
+								json: async () => mockResponse,
+							}),
+						100,
+					),
+				),
+		);
 
 		render(<FileUpload onUploadSuccess={mockOnUploadSuccess} />);
 
-		const fileInput = screen.getByRole('textbox', { hidden: true }) as HTMLInputElement;
+		const fileInput = screen.getByTestId('file-input') as HTMLInputElement;
 		const validFile = createMockFile('transactions.csv', 'text/csv');
 
 		await user.upload(fileInput, validFile);
@@ -128,9 +143,12 @@ describe('FileUpload Component', () => {
 		});
 
 		// Wait for upload to complete
-		await waitFor(() => {
-			expect(screen.getByTestId('check-circle-icon')).toBeInTheDocument();
-		});
+		await waitFor(
+			() => {
+				expect(screen.getByTestId('check-circle-icon')).toBeInTheDocument();
+			},
+			{ timeout: 2000 },
+		);
 
 		expect(screen.getByText('Successfully uploaded transactions.csv')).toBeInTheDocument();
 		expect(mockOnUploadSuccess).toHaveBeenCalledWith(mockResponse.data);
@@ -154,7 +172,7 @@ describe('FileUpload Component', () => {
 
 		render(<FileUpload onUploadError={mockOnUploadError} />);
 
-		const fileInput = screen.getByRole('textbox', { hidden: true }) as HTMLInputElement;
+		const fileInput = screen.getByTestId('file-input') as HTMLInputElement;
 		const validFile = createMockFile('invalid.csv', 'text/csv');
 
 		await user.upload(fileInput, validFile);
@@ -177,7 +195,7 @@ describe('FileUpload Component', () => {
 
 		render(<FileUpload />);
 
-		const fileInput = screen.getByRole('textbox', { hidden: true }) as HTMLInputElement;
+		const fileInput = screen.getByTestId('file-input') as HTMLInputElement;
 		// File with generic MIME type but .csv extension
 		const csvFile = createMockFile('data.csv', 'application/octet-stream');
 

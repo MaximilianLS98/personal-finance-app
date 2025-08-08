@@ -191,22 +191,19 @@ describe('calculateFinancialSummary', () => {
 });
 
 describe('formatCurrency', () => {
-	it('should format positive amounts with NOK currency by default', () => {
+	it('should format positive amounts with USD currency by default', () => {
 		const result = formatCurrency(12345.67);
-		expect(result).toMatch(/12[\s\u00A0]345,67/); // Handles different space characters
-		expect(result).toContain('kr'); // Norwegian Kroner symbol
+		expect(result).toBe('$12,345.67');
 	});
 
 	it('should format negative amounts correctly', () => {
 		const result = formatCurrency(-1234.56);
-		expect(result).toMatch(/[−-]1[\s\u00A0]234,56/); // Handle both minus signs
-		expect(result).toContain('kr');
+		expect(result).toBe('-$1,234.56');
 	});
 
 	it('should format zero correctly', () => {
 		const result = formatCurrency(0);
-		expect(result).toMatch(/0,00/);
-		expect(result).toContain('kr');
+		expect(result).toBe('$0.00');
 	});
 
 	it('should handle different currencies', () => {
@@ -222,26 +219,26 @@ describe('formatCurrency', () => {
 
 	it('should handle large numbers', () => {
 		const result = formatCurrency(1234567.89);
-		expect(result).toMatch(/1[\s\u00A0]234[\s\u00A0]567,89/);
+		expect(result).toBe('$1,234,567.89');
 	});
 });
 
 describe('formatAmount', () => {
 	it('should format positive amounts without currency symbol', () => {
 		const result = formatAmount(12345.67);
-		expect(result).toMatch(/12[\s\u00A0]345,67/);
+		expect(result).toBe('12,345.67');
 		expect(result).not.toContain('kr');
 		expect(result).not.toContain('$');
 	});
 
 	it('should format negative amounts correctly', () => {
 		const result = formatAmount(-1234.56);
-		expect(result).toMatch(/[−-]1[\s\u00A0]234,56/); // Handle both minus signs
+		expect(result).toBe('-1,234.56');
 	});
 
 	it('should format zero correctly', () => {
 		const result = formatAmount(0);
-		expect(result).toBe('0,00');
+		expect(result).toBe('0.00');
 	});
 
 	it('should handle different locales', () => {
@@ -251,11 +248,11 @@ describe('formatAmount', () => {
 
 	it('should handle large numbers', () => {
 		const result = formatAmount(1234567.89);
-		expect(result).toMatch(/1[\s\u00A0]234[\s\u00A0]567,89/);
+		expect(result).toBe('1,234,567.89');
 	});
 
 	it('should always show two decimal places', () => {
 		const result = formatAmount(100);
-		expect(result).toMatch(/100,00/);
+		expect(result).toBe('100.00');
 	});
 });

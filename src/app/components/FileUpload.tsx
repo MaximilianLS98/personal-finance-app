@@ -259,6 +259,7 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 						onChange={handleInputChange}
 						className='hidden'
 						disabled={state.isUploading}
+						data-testid='file-input'
 					/>
 				</CardContent>
 			</Card>

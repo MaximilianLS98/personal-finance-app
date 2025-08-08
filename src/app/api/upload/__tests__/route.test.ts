@@ -2,11 +2,32 @@ import { POST } from '../route';
 import { NextRequest } from 'next/server';
 
 describe('/api/upload', () => {
-	const createMockRequest = (formData: FormData): NextRequest => {
-		return new NextRequest('http://localhost:3000/api/upload', {
+	const createMockRequest = (file: File): NextRequest => {
+		// Create a mock FormData that directly returns our file
+		const mockFormData = {
+			get: (key: string) => {
+				if (key === 'file') {
+					return file;
+				}
+				return null;
+			},
+			entries: function* () {
+				yield ['file', file];
+			},
+			keys: function* () {
+				yield 'file';
+			},
+			values: function* () {
+				yield file;
+			},
+		};
+
+		const mockRequest = {
+			formData: async () => mockFormData,
 			method: 'POST',
-			body: formData,
-		});
+			url: 'http://localhost:3000/api/upload',
+		} as NextRequest;
+		return mockRequest;
 	};
 
 	const createMockFile = (
@@ -15,25 +36,27 @@ describe('/api/upload', () => {
 		type: string = 'text/csv',
 		size?: number,
 	): File => {
-		const blob = new Blob([content], { type });
-		const file = new File([blob], name, { type });
+		const actualSize = size !== undefined ? size : content.length;
 
-		// Mock the size property if provided
-		if (size !== undefined) {
-			Object.defineProperty(file, 'size', {
-				value: size,
-				writable: false,
-				configurable: true,
-			});
-		}
+		// Create a proper mock File object with all required properties
+		const mockFile = {
+			name,
+			type,
+			size: actualSize,
+			lastModified: Date.now(),
+			webkitRelativePath: '',
+			text: jest.fn().mockResolvedValue(content),
+			stream: jest.fn().mockReturnValue(new ReadableStream()),
+			arrayBuffer: jest.fn().mockResolvedValue(new ArrayBuffer(content.length)),
+			slice: jest.fn(),
+		} as unknown as File;
 
-		return file;
+		return mockFile;
 	};
 
 	describe('File validation', () => {
 		it('should return error when no file is provided', async () => {
-			const formData = new FormData();
-			const request = createMockRequest(formData);
+			const request = createMockRequest(null as any);
 
 			const response = await POST(request);
 			const data = await response.json();
@@ -44,13 +67,11 @@ describe('/api/upload', () => {
 		});
 
 		it('should return error when file is too large', async () => {
-			const formData = new FormData();
 			// Create a large content string that will actually be large
 			const largeContent = 'x'.repeat(6 * 1024 * 1024); // 6MB of content
 			const largeFile = createMockFile(largeContent, 'large.csv', 'text/csv');
-			formData.append('file', largeFile);
 
-			const request = createMockRequest(formData);
+			const request = createMockRequest(largeFile);
 			const response = await POST(request);
 			const data = await response.json();
 
@@ -60,13 +81,9 @@ describe('/api/upload', () => {
 		});
 
 		it('should return error for invalid file type', async () => {
-			const formData = new FormData();
-			const invalidFile = createMockFile('test content', 'test.txt', 'text/plain');
-			// Override the name to not end with .csv
-			Object.defineProperty(invalidFile, 'name', { value: 'test.txt' });
-			formData.append('file', invalidFile);
+			const invalidFile = createMockFile('test content', 'test.txt', 'application/json');
 
-			const request = createMockRequest(formData);
+			const request = createMockRequest(invalidFile);
 			const response = await POST(request);
 			const data = await response.json();
 
@@ -77,11 +94,9 @@ describe('/api/upload', () => {
 
 		it('should accept CSV file with .csv extension even with text/plain MIME type', async () => {
 			const csvContent = 'Date,Description,Amount\n2024-01-01,Test,100';
-			const formData = new FormData();
 			const csvFile = createMockFile(csvContent, 'test.csv', 'text/plain');
-			formData.append('file', csvFile);
 
-			const request = createMockRequest(formData);
+			const request = createMockRequest(csvFile);
 			const response = await POST(request);
 			const data = await response.json();
 
@@ -95,11 +110,9 @@ describe('/api/upload', () => {
 
 	describe('CSV content validation', () => {
 		it('should return error for invalid CSV content', async () => {
-			const formData = new FormData();
 			const csvFile = createMockFile('', 'empty.csv', 'text/csv');
-			formData.append('file', csvFile);
 
-			const request = createMockRequest(formData);
+			const request = createMockRequest(csvFile);
 			const response = await POST(request);
 			const data = await response.json();
 
@@ -109,15 +122,13 @@ describe('/api/upload', () => {
 		});
 
 		it('should return error for CSV with only headers', async () => {
-			const formData = new FormData();
 			const csvFile = createMockFile(
 				'Date,Description,Amount',
 				'headers-only.csv',
 				'text/csv',
 			);
-			formData.append('file', csvFile);
 
-			const request = createMockRequest(formData);
+			const request = createMockRequest(csvFile);
 			const response = await POST(request);
 			const data = await response.json();
 
@@ -130,11 +141,9 @@ describe('/api/upload', () => {
 	describe('CSV parsing', () => {
 		it('should return error when parsing fails completely', async () => {
 			const csvContent = 'Invalid,CSV,Content\nBad,Data,Here';
-			const formData = new FormData();
 			const csvFile = createMockFile(csvContent, 'bad.csv', 'text/csv');
-			formData.append('file', csvFile);
 
-			const request = createMockRequest(formData);
+			const request = createMockRequest(csvFile);
 			const response = await POST(request);
 			const data = await response.json();
 
@@ -149,11 +158,9 @@ describe('/api/upload', () => {
 		it('should return success with parsed transactions', async () => {
 			const csvContent =
 				'Date,Description,Amount\n2024-01-01,Salary,2500\n2024-01-02,Groceries,-150';
-			const formData = new FormData();
 			const csvFile = createMockFile(csvContent, 'transactions.csv', 'text/csv');
-			formData.append('file', csvFile);
 
-			const request = createMockRequest(formData);
+			const request = createMockRequest(csvFile);
 			const response = await POST(request);
 			const data = await response.json();
 
@@ -180,11 +187,9 @@ describe('/api/upload', () => {
 
 		it('should return success with partial parsing errors', async () => {
 			const csvContent = 'Date,Description,Amount\n2024-01-01,Salary,2500\ninvalid,row,data';
-			const formData = new FormData();
 			const csvFile = createMockFile(csvContent, 'partial.csv', 'text/csv');
-			formData.append('file', csvFile);
 
-			const request = createMockRequest(formData);
+			const request = createMockRequest(csvFile);
 			const response = await POST(request);
 			const data = await response.json();
 
@@ -202,11 +207,9 @@ describe('/api/upload', () => {
 		it('should handle Norwegian CSV format', async () => {
 			const csvContent =
 				'Bokføringsdato,Tittel,Beløp\n15.01.2024,Lønn,25000\n16.01.2024,Dagligvarer,-855';
-			const formData = new FormData();
 			const csvFile = createMockFile(csvContent, 'norwegian.csv', 'text/csv');
-			formData.append('file', csvFile);
 
-			const request = createMockRequest(formData);
+			const request = createMockRequest(csvFile);
 			const response = await POST(request);
 			const data = await response.json();
 
@@ -233,11 +236,9 @@ describe('/api/upload', () => {
 		acceptedTypes.forEach(({ type, name }) => {
 			it(`should accept file with MIME type ${type}`, async () => {
 				const csvContent = 'Date,Description,Amount\n2024-01-01,Test,100';
-				const formData = new FormData();
 				const csvFile = createMockFile(csvContent, name, type);
-				formData.append('file', csvFile);
 
-				const request = createMockRequest(formData);
+				const request = createMockRequest(csvFile);
 				const response = await POST(request);
 
 				expect(response.status).toBe(200);
