@@ -1,0 +1,4 @@
+1. subscriptions overview and tracking 
+a whole new separate feature for tracking subscriptions the users has. It should also be smart enough to detect subscriptions from the uploaded financial csv, based on description and date payed each month. users should be able to crud subscriptions and their info, and have a nice dashboard to get at a glance information so they can do informed decicions regarding their subscriptions
+
+this should also conceptualize for the users just how much money these subscriptions are over a long time horizon, i.e "this is how much you could have saved by cancelling Netflix" or "if you cancel netflix today and invest this money instead, by 2030 youd have y amount of money"

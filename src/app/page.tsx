@@ -233,9 +233,9 @@ export default function Home() {
 
 					{/* Financial Summary Component */}
 					<FinancialSummary
-						summary={state.summary}
+						summary={state.summary || undefined}
 						isLoading={state.isLoadingSummary}
-						error={state.summaryError}
+						error={state.summaryError || undefined}
 					/>
 				</div>
 			</div>

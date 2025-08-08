@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parseCSV, validateCSVContent } from '@/lib/csv-parser';
 import { ErrorResponse } from '@/lib/types';
-import { storeTransactions } from '@/lib/storage';
+import { createTransactionRepository } from '@/lib/database';
 
 /**
  * Maximum file size for CSV uploads (5MB)
@@ -104,25 +104,51 @@ export async function POST(request: NextRequest) {
 			);
 		}
 
-		// Store transactions in memory for summary endpoint
-		storeTransactions(parseResult.transactions);
+		// Store transactions in database using repository
+		const repository = createTransactionRepository();
+		try {
+			await repository.initialize();
+			
+			// Create transactions without ID field for database insertion
+			// eslint-disable-next-line @typescript-eslint/no-unused-vars
+			const transactionsForDb = parseResult.transactions.map(({ id, ...transaction }) => transaction);
+			const dbResult = await repository.createMany(transactionsForDb);
 
-		// Return successful response with parsed data
-		return NextResponse.json(
-			{
-				success: true,
-				data: {
-					transactions: parseResult.transactions,
-					summary: {
-						totalRows: parseResult.totalRows,
-						validRows: parseResult.validRows,
-						errorCount: parseResult.errors.length,
+			// Return successful response with database result
+			return NextResponse.json(
+				{
+					success: true,
+					data: {
+						transactions: dbResult.created,
+						duplicates: dbResult.duplicates,
+						summary: {
+							totalRows: parseResult.totalRows,
+							validRows: parseResult.validRows,
+							errorCount: parseResult.errors.length,
+							created: dbResult.created.length,
+							duplicateCount: dbResult.duplicates.length,
+							totalProcessed: dbResult.totalProcessed,
+						},
+						errors: parseResult.errors.length > 0 ? parseResult.errors : undefined,
 					},
-					errors: parseResult.errors.length > 0 ? parseResult.errors : undefined,
 				},
-			},
-			{ status: 200 },
-		);
+				{ status: 200 },
+			);
+		} catch (dbError) {
+			console.error('Database error during upload:', dbError);
+			
+			// Return database error response
+			return NextResponse.json(
+				{
+					error: 'DATABASE_ERROR',
+					message: 'Failed to store transactions in database',
+					details: dbError instanceof Error ? dbError.message : 'Unknown database error',
+				} as ErrorResponse,
+				{ status: 500 },
+			);
+		} finally {
+			await repository.close();
+		}
 	} catch (error) {
 		console.error('Upload API error:', error);
 

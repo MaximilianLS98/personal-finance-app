@@ -16,7 +16,7 @@ A personal finance tool that allows users to import monthly bank CSV files and v
 2. WHEN the user selects a CSV file THEN the system SHALL validate that the file is in CSV format
 3. WHEN the user uploads a valid CSV file THEN the system SHALL parse the CSV data and extract transaction information
 4. IF the CSV file is invalid or corrupted THEN the system SHALL display an error message to the user
-5. WHEN the CSV is successfully processed THEN the system SHALL store the transaction data
+5. WHEN the CSV is successfully processed THEN the system SHALL store the transaction data persistently in a SQLite database
 
 ### Requirement 2
 
@@ -45,6 +45,19 @@ A personal finance tool that allows users to import monthly bank CSV files and v
 
 ### Requirement 4
 
+**User Story:** As a user, I want my uploaded financial data to be saved permanently, so that I can access my transaction history across sessions and build up a comprehensive financial record over time.
+
+#### Acceptance Criteria
+
+1. WHEN transaction data is processed THEN the system SHALL store all transactions in a SQLite database
+2. WHEN the user uploads a new CSV file THEN the system SHALL append new transactions to the existing database
+3. WHEN the user returns to the application THEN the system SHALL load previously uploaded transaction data from the database
+4. WHEN displaying financial summaries THEN the system SHALL calculate totals from all stored transactions across all uploaded files
+5. WHEN storing transactions THEN the system SHALL prevent duplicate entries from the same CSV file
+6. IF database operations fail THEN the system SHALL display appropriate error messages and maintain data integrity
+
+### Requirement 5
+
 **User Story:** As a user, I want the application to be built with modern web technologies (Next.js, Bun), so that I have a fast and reliable experience.
 
 #### Acceptance Criteria
@@ -54,3 +67,4 @@ A personal finance tool that allows users to import monthly bank CSV files and v
 3. WHEN running development tasks THEN the system SHALL use Bun as the task runner
 4. WHEN the application loads THEN the system SHALL provide fast initial page load times
 5. WHEN processing CSV files THEN the system SHALL handle the processing efficiently
+6. WHEN storing data THEN the system SHALL use SQLite as the database for reliable local persistence

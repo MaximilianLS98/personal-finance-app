@@ -4,6 +4,7 @@
  */
 
 import { Transaction } from './types';
+import { determineTransactionType } from './transaction-utils';
 
 /**
  * Supported CSV column mappings for different formats
@@ -248,8 +249,8 @@ function parseTransactionRow(
 		throw new Error(`Invalid amount format: ${amountStr}`);
 	}
 
-	// Categorize transaction type
-	const type = categorizeTransaction(amount);
+	// Categorize transaction type using enhanced detection
+	const type = determineTransactionType(amount, description);
 
 	// Generate unique ID
 	const id = generateTransactionId(date, description, amount);
@@ -366,12 +367,6 @@ function parseAmount(amountStr: string): number {
 	return parseFloat(cleaned);
 }
 
-/**
- * Categorizes transaction as income or expense based on amount
- */
-function categorizeTransaction(amount: number): 'income' | 'expense' {
-	return amount >= 0 ? 'income' : 'expense';
-}
 
 /**
  * Generates a unique ID for a transaction based on its properties

@@ -1,38 +1,18 @@
 import { NextResponse } from 'next/server';
-import { getStoredTransactions, hasStoredTransactions } from '@/lib/storage';
-import { calculateFinancialSummary } from '@/lib/financial-calculator';
-import { ErrorResponse, FinancialSummary } from '@/lib/types';
+import { createTransactionRepository } from '@/lib/database';
+import { ErrorResponse } from '@/lib/types';
 
 /**
- * GET /api/summary - Retrieve financial summary of stored transactions
+ * GET /api/summary - Retrieve financial summary from database using repository
  */
 export async function GET() {
+	const repository = createTransactionRepository();
+	
 	try {
-		// Check if there are any stored transactions
-		if (!hasStoredTransactions()) {
-			// Return zero values when no transaction data exists
-			const emptySummary: FinancialSummary = {
-				totalIncome: 0,
-				totalExpenses: 0,
-				netAmount: 0,
-				transactionCount: 0,
-			};
+		await repository.initialize();
 
-			return NextResponse.json(
-				{
-					success: true,
-					data: emptySummary,
-					message: 'No transaction data available',
-				},
-				{ status: 200 },
-			);
-		}
-
-		// Get stored transactions
-		const transactions = getStoredTransactions();
-
-		// Calculate financial summary using utility functions
-		const summary = calculateFinancialSummary(transactions);
+		// Calculate financial summary using repository method with efficient SQL aggregation
+		const summary = await repository.calculateSummary();
 
 		// Return successful response with summary data
 		return NextResponse.json(
@@ -45,6 +25,18 @@ export async function GET() {
 	} catch (error) {
 		console.error('Summary API error:', error);
 
+		// Handle database-specific errors
+		if (error instanceof Error && error.message.includes('Repository not initialized')) {
+			return NextResponse.json(
+				{
+					error: 'DATABASE_CONNECTION_ERROR',
+					message: 'Failed to connect to database',
+					details: error.message,
+				} as ErrorResponse,
+				{ status: 503 },
+			);
+		}
+
 		return NextResponse.json(
 			{
 				error: 'INTERNAL_SERVER_ERROR',
@@ -53,5 +45,7 @@ export async function GET() {
 			} as ErrorResponse,
 			{ status: 500 },
 		);
+	} finally {
+		await repository.close();
 	}
 }
