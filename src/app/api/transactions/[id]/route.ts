@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createTransactionRepository } from '@/lib/database';
+import { getCategoryEngine } from '@/lib/categorization-engine';
 import { ErrorResponse } from '@/lib/types';
 
 /**
@@ -14,6 +15,18 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 		
 		await repository.initialize();
 
+		// Get the original transaction before updating to check for category changes
+		const originalTransaction = await repository.findById(id);
+		if (!originalTransaction) {
+			return NextResponse.json(
+				{
+					error: 'NOT_FOUND',
+					message: 'Transaction not found',
+				} as ErrorResponse,
+				{ status: 404 },
+			);
+		}
+
 		// Parse the date if provided
 		const updates = {
 			...body,
@@ -21,6 +34,30 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 		};
 
 		const updatedTransaction = await repository.update(id, updates);
+
+		// Check if category was updated and learn from it
+		if (updates.categoryId !== undefined && updates.categoryId !== originalTransaction.categoryId && updatedTransaction) {
+			try {
+				const engine = getCategoryEngine();
+				
+				// If user assigned a category (not removing it)
+				if (updates.categoryId) {
+					// Check if this was accepting a suggestion or manual assignment
+					const currentSuggestion = await engine.suggestCategory(originalTransaction.description);
+					const wasCorrectSuggestion = currentSuggestion?.category.id === updates.categoryId;
+					
+					// Learn from the user's choice
+					await engine.learnFromUserAction(
+						originalTransaction.description,
+						updates.categoryId,
+						wasCorrectSuggestion
+					);
+				}
+			} catch (learningError) {
+				// Don't fail the update if learning fails, just log it
+				console.warn('Failed to learn from category assignment:', learningError);
+			}
+		}
 
 		if (!updatedTransaction) {
 			return NextResponse.json(

@@ -43,7 +43,7 @@ import CategorySelector from '@/components/CategorySelector';
 import SimpleCategorySelector from '@/components/SimpleCategorySelector';
 import { Transaction, Category, CategorySuggestion } from '@/lib/types';
 import { getTransactionTypeStyle, getTransactionTypeLabel } from '@/lib/transaction-utils';
-import { Pencil, Trash2, Upload, Plus, Calendar as CalendarIcon, Filter, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Sparkles, ChevronUp, ChevronDown } from 'lucide-react';
+import { Pencil, Trash2, Upload, Plus, Calendar as CalendarIcon, Filter, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Sparkles, ChevronUp, ChevronDown, CheckCircle2 } from 'lucide-react';
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, subDays, subWeeks, subMonths, isAfter, isBefore, isWithinInterval } from 'date-fns';
 
 interface EditTransaction {
@@ -111,6 +111,7 @@ export default function TransactionsPage() {
 	const [suggestions, setSuggestions] = useState<Record<string, CategorySuggestion | null>>({});
 	const [loadingSuggestions, setLoadingSuggestions] = useState<Set<string>>(new Set());
 	const [isBulkSuggesting, setIsBulkSuggesting] = useState(false);
+	const [isAcceptingAllSuggestions, setIsAcceptingAllSuggestions] = useState(false);
 
 	// Filter state
 	const [filters, setFilters] = useState<FilterState>({
@@ -524,6 +525,45 @@ export default function TransactionsPage() {
 		}
 	};
 
+	const handleAcceptAllSuggestions = async () => {
+		// Get all transactions that have suggestions
+		const transactionsWithSuggestions = paginatedTransactions.filter(t => 
+			suggestions[t.id] && !t.categoryId
+		);
+		
+		if (transactionsWithSuggestions.length === 0) {
+			return;
+		}
+
+		setIsAcceptingAllSuggestions(true);
+
+		try {
+			// Apply all suggestions in parallel
+			const updatePromises = transactionsWithSuggestions.map(async (transaction) => {
+				const suggestion = suggestions[transaction.id];
+				if (suggestion) {
+					return handleUpdateTransactionCategory(transaction.id, suggestion.category.id);
+				}
+			});
+
+			await Promise.all(updatePromises);
+
+			// Clear the suggestions that were accepted
+			setSuggestions(prev => {
+				const newSuggestions = { ...prev };
+				transactionsWithSuggestions.forEach(t => {
+					delete newSuggestions[t.id];
+				});
+				return newSuggestions;
+			});
+
+		} catch (error) {
+			console.error('Error accepting all suggestions:', error);
+		} finally {
+			setIsAcceptingAllSuggestions(false);
+		}
+	};
+
 	// Filter handlers
 	const handlePresetChange = (preset: string) => {
 		const presetConfig = DATE_PRESETS[preset as keyof typeof DATE_PRESETS];
@@ -670,6 +710,31 @@ export default function TransactionsPage() {
 								</>
 							)}
 						</Button>
+						
+						{/* Accept All Suggestions Button */}
+						{(() => {
+							const suggestionsToAccept = paginatedTransactions.filter(t => suggestions[t.id] && !t.categoryId);
+							return suggestionsToAccept.length > 0 && (
+								<Button
+									variant="default"
+									onClick={handleAcceptAllSuggestions}
+									disabled={isAcceptingAllSuggestions}
+									className="bg-green-600 hover:bg-green-700"
+								>
+									{isAcceptingAllSuggestions ? (
+										<>
+											<CheckCircle2 className="mr-2 h-4 w-4 animate-pulse" />
+											Accepting...
+										</>
+									) : (
+										<>
+											<CheckCircle2 className="mr-2 h-4 w-4" />
+											Accept All ({suggestionsToAccept.length})
+										</>
+									)}
+								</Button>
+							);
+						})()}
 						<Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
 							<DialogTrigger asChild>
 								<Button>

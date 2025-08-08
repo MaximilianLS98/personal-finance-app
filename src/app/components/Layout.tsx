@@ -3,7 +3,7 @@
 import { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Receipt, Settings } from 'lucide-react';
+import { Home, Receipt, Settings, BarChart3 } from 'lucide-react';
 
 interface LayoutProps {
 	children: ReactNode;
@@ -27,14 +27,25 @@ export default function Layout({ children }: LayoutProps) {
 						</div>
 						<nav className='flex space-x-4'>
 							<Link
-								href='/'
+								href='/home'
 								className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-									isActive('/') 
+									isActive('/home') 
 										? 'bg-primary text-primary-foreground' 
 										: 'text-muted-foreground hover:text-foreground hover:bg-muted'
 								}`}
 							>
 								<Home className='mr-2 h-4 w-4' />
+								Home
+							</Link>
+							<Link
+								href='/dashboard'
+								className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+									isActive('/dashboard') 
+										? 'bg-primary text-primary-foreground' 
+										: 'text-muted-foreground hover:text-foreground hover:bg-muted'
+								}`}
+							>
+								<BarChart3 className='mr-2 h-4 w-4' />
 								Dashboard
 							</Link>
 							<Link
