@@ -17,8 +17,8 @@ import { Button } from '@/components/ui/button';
 // Extensible registry for base color themes. Keys should map to CSS var sets in globals.css
 const BASE_COLOR_THEMES = [
 	{ key: 'neutral', label: 'Neutral' },
-	{ key: 'slate', label: 'Slate' },
 	{ key: 'tangerine', label: 'Tangerine' },
+	{ key: 'candy', label: 'Candy' },
 ] as const;
 
 const CURRENCIES = [

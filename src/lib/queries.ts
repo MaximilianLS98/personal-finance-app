@@ -10,6 +10,7 @@ import type {
 	CategoryRule,
 	CategorySuggestion,
 } from './types';
+import { format as formatDate } from 'date-fns';
 
 // Summary
 export const useSummaryQuery = () =>
@@ -44,14 +45,14 @@ export const useDashboardQuery = (params: {
 }) =>
 	useQuery({
 		queryKey: queryKeys.dashboard({
-			from: params.from ? params.from.toISOString() : undefined,
-			to: params.to ? params.to.toISOString() : undefined,
+			from: params.from ? formatDate(params.from, 'yyyy-MM-dd') : undefined,
+			to: params.to ? formatDate(params.to, 'yyyy-MM-dd') : undefined,
 			interval: params.interval,
 		}),
 		queryFn: async () => {
 			const search = new URLSearchParams();
-			if (params.from) search.append('from', params.from.toISOString());
-			if (params.to) search.append('to', params.to.toISOString());
+			if (params.from) search.append('from', formatDate(params.from, 'yyyy-MM-dd'));
+			if (params.to) search.append('to', formatDate(params.to, 'yyyy-MM-dd'));
 			search.append('interval', params.interval);
 			return getJson<any>(`/api/dashboard?${search.toString()}`);
 		},
@@ -123,9 +124,7 @@ export const useUploadMutation = () => {
 			return res.json();
 		},
 		onSuccess: () => {
-			// Invalidate relevant data
 			qc.invalidateQueries({ queryKey: queryKeys.summary() });
-			qc.invalidateQueries({ queryKey: ['transactions'] });
 			qc.invalidateQueries({ queryKey: ['dashboard'] });
 		},
 	});

@@ -14,18 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import Layout from '@/app/components/Layout';
-import {
-	LineChart,
-	Line,
-	XAxis,
-	YAxis,
-	CartesianGrid,
-	Tooltip,
-	Legend,
-	ResponsiveContainer,
-	BarChart,
-	Bar,
-} from 'recharts';
+import { ResponsiveContainer } from 'recharts';
 import {
 	format,
 	startOfDay,
@@ -54,6 +43,11 @@ import {
 import { useDashboardQuery } from '@/lib/queries';
 import { useDashboardFilters } from '@/lib/stores/filters';
 import { useCurrencySettings } from '@/app/providers';
+import IncomeExpensesOverTimeChart from '@/app/components/IncomeExpensesOverTimeChart';
+import SpendingByCategoryPie from '@/app/components/SpendingByCategoryPie';
+import MonthlySpendingTrendsChart from '@/app/components/MonthlySpendingTrendsChart';
+import MonthlyIncomeVsExpensesChart from '@/app/components/MonthlyIncomeVsExpensesChart';
+import TopCategoryAveragesCard from '@/app/components/TopCategoryAveragesCard';
 
 interface DateRange {
 	from: Date | undefined;
@@ -272,12 +266,7 @@ export default function DashboardPage() {
 		return null;
 	};
 
-	const chartData = useMemo(() => {
-		if (!data) return { lineData: [], barData: [] };
-		const lineData = (data as any).expenseIncomeOverTime ?? [];
-		const barData = (data as any).categoryBreakdown?.slice(0, 10) ?? [];
-		return { lineData, barData };
-	}, [data]);
+	// charts now live in child components
 
 	const summaryStats = useMemo(() => {
 		if (!data) return { totalIncome: 0, totalExpenses: 0, netAmount: 0 };
@@ -533,179 +522,21 @@ export default function DashboardPage() {
 				)}
 
 				{/* Top Category Averages */}
-				{!isLoading && data && (data as any).topCategoryAverages?.length > 0 && (
-					<Card>
-						<CardHeader>
-							<CardTitle className='flex items-center gap-2'>
-								<BarChart3 className='h-5 w-5' />
-								Top 3 Categories - Average Spending
-							</CardTitle>
-							<p className='text-sm text-muted-foreground'>
-								Average spending per{' '}
-								{interval === 'day'
-									? 'day'
-									: interval === 'week'
-										? 'week'
-										: 'month'}{' '}
-								for your highest spending categories
-							</p>
-						</CardHeader>
-						<CardContent>
-							<div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
-								{(data as any).topCategoryAverages.map(
-									(category: any, index: number) => (
-										<div
-											key={category.categoryId}
-											className='p-4 border rounded-lg'>
-											<div className='flex items-center gap-3 mb-2'>
-												<div
-													className='w-4 h-4 rounded-full'
-													style={{
-														backgroundColor: category.categoryColor,
-													}}
-												/>
-												<span className='font-medium text-sm'>
-													{category.categoryName}
-												</span>
-												<span className='text-xs bg-secondary px-2 py-1 rounded'>
-													#{index + 1}
-												</span>
-											</div>
-											<div className='space-y-2'>
-												<div>
-													<p className='text-xs text-muted-foreground'>
-														Average per{' '}
-														{interval === 'day'
-															? 'day'
-															: interval === 'week'
-																? 'week'
-																: 'month'}
-													</p>
-													<p
-														className='text-lg font-bold'
-														style={{ color: category.categoryColor }}>
-														{formatCurrency(
-															category.averagePerInterval,
-														)}
-													</p>
-												</div>
-												<div className='text-xs text-muted-foreground'>
-													<p>
-														Total:{' '}
-														{formatCurrency(category.totalAmount)}
-													</p>
-													<p>
-														Over {category.intervalCount}{' '}
-														{interval === 'day'
-															? 'days'
-															: interval === 'week'
-																? 'weeks'
-																: 'months'}
-													</p>
-												</div>
-											</div>
-										</div>
-									),
-								)}
-							</div>
-						</CardContent>
-					</Card>
-				)}
+				<TopCategoryAveragesCard />
 
 				{/* Charts */}
-				{isLoading ? (
+				{data ? (
 					<div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
-						<Card>
-							<CardHeader>
-								<CardTitle>Income vs Expenses Over Time</CardTitle>
-							</CardHeader>
-							<CardContent>
-								<div className='h-80 flex items-center justify-center'>
-									<p className='text-muted-foreground'>Loading chart data...</p>
-								</div>
-							</CardContent>
-						</Card>
-						<Card>
-							<CardHeader>
-								<CardTitle>Spending by Category</CardTitle>
-							</CardHeader>
-							<CardContent>
-								<div className='h-80 flex items-center justify-center'>
-									<p className='text-muted-foreground'>Loading chart data...</p>
-								</div>
-							</CardContent>
-						</Card>
-					</div>
-				) : data ? (
-					<div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
-						{/* Line Chart - Income vs Expenses Over Time */}
-						<Card>
-							<CardHeader>
-								<CardTitle>Income vs Expenses Over Time</CardTitle>
-							</CardHeader>
-							<CardContent>
-								<div className='h-80'>
-									<ResponsiveContainer width='100%' height='100%'>
-										<LineChart data={chartData.lineData}>
-											<CartesianGrid strokeDasharray='3 3' />
-											<XAxis dataKey='date' />
-											<YAxis />
-											<Tooltip content={<LineChartTooltip />} />
-											<Legend />
-											<Line
-												type='monotone'
-												dataKey='income'
-												stroke='#22c55e'
-												strokeWidth={2}
-												name='Income'
-											/>
-											<Line
-												type='monotone'
-												dataKey='expenses'
-												stroke='#ef4444'
-												strokeWidth={2}
-												name='Expenses'
-											/>
-											<Line
-												type='monotone'
-												dataKey='net'
-												stroke='#3b82f6'
-												strokeWidth={2}
-												name='Net'
-												strokeDasharray='5 5'
-											/>
-										</LineChart>
-									</ResponsiveContainer>
-								</div>
-							</CardContent>
-						</Card>
-
-						{/* Bar Chart - Category Spending */}
-						<Card>
-							<CardHeader>
-								<CardTitle>Top Categories by Spending</CardTitle>
-							</CardHeader>
-							<CardContent>
-								<div className='h-80'>
-									<ResponsiveContainer width='100%' height='100%'>
-										<BarChart data={chartData.barData}>
-											<CartesianGrid strokeDasharray='3 3' />
-											<XAxis
-												dataKey='categoryName'
-												angle={-45}
-												textAnchor='end'
-												height={80}
-											/>
-											<YAxis />
-											<Tooltip content={<BarChartTooltip />} />
-											<Bar dataKey='amount' fill='#8884d8' name='Amount' />
-										</BarChart>
-									</ResponsiveContainer>
-								</div>
-							</CardContent>
-						</Card>
+						<IncomeExpensesOverTimeChart />
+						<SpendingByCategoryPie />
 					</div>
 				) : null}
+
+				{/* Additional Monthly Charts (independent of Group by) */}
+				<div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
+					<MonthlySpendingTrendsChart />
+					<MonthlyIncomeVsExpensesChart />
+				</div>
 			</div>
 		</Layout>
 	);

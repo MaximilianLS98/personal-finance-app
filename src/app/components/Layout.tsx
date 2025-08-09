@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { Home, Receipt, Settings as SettingsIcon, BarChart3 } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import SettingsPanel from '@/app/components/SettingsPanel';
+import { SheetHeader, SheetTitle } from '@/components/ui/sheet';
 
 interface LayoutProps {
 	children: ReactNode;
@@ -66,6 +67,9 @@ export default function Layout({ children }: LayoutProps) {
 									Settings
 								</SheetTrigger>
 								<SheetContent side='right' className='w-full max-w-lg'>
+									<SheetHeader>
+										<SheetTitle className='sr-only'>Settings</SheetTitle>
+									</SheetHeader>
 									<SettingsPanel />
 								</SheetContent>
 							</Sheet>

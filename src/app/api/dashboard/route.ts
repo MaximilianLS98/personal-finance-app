@@ -22,6 +22,7 @@ import type { ErrorResponse } from '@/lib/types';
 interface DashboardData {
 	expenseIncomeOverTime: Array<{
 		date: string;
+		dateKeyIso: string; // ISO-like key for interval start (yyyy-MM-dd)
 		income: number;
 		expenses: number;
 		net: number;
@@ -144,6 +145,7 @@ export async function GET(
 		// Generate complete time series with empty periods
 		const expenseIncomeOverTime: Array<{
 			date: string;
+			dateKeyIso: string;
 			income: number;
 			expenses: number;
 			net: number;
@@ -159,6 +161,7 @@ export async function GET(
 
 				expenseIncomeOverTime.push({
 					date: getDisplayDate(dateKey, interval),
+					dateKeyIso: dateKey,
 					income: data.income,
 					expenses: data.expenses,
 					net: data.income - data.expenses,
@@ -189,6 +192,7 @@ export async function GET(
 			sortedEntries.forEach(([dateKey, data]) => {
 				expenseIncomeOverTime.push({
 					date: getDisplayDate(dateKey, interval),
+					dateKeyIso: dateKey,
 					income: data.income,
 					expenses: data.expenses,
 					net: data.income - data.expenses,

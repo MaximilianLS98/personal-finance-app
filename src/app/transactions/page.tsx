@@ -841,7 +841,7 @@ export default function TransactionsPage() {
 													<Button
 														variant='outline'
 														size='sm'
-														onClick={() =>
+														onClick={() => {
 															setEditingTransaction({
 																id: transaction.id,
 																date: new Date(transaction.date)
@@ -854,8 +854,9 @@ export default function TransactionsPage() {
 																).toString(),
 																type: transaction.type,
 																categoryId: transaction.categoryId,
-															})
-														}>
+															});
+															setIsEditDialogOpen(true);
+														}}>
 														<Pencil className='h-4 w-4' />
 													</Button>
 													<Button
