@@ -5,11 +5,11 @@ import type { PaginationOptions } from '@/lib/database/types';
 
 /**
  * GET /api/transactions - Retrieve transactions with optional pagination and filtering
- * Query params: page, limit, sortBy, sortOrder, from, to, type, search
+ * Query params: page, limit, sortBy, sortOrder, from, to, type, search, categoryIds (repeatable), includeUncategorized
  */
 export async function GET(request: NextRequest) {
 	const repository = createTransactionRepository();
-	
+
 	try {
 		await repository.initialize();
 
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 		// Check if pagination is requested
 		const page = searchParams.get('page');
 		const limit = searchParams.get('limit');
-		
+
 		// If no pagination params, return all transactions (legacy support)
 		if (!page && !limit) {
 			const transactions = await repository.findAll();
@@ -38,7 +38,8 @@ export async function GET(request: NextRequest) {
 			limit: parseInt(limit || '25', 10),
 			sortBy: searchParams.get('sortBy') || 'date',
 			sortOrder: (searchParams.get('sortOrder') as 'ASC' | 'DESC') || 'DESC',
-			transactionType: (searchParams.get('type') as 'all' | 'income' | 'expense' | 'transfer') || 'all',
+			transactionType:
+				(searchParams.get('type') as 'all' | 'income' | 'expense' | 'transfer') || 'all',
 			searchTerm: searchParams.get('search') || undefined,
 		};
 
@@ -50,6 +51,16 @@ export async function GET(request: NextRequest) {
 				from: fromParam ? new Date(fromParam) : undefined,
 				to: toParam ? new Date(toParam) : undefined,
 			};
+		}
+
+		// Parse category filters
+		const categoryIds = searchParams.getAll('categoryIds');
+		if (categoryIds && categoryIds.length > 0) {
+			options.categoryIds = categoryIds;
+		}
+		const includeUncategorized = searchParams.get('includeUncategorized');
+		if (includeUncategorized === 'true') {
+			options.includeUncategorized = true;
 		}
 
 		const result = await repository.findWithPagination(options);

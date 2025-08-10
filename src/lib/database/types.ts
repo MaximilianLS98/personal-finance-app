@@ -25,6 +25,10 @@ export interface PaginationOptions {
 	transactionType?: 'all' | 'income' | 'expense' | 'transfer';
 	/** Optional search term */
 	searchTerm?: string;
+	/** Optional category filter: include only these category IDs */
+	categoryIds?: string[];
+	/** Whether to include uncategorized transactions (category_id IS NULL) */
+	includeUncategorized?: boolean;
 }
 
 /**
@@ -104,6 +108,16 @@ export interface DatabaseManager {
 export interface DatabaseTransaction extends Transaction {
 	createdAt: Date;
 	updatedAt: Date;
+}
+
+/**
+ * Enhanced transaction model with subscription information and database metadata
+ */
+export interface DatabaseTransactionWithSubscription extends DatabaseTransaction {
+	/** Whether this transaction is part of a subscription */
+	isSubscription: boolean;
+	/** Subscription ID if this is a subscription transaction */
+	subscriptionId?: string;
 }
 
 /**

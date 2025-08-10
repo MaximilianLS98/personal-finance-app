@@ -30,6 +30,9 @@ export interface TransactionsFiltersState {
 	sortDirection: 'asc' | 'desc';
 	page: number;
 	pageSize: number;
+	// Category filter UI state
+	selectedCategoryIds: string[]; // when empty, treat as 'all' unless includeUncategorized is set
+	includeUncategorized: boolean; // whether to include transactions with no category
 	setState: (updater: (prev: TransactionsFiltersState) => TransactionsFiltersState) => void;
 }
 
@@ -42,5 +45,7 @@ export const useTransactionsFilters = create<TransactionsFiltersState>((set) => 
 	sortDirection: 'desc',
 	page: 1,
 	pageSize: 50,
+	selectedCategoryIds: [],
+	includeUncategorized: false,
 	setState: (updater) => set((state) => updater(state)),
 }));

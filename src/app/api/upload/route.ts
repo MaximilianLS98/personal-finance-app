@@ -1,6 +1,7 @@
 import { parseCSV, validateCSVContent } from '@/lib/csv-parser';
 import { ErrorResponse } from '@/lib/types';
 import { createTransactionRepository } from '@/lib/database';
+import { BudgetTransactionIntegrationService } from '@/lib/budget-transaction-integration';
 
 function json(data: any, init?: { status?: number }) {
 	try {
@@ -128,6 +129,17 @@ export async function POST(request: any) {
 				({ id, ...transaction }) => transaction,
 			);
 			const dbResult = await repository.createMany(transactionsForDb);
+
+			// Update budgets with new transactions
+			if (dbResult.created.length > 0) {
+				try {
+					const budgetIntegration = new BudgetTransactionIntegrationService(repository);
+					await budgetIntegration.onTransactionsCreated(dbResult.created);
+				} catch (budgetError) {
+					console.error('Error updating budgets after transaction upload:', budgetError);
+					// Don't fail the upload if budget updates fail
+				}
+			}
 
 			// Return successful response with database result
 			return json(

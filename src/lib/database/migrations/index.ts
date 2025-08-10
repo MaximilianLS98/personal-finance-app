@@ -8,11 +8,22 @@ import { migration001 } from './001_initial';
 import { migration002 } from './002_add_transfer_type';
 import { migration003 } from './003_add_categories';
 import { migration004 } from './004_add_currency';
+import { migration005 } from './005_add_subscriptions';
+import { migration006 } from './006_add_budgets';
+import { migration007 } from './007_add_default_scenario';
 
 /**
  * Registry of all available migrations in order
  */
-export const migrations: Migration[] = [migration001, migration002, migration003, migration004];
+export const migrations: Migration[] = [
+	migration001,
+	migration002,
+	migration003,
+	migration004,
+	migration005,
+	migration006,
+	migration007,
+];
 
 /**
  * Migration runner class for managing database schema evolution

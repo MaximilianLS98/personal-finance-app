@@ -18,7 +18,8 @@ import { Button } from '@/components/ui/button';
 const BASE_COLOR_THEMES = [
 	{ key: 'neutral', label: 'Neutral' },
 	{ key: 'tangerine', label: 'Tangerine' },
-	{ key: 'candy', label: 'Candy' },
+    { key: 'candy', label: 'Candy' },
+    { key: 'soft-pop', label: 'Soft Pop' },
 ] as const;
 
 const CURRENCIES = [

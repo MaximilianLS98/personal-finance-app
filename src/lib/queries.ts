@@ -68,6 +68,9 @@ export interface TransactionsQueryParams {
 	search?: string;
 	from?: Date;
 	to?: Date;
+	// Category filtering
+	categories?: string[]; // when present, include transactions whose categoryId is in this list
+	includeUncategorized?: boolean; // when true, also include categoryId IS NULL
 }
 
 export const buildTransactionsSearchParams = (params: TransactionsQueryParams) => {
@@ -78,11 +81,30 @@ export const buildTransactionsSearchParams = (params: TransactionsQueryParams) =
 	if (params.search) search.append('search', params.search);
 	if (params.from) search.append('from', params.from.toISOString());
 	if (params.to) search.append('to', params.to.toISOString());
+	if (params.categories && params.categories.length > 0) {
+		// Append multiple categoryIds entries for array semantics
+		for (const id of params.categories) search.append('categoryIds', id);
+	}
+	if (params.includeUncategorized) search.append('includeUncategorized', 'true');
 	return search;
 };
 
-export const transactionsKey = (params: TransactionsQueryParams) =>
-	queryKeys.transactions(Object.fromEntries(buildTransactionsSearchParams(params).entries()));
+export const transactionsKey = (params: TransactionsQueryParams) => {
+	// Build a stable key object that preserves arrays (categories) and booleans
+	const keyParams: Record<string, unknown> = {
+		page: params.page,
+		limit: params.limit,
+		sortBy: params.sortBy,
+		sortOrder: params.sortOrder,
+		type: params.type,
+		search: params.search,
+		from: params.from ? params.from.toISOString() : undefined,
+		to: params.to ? params.to.toISOString() : undefined,
+		categories: params.categories ? [...params.categories].sort() : undefined,
+		includeUncategorized: !!params.includeUncategorized,
+	};
+	return queryKeys.transactions(keyParams);
+};
 
 export type TransactionsResponse = {
 	success: boolean;

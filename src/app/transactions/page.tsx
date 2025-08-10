@@ -33,7 +33,6 @@ import {
 	TableRow,
 } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import Layout from '@/app/components/Layout';
 import FileUpload from '@/app/components/FileUpload';
 import SimpleCategorySelector from '@/components/SimpleCategorySelector';
 import { Transaction, Category, CategorySuggestion } from '@/lib/types';
@@ -202,6 +201,8 @@ export default function TransactionsPage() {
 		sortDirection,
 		page,
 		pageSize,
+		selectedCategoryIds,
+		includeUncategorized,
 		setState,
 	} = useTransactionsFilters();
 
@@ -214,6 +215,8 @@ export default function TransactionsPage() {
 		search: searchTerm || undefined,
 		from: dateRange.from,
 		to: dateRange.to,
+		categories: selectedCategoryIds.length > 0 ? selectedCategoryIds : undefined,
+		includeUncategorized: includeUncategorized || undefined,
 	};
 
 	const { data: txData, isLoading, isError, error } = useTransactionsQuery(currentParams);
@@ -340,8 +343,10 @@ export default function TransactionsPage() {
 		if (preset !== 'all') count++;
 		if (transactionType !== 'all') count++;
 		if (searchTerm) count++;
+		if (selectedCategoryIds.length > 0) count++;
+		if (includeUncategorized) count++;
 		return count;
-	}, [preset, transactionType, searchTerm]);
+	}, [preset, transactionType, searchTerm, selectedCategoryIds.length, includeUncategorized]);
 
 	const handleSort = (field: SortField) => {
 		setState((prev) => {
@@ -432,6 +437,8 @@ export default function TransactionsPage() {
 			transactionType: 'all',
 			searchTerm: '',
 			preset: 'all',
+			selectedCategoryIds: [],
+			includeUncategorized: false,
 			page: 1,
 		}));
 
@@ -491,586 +498,700 @@ export default function TransactionsPage() {
 		}).format(new Date(date));
 
 	return (
-		<Layout>
-			<div className='max-w-7xl mx-auto p-6 space-y-8'>
-				{/* Header */}
-				<div className='flex justify-between items-center'>
-					<div>
-						<h1 className='text-3xl font-bold text-foreground'>Transactions</h1>
-						<p className='text-muted-foreground mt-2'>
-							View and manage all your uploaded transactions ({transactions.length} of{' '}
-							{totalCount})
-						</p>
-					</div>
-					<div className='flex gap-2'>
-						<Button
-							variant='outline'
-							onClick={handleBulkSuggestions}
-							disabled={
-								isBulkSuggesting ||
-								transactions.filter((t) => !t.categoryId).length === 0
-							}>
-							{isBulkSuggesting ? (
-								<>
-									<Sparkles className='mr-2 h-4 w-4 animate-pulse' />
-									Getting Suggestions...
-								</>
-							) : (
-								<>
-									<Sparkles className='mr-2 h-4 w-4' />
-									Suggest Categories
-								</>
-							)}
-						</Button>
-
-						{(() => {
-							const suggestionsToAccept = transactions.filter(
-								(t) => suggestions[t.id] && !t.categoryId,
-							);
-							return (
-								suggestionsToAccept.length > 0 && (
-									<Button
-										variant='default'
-										onClick={handleAcceptAllSuggestions}
-										disabled={isAcceptingAllSuggestions}
-										className='bg-green-600 hover:bg-green-700'>
-										{isAcceptingAllSuggestions ? (
-											<>
-												<CheckCircle2 className='mr-2 h-4 w-4 animate-pulse' />
-												Accepting...
-											</>
-										) : (
-											<>
-												<CheckCircle2 className='mr-2 h-4 w-4' />
-												Accept All ({suggestionsToAccept.length})
-											</>
-										)}
-									</Button>
-								)
-							);
-						})()}
-						<Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
-							<DialogTrigger asChild>
-								<Button>
-									<Upload className='mr-2 h-4 w-4' />
-									Upload Transactions
-								</Button>
-							</DialogTrigger>
-							<DialogContent className='sm:max-w-md'>
-								<DialogHeader>
-									<DialogTitle>Upload New Transactions</DialogTitle>
-									<DialogDescription>
-										Upload a CSV file with new transactions to add to your
-										account.
-									</DialogDescription>
-								</DialogHeader>
-								<FileUpload
-									onUploadSuccess={() => setIsUploadDialogOpen(false)}
-									onUploadError={(e) => setDeleteError(e)}
-								/>
-							</DialogContent>
-						</Dialog>
-					</div>
+		<div className='max-w-7xl mx-auto p-6 space-y-8'>
+			{/* Header */}
+			<div className='flex justify-between items-center'>
+				<div>
+					<h1 className='text-3xl font-bold text-foreground'>Transactions</h1>
+					<p className='text-muted-foreground mt-2'>
+						View and manage all your uploaded transactions ({transactions.length} of{' '}
+						{totalCount})
+					</p>
 				</div>
-
-				{/* Filters */}
-				<Card>
-					<CardHeader>
-						<div className='flex items-center justify-between'>
-							<CardTitle className='flex items-center'>
-								<Filter className='mr-2 h-5 w-5' />
-								Filters
-								{activeFiltersCount > 0 && (
-									<span className='ml-2 bg-primary text-primary-foreground rounded-full px-2 py-1 text-xs'>
-										{activeFiltersCount}
-									</span>
-								)}
-							</CardTitle>
-							{activeFiltersCount > 0 && (
-								<Button variant='outline' size='sm' onClick={clearAllFilters}>
-									<X className='mr-2 h-4 w-4' />
-									Clear All
-								</Button>
-							)}
-						</div>
-					</CardHeader>
-					<CardContent className='space-y-4'>
-						{/* Search and Type Filter Row */}
-						<div className='flex gap-4 flex-wrap'>
-							<div className='flex-1 min-w-[200px]'>
-								<Label htmlFor='search'>Search Transactions</Label>
-								<Input
-									id='search'
-									placeholder='Search by description...'
-									value={searchTerm}
-									onChange={(e) => handleSearchChange(e.target.value)}
-									className='mt-1'
-								/>
-							</div>
-							<div className='min-w-[150px]'>
-								<Label htmlFor='type-filter'>Transaction Type</Label>
-								<Select
-									value={transactionType}
-									onValueChange={handleTypeFilterChange}>
-									<SelectTrigger className='mt-1'>
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value='all'>All Types</SelectItem>
-										<SelectItem value='income'>Income Only</SelectItem>
-										<SelectItem value='expense'>Expense Only</SelectItem>
-										<SelectItem value='transfer'>Transfer Only</SelectItem>
-									</SelectContent>
-								</Select>
-							</div>
-						</div>
-
-						{/* Date Filter Row */}
-						<div className='flex gap-4 flex-wrap items-end'>
-							<div className='min-w-[200px]'>
-								<Label htmlFor='date-preset'>Date Range</Label>
-								<Select value={preset} onValueChange={handlePresetChange}>
-									<SelectTrigger className='mt-1'>
-										<SelectValue />
-									</SelectTrigger>
-									<SelectContent>
-										{Object.entries(DATE_PRESETS).map(([key, p]) => (
-											<SelectItem key={key} value={key}>
-												{p.label}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</div>
-
-							{preset === 'custom' && (
-								<>
-									<div className='min-w-[150px]'>
-										<Label>From Date</Label>
-										<Popover>
-											<PopoverTrigger asChild>
-												<Button
-													variant='outline'
-													className='mt-1 w-full justify-start text-left font-normal'>
-													<CalendarIcon className='mr-2 h-4 w-4' />
-													{dateRange.from
-														? format(dateRange.from, 'MMM dd, yyyy')
-														: 'Pick a date'}
-												</Button>
-											</PopoverTrigger>
-											<PopoverContent className='w-auto p-0'>
-												<Calendar
-													mode='single'
-													selected={dateRange.from}
-													onSelect={(date) =>
-														handleDateRangeChange({
-															...dateRange,
-															from: date,
-														})
-													}
-													initialFocus
-												/>
-											</PopoverContent>
-										</Popover>
-									</div>
-									<div className='min-w-[150px]'>
-										<Label>To Date</Label>
-										<Popover>
-											<PopoverTrigger asChild>
-												<Button
-													variant='outline'
-													className='mt-1 w-full justify-start text-left font-normal'>
-													<CalendarIcon className='mr-2 h-4 w-4' />
-													{dateRange.to
-														? format(dateRange.to, 'MMM dd, yyyy')
-														: 'Pick a date'}
-												</Button>
-											</PopoverTrigger>
-											<PopoverContent className='w-auto p-0'>
-												<Calendar
-													mode='single'
-													selected={dateRange.to}
-													onSelect={(date) =>
-														handleDateRangeChange({
-															...dateRange,
-															to: date,
-														})
-													}
-													initialFocus
-												/>
-											</PopoverContent>
-										</Popover>
-									</div>
-								</>
-							)}
-						</div>
-
-						{/* Active Filters Summary */}
-						{(dateRange.from ||
-							dateRange.to ||
-							transactionType !== 'all' ||
-							searchTerm) && (
-							<div className='flex flex-wrap gap-2 pt-2 border-t'>
-								<span className='text-sm font-medium text-muted-foreground'>
-									Active filters:
-								</span>
-								{searchTerm && (
-									<span className='bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs'>
-										Search: "{searchTerm}"
-									</span>
-								)}
-								{transactionType !== 'all' && (
-									<span className='bg-green-100 text-green-800 px-2 py-1 rounded text-xs'>
-										Type: {transactionType}
-									</span>
-								)}
-								{dateRange.from && (
-									<span className='bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs'>
-										From: {format(dateRange.from, 'MMM dd, yyyy')}
-									</span>
-								)}
-								{dateRange.to && (
-									<span className='bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs'>
-										To: {format(dateRange.to, 'MMM dd, yyyy')}
-									</span>
-								)}
-							</div>
-						)}
-					</CardContent>
-				</Card>
-
-				{/* Error Alerts */}
-				{(isError || deleteError) && (
-					<Alert variant='destructive'>
-						<AlertDescription>
-							{(error as Error)?.message || deleteError}
-						</AlertDescription>
-					</Alert>
-				)}
-
-				{/* Transactions Table */}
-				<Card>
-					<CardHeader>
-						<CardTitle>
-							{transactions.length === totalCount
-								? `All Transactions (${totalCount})`
-								: `Filtered Transactions (${totalCount} of ${totalCount})`}
-						</CardTitle>
-					</CardHeader>
-					<CardContent>
-						{isLoading ? (
-							<div className='text-center py-8'>Loading transactions...</div>
-						) : transactions.length === 0 ? (
-							<div className='text-center py-8 text-muted-foreground'>
-								No transactions found. Upload a CSV file to get started.
-							</div>
+				<div className='flex gap-2'>
+					<Button
+						variant='outline'
+						onClick={handleBulkSuggestions}
+						disabled={
+							isBulkSuggesting ||
+							transactions.filter((t) => !t.categoryId).length === 0
+						}>
+						{isBulkSuggesting ? (
+							<>
+								<Sparkles className='mr-2 h-4 w-4 animate-pulse' />
+								Getting Suggestions...
+							</>
 						) : (
-							<Table>
-								<TableCaption>
-									{transactions.length === totalCount
-										? 'A list of all your uploaded transactions.'
-										: `Showing ${transactions.length} transactions matching your filters.`}
-								</TableCaption>
-								<TableHeader>
-									<TableRow>
-										<SortableHeader field='date'>Date</SortableHeader>
-										<SortableHeader field='description'>
-											Description
-										</SortableHeader>
-										<SortableHeader field='category'>Category</SortableHeader>
-										<SortableHeader field='type'>Type</SortableHeader>
-										<SortableHeader field='amount' className='text-right'>
-											Amount
-										</SortableHeader>
-										<SortableHeader field={null} className='text-right'>
-											Actions
-										</SortableHeader>
-									</TableRow>
-								</TableHeader>
-								<TableBody>
-									{transactions.map((transaction) => (
-										<TableRow key={transaction.id}>
-											<TableCell className='font-medium'>
-												{formatDate(transaction.date)}
-											</TableCell>
-											<TableCell>{transaction.description}</TableCell>
-											<TableCell>
-												<SimpleCategorySelector
-													categories={categories}
-													currentCategoryId={transaction.categoryId}
-													onCategoryChange={(categoryId) =>
-														handleCategoryChangeWithLearning(
-															transaction.id,
-															transaction.description,
-															categoryId,
-														)
-													}
-													onSuggestRequest={() =>
-														handleGetSuggestion(
-															transaction.id,
-															transaction.description,
-														)
-													}
-													suggestion={suggestions[transaction.id]}
-													isLoadingSuggestion={loadingSuggestions.has(
-														transaction.id,
-													)}
-													compact={true}
-												/>
-											</TableCell>
-											<TableCell>
-												<span
-													className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getTransactionTypeStyle(transaction.type).badgeClass}`}>
-													{getTransactionTypeLabel(transaction.type)}
-												</span>
-											</TableCell>
-											<TableCell
-												className={`text-right font-medium ${getTransactionTypeStyle(transaction.type).amountClass}`}>
-												{transaction.type === 'income'
-													? '+'
-													: transaction.type === 'transfer'
-														? '±'
-														: '-'}
-												{formatCurrency(
-													transaction.amount,
-													transaction.currency,
-												)}
-											</TableCell>
-											<TableCell className='text-right'>
-												<div className='flex justify-end space-x-2'>
+							<>
+								<Sparkles className='mr-2 h-4 w-4' />
+								Suggest Categories
+							</>
+						)}
+					</Button>
+
+					{(() => {
+						const suggestionsToAccept = transactions.filter(
+							(t) => suggestions[t.id] && !t.categoryId,
+						);
+						return (
+							suggestionsToAccept.length > 0 && (
+								<Button
+									variant='default'
+									onClick={handleAcceptAllSuggestions}
+									disabled={isAcceptingAllSuggestions}
+									className='bg-green-600 hover:bg-green-700'>
+									{isAcceptingAllSuggestions ? (
+										<>
+											<CheckCircle2 className='mr-2 h-4 w-4 animate-pulse' />
+											Accepting...
+										</>
+									) : (
+										<>
+											<CheckCircle2 className='mr-2 h-4 w-4' />
+											Accept All ({suggestionsToAccept.length})
+										</>
+									)}
+								</Button>
+							)
+						);
+					})()}
+					<Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
+						<DialogTrigger asChild>
+							<Button>
+								<Upload className='mr-2 h-4 w-4' />
+								Upload Transactions
+							</Button>
+						</DialogTrigger>
+						<DialogContent className='sm:max-w-md'>
+							<DialogHeader>
+								<DialogTitle>Upload New Transactions</DialogTitle>
+								<DialogDescription>
+									Upload a CSV file with new transactions to add to your account.
+								</DialogDescription>
+							</DialogHeader>
+							<FileUpload
+								onUploadSuccess={() => setIsUploadDialogOpen(false)}
+								onUploadError={(e) => setDeleteError(e)}
+							/>
+						</DialogContent>
+					</Dialog>
+				</div>
+			</div>
+
+			{/* Filters */}
+			<Card>
+				<CardHeader>
+					<div className='flex items-center justify-between'>
+						<CardTitle className='flex items-center'>
+							<Filter className='mr-2 h-5 w-5' />
+							Filters
+							{activeFiltersCount > 0 && (
+								<span className='ml-2 bg-primary text-primary-foreground rounded-full px-2 py-1 text-xs'>
+									{activeFiltersCount}
+								</span>
+							)}
+						</CardTitle>
+						{activeFiltersCount > 0 && (
+							<Button variant='outline' size='sm' onClick={clearAllFilters}>
+								<X className='mr-2 h-4 w-4' />
+								Clear All
+							</Button>
+						)}
+					</div>
+				</CardHeader>
+				<CardContent className='space-y-4'>
+					{/* Search and Type Filter Row */}
+					<div className='flex gap-4 flex-wrap'>
+						<div className='flex-1 min-w-[200px]'>
+							<Label htmlFor='search'>Search Transactions</Label>
+							<Input
+								id='search'
+								placeholder='Search by description...'
+								value={searchTerm}
+								onChange={(e) => handleSearchChange(e.target.value)}
+								className='mt-1'
+							/>
+						</div>
+						<div className='min-w-[150px]'>
+							<Label htmlFor='type-filter'>Transaction Type</Label>
+							<Select value={transactionType} onValueChange={handleTypeFilterChange}>
+								<SelectTrigger className='mt-1'>
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value='all'>All Types</SelectItem>
+									<SelectItem value='income'>Income Only</SelectItem>
+									<SelectItem value='expense'>Expense Only</SelectItem>
+									<SelectItem value='transfer'>Transfer Only</SelectItem>
+								</SelectContent>
+							</Select>
+						</div>
+					</div>
+
+					{/* Date Filter Row */}
+					<div className='flex gap-4 flex-wrap items-end'>
+						<div className='min-w-[200px]'>
+							<Label htmlFor='date-preset'>Date Range</Label>
+							<Select value={preset} onValueChange={handlePresetChange}>
+								<SelectTrigger className='mt-1'>
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									{Object.entries(DATE_PRESETS).map(([key, p]) => (
+										<SelectItem key={key} value={key}>
+											{p.label}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+
+						{/* Category Filter Row */}
+						<div className='flex gap-4 flex-wrap items-end'>
+							<div className='min-w-[240px] flex-1'>
+								<Label htmlFor='category-filter'>Categories</Label>
+								<div className='mt-1 flex flex-wrap gap-2'>
+									{/* Multi-select using simple checkboxes in a popover list */}
+									<Popover>
+										<PopoverTrigger asChild>
+											<Button variant='outline'>
+												{selectedCategoryIds.length === 0 &&
+												!includeUncategorized
+													? 'All categories'
+													: `${selectedCategoryIds.length} selected${includeUncategorized ? ' + uncategorized' : ''}`}
+											</Button>
+										</PopoverTrigger>
+										<PopoverContent className='w-72 p-2'>
+											<div className='space-y-2 max-h-72 overflow-auto'>
+												<div className='flex items-center justify-between'>
+													<Label className='text-sm'>
+														Include uncategorized
+													</Label>
+													<input
+														type='checkbox'
+														checked={includeUncategorized}
+														onChange={(e) =>
+															setState((prev) => ({
+																...prev,
+																includeUncategorized:
+																	e.target.checked,
+																page: 1,
+															}))
+														}
+													/>
+												</div>
+												<div className='h-px bg-border my-1' />
+												<div className='space-y-1'>
+													{categories.map((c) => {
+														const checked =
+															selectedCategoryIds.includes(c.id);
+														return (
+															<label
+																key={c.id}
+																className='flex items-center gap-2 text-sm'>
+																<input
+																	type='checkbox'
+																	checked={checked}
+																	onChange={(e) =>
+																		setState((prev) => ({
+																			...prev,
+																			selectedCategoryIds: e
+																				.target.checked
+																				? [
+																						...prev.selectedCategoryIds,
+																						c.id,
+																					]
+																				: prev.selectedCategoryIds.filter(
+																						(id) =>
+																							id !==
+																							c.id,
+																					),
+																			page: 1,
+																		}))
+																	}
+																/>
+																<span className='inline-flex items-center gap-2'>
+																	<span
+																		className='w-3 h-3 rounded-full inline-block'
+																		style={{
+																			backgroundColor:
+																				c.color,
+																		}}
+																	/>
+																	{c.name}
+																</span>
+															</label>
+														);
+													})}
+												</div>
+												<div className='h-px bg-border my-1' />
+												<div className='flex justify-between'>
 													<Button
-														variant='outline'
+														variant='ghost'
 														size='sm'
-														onClick={() => {
-															setEditingTransaction({
-																id: transaction.id,
-																date: new Date(transaction.date)
-																	.toISOString()
-																	.split('T')[0],
-																description:
-																	transaction.description,
-																amount: Math.abs(
-																	transaction.amount,
-																).toString(),
-																type: transaction.type,
-																categoryId: transaction.categoryId,
-															});
-															setIsEditDialogOpen(true);
-														}}>
-														<Pencil className='h-4 w-4' />
+														onClick={() =>
+															setState((prev) => ({
+																...prev,
+																selectedCategoryIds: [],
+																includeUncategorized: false,
+																page: 1,
+															}))
+														}>
+														Clear
 													</Button>
 													<Button
 														variant='outline'
 														size='sm'
 														onClick={() =>
-															handleDelete(transaction.id)
+															setState((prev) => ({
+																...prev,
+																selectedCategoryIds: categories.map(
+																	(c) => c.id,
+																),
+																page: 1,
+															}))
 														}>
-														<Trash2 className='h-4 w-4' />
+														Select all
 													</Button>
 												</div>
-											</TableCell>
-										</TableRow>
-									))}
-								</TableBody>
-							</Table>
-						)}
-
-						{/* Pagination Controls */}
-						{transactions.length > 0 && (
-							<div className='flex items-center justify-between mt-6 pt-4 border-t'>
-								<div className='flex items-center space-x-2'>
-									<span className='text-sm text-muted-foreground'>
-										{(() => {
-											const startIndex = (page - 1) * pageSize + 1;
-											const endIndex = Math.min(page * pageSize, totalCount);
-											return `Showing ${startIndex} to ${endIndex} of ${totalCount} transactions`;
-										})()}
-									</span>
-								</div>
-
-								<div className='flex items-center space-x-4'>
-									{/* Page Size Selector */}
-									<div className='flex items-center space-x-2'>
-										<span className='text-sm text-muted-foreground'>Show:</span>
-										<Select
-											value={pageSize.toString()}
-											onValueChange={(value) =>
-												handlePageSizeChange(Number(value))
-											}>
-											<SelectTrigger className='w-20'>
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent>
-												{PAGE_SIZE_OPTIONS.map((size) => (
-													<SelectItem key={size} value={size.toString()}>
-														{size}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
-									</div>
-
-									{/* Pagination Navigation */}
-									{totalPages > 1 && (
-										<div className='flex items-center space-x-2'>
-											<Button
-												variant='outline'
-												size='sm'
-												onClick={() => handlePageChange(1)}
-												disabled={!canGoPrevious}>
-												<ChevronsLeft className='h-4 w-4' />
-											</Button>
-											<Button
-												variant='outline'
-												size='sm'
-												onClick={() => handlePageChange(page - 1)}
-												disabled={!canGoPrevious}>
-												<ChevronLeft className='h-4 w-4' />
-											</Button>
-											<span className='text-sm text-muted-foreground min-w-[100px] text-center'>
-												Page {page} of {totalPages}
-											</span>
-											<Button
-												variant='outline'
-												size='sm'
-												onClick={() => handlePageChange(page + 1)}
-												disabled={!canGoNext}>
-												<ChevronRight className='h-4 w-4' />
-											</Button>
-											<Button
-												variant='outline'
-												size='sm'
-												onClick={() => handlePageChange(totalPages)}
-												disabled={!canGoNext}>
-												<ChevronsRight className='h-4 w-4' />
-											</Button>
-										</div>
-									)}
+											</div>
+										</PopoverContent>
+									</Popover>
 								</div>
 							</div>
-						)}
-					</CardContent>
-				</Card>
+						</div>
 
-				{/* Edit Transaction Dialog */}
-				<Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-					<DialogContent className='sm:max-w-[425px]'>
-						<DialogHeader>
-							<DialogTitle>Edit Transaction</DialogTitle>
-							<DialogDescription>
-								Make changes to the transaction details below.
-							</DialogDescription>
-						</DialogHeader>
-						{editingTransaction && (
-							<div className='grid gap-4 py-4'>
-								{editError && (
-									<Alert variant='destructive'>
-										<AlertDescription>{editError}</AlertDescription>
-									</Alert>
-								)}
-								<div className='grid grid-cols-4 items-center gap-4'>
-									<Label htmlFor='edit-date' className='text-right'>
-										Date
-									</Label>
-									<Input
-										id='edit-date'
-										type='date'
-										value={editingTransaction.date}
-										onChange={(e) =>
-											setEditingTransaction({
-												...editingTransaction,
-												date: e.target.value,
-											})
-										}
-										className='col-span-3'
-									/>
+						{preset === 'custom' && (
+							<>
+								<div className='min-w-[150px]'>
+									<Label>From Date</Label>
+									<Popover>
+										<PopoverTrigger asChild>
+											<Button
+												variant='outline'
+												className='mt-1 w-full justify-start text-left font-normal'>
+												<CalendarIcon className='mr-2 h-4 w-4' />
+												{dateRange.from
+													? format(dateRange.from, 'MMM dd, yyyy')
+													: 'Pick a date'}
+											</Button>
+										</PopoverTrigger>
+										<PopoverContent className='w-auto p-0'>
+											<Calendar
+												mode='single'
+												selected={dateRange.from}
+												onSelect={(date) =>
+													handleDateRangeChange({
+														...dateRange,
+														from: date,
+													})
+												}
+												initialFocus
+											/>
+										</PopoverContent>
+									</Popover>
 								</div>
-								<div className='grid grid-cols-4 items-center gap-4'>
-									<Label htmlFor='edit-description' className='text-right'>
-										Description
-									</Label>
-									<Textarea
-										id='edit-description'
-										value={editingTransaction.description}
-										onChange={(e) =>
-											setEditingTransaction({
-												...editingTransaction,
-												description: e.target.value,
-											})
-										}
-										className='col-span-3'
-										rows={2}
-									/>
+								<div className='min-w-[150px]'>
+									<Label>To Date</Label>
+									<Popover>
+										<PopoverTrigger asChild>
+											<Button
+												variant='outline'
+												className='mt-1 w-full justify-start text-left font-normal'>
+												<CalendarIcon className='mr-2 h-4 w-4' />
+												{dateRange.to
+													? format(dateRange.to, 'MMM dd, yyyy')
+													: 'Pick a date'}
+											</Button>
+										</PopoverTrigger>
+										<PopoverContent className='w-auto p-0'>
+											<Calendar
+												mode='single'
+												selected={dateRange.to}
+												onSelect={(date) =>
+													handleDateRangeChange({
+														...dateRange,
+														to: date,
+													})
+												}
+												initialFocus
+											/>
+										</PopoverContent>
+									</Popover>
 								</div>
-								<div className='grid grid-cols-4 items-center gap-4'>
-									<Label htmlFor='edit-amount' className='text-right'>
+							</>
+						)}
+					</div>
+
+					{/* Active Filters Summary */}
+					{(dateRange.from ||
+						dateRange.to ||
+						transactionType !== 'all' ||
+						searchTerm ||
+						selectedCategoryIds.length > 0 ||
+						includeUncategorized) && (
+						<div className='flex flex-wrap gap-2 pt-2 border-t'>
+							<span className='text-sm font-medium text-muted-foreground'>
+								Active filters:
+							</span>
+							{searchTerm && (
+								<span className='bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs'>
+									Search: "{searchTerm}"
+								</span>
+							)}
+							{transactionType !== 'all' && (
+								<span className='bg-green-100 text-green-800 px-2 py-1 rounded text-xs'>
+									Type: {transactionType}
+								</span>
+							)}
+							{dateRange.from && (
+								<span className='bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs'>
+									From: {format(dateRange.from, 'MMM dd, yyyy')}
+								</span>
+							)}
+							{dateRange.to && (
+								<span className='bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs'>
+									To: {format(dateRange.to, 'MMM dd, yyyy')}
+								</span>
+							)}
+							{(selectedCategoryIds.length > 0 || includeUncategorized) && (
+								<span className='bg-orange-100 text-orange-800 px-2 py-1 rounded text-xs'>
+									Categories:{' '}
+									{selectedCategoryIds.length > 0
+										? `${selectedCategoryIds.length} selected`
+										: 'none'}
+									{includeUncategorized ? ' + uncategorized' : ''}
+								</span>
+							)}
+						</div>
+					)}
+				</CardContent>
+			</Card>
+
+			{/* Error Alerts */}
+			{(isError || deleteError) && (
+				<Alert variant='destructive'>
+					<AlertDescription>{(error as Error)?.message || deleteError}</AlertDescription>
+				</Alert>
+			)}
+
+			{/* Transactions Table */}
+			<Card>
+				<CardHeader>
+					<CardTitle>
+						{transactions.length === totalCount
+							? `All Transactions (${totalCount})`
+							: `Filtered Transactions (${totalCount} of ${totalCount})`}
+					</CardTitle>
+				</CardHeader>
+				<CardContent>
+					{isLoading ? (
+						<div className='text-center py-8'>Loading transactions...</div>
+					) : transactions.length === 0 ? (
+						<div className='text-center py-8 text-muted-foreground'>
+							No transactions found. Upload a CSV file to get started.
+						</div>
+					) : (
+						<Table>
+							<TableCaption>
+								{transactions.length === totalCount
+									? 'A list of all your uploaded transactions.'
+									: `Showing ${transactions.length} transactions matching your filters.`}
+							</TableCaption>
+							<TableHeader>
+								<TableRow>
+									<SortableHeader field='date'>Date</SortableHeader>
+									<SortableHeader field='description'>Description</SortableHeader>
+									<SortableHeader field='category'>Category</SortableHeader>
+									<SortableHeader field='type'>Type</SortableHeader>
+									<SortableHeader field='amount' className='text-right'>
 										Amount
-									</Label>
-									<Input
-										id='edit-amount'
-										type='number'
-										step='0.01'
-										value={editingTransaction.amount}
-										onChange={(e) =>
-											setEditingTransaction({
-												...editingTransaction,
-												amount: e.target.value,
-											})
-										}
-										className='col-span-3'
-									/>
-								</div>
-								<div className='grid grid-cols-4 items-center gap-4'>
-									<Label htmlFor='edit-type' className='text-right'>
-										Type
-									</Label>
+									</SortableHeader>
+									<SortableHeader field={null} className='text-right'>
+										Actions
+									</SortableHeader>
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{transactions.map((transaction) => (
+									<TableRow key={transaction.id}>
+										<TableCell className='font-medium'>
+											{formatDate(transaction.date)}
+										</TableCell>
+										<TableCell>{transaction.description}</TableCell>
+										<TableCell>
+											<SimpleCategorySelector
+												categories={categories}
+												currentCategoryId={transaction.categoryId}
+												onCategoryChange={(categoryId) =>
+													handleCategoryChangeWithLearning(
+														transaction.id,
+														transaction.description,
+														categoryId,
+													)
+												}
+												onSuggestRequest={() =>
+													handleGetSuggestion(
+														transaction.id,
+														transaction.description,
+													)
+												}
+												suggestion={suggestions[transaction.id]}
+												isLoadingSuggestion={loadingSuggestions.has(
+													transaction.id,
+												)}
+												compact={true}
+											/>
+										</TableCell>
+										<TableCell>
+											<span
+												className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getTransactionTypeStyle(transaction.type).badgeClass}`}>
+												{getTransactionTypeLabel(transaction.type)}
+											</span>
+										</TableCell>
+										<TableCell
+											className={`text-right font-medium ${getTransactionTypeStyle(transaction.type).amountClass}`}>
+											{transaction.type === 'income'
+												? '+'
+												: transaction.type === 'transfer'
+													? '±'
+													: '-'}
+											{formatCurrency(
+												transaction.amount,
+												transaction.currency,
+											)}
+										</TableCell>
+										<TableCell className='text-right'>
+											<div className='flex justify-end space-x-2'>
+												<Button
+													variant='outline'
+													size='sm'
+													onClick={() => {
+														setEditingTransaction({
+															id: transaction.id,
+															date: new Date(transaction.date)
+																.toISOString()
+																.split('T')[0],
+															description: transaction.description,
+															amount: Math.abs(
+																transaction.amount,
+															).toString(),
+															type: transaction.type,
+															categoryId: transaction.categoryId,
+														});
+														setIsEditDialogOpen(true);
+													}}>
+													<Pencil className='h-4 w-4' />
+												</Button>
+												<Button
+													variant='outline'
+													size='sm'
+													onClick={() => handleDelete(transaction.id)}>
+													<Trash2 className='h-4 w-4' />
+												</Button>
+											</div>
+										</TableCell>
+									</TableRow>
+								))}
+							</TableBody>
+						</Table>
+					)}
+
+					{/* Pagination Controls */}
+					{transactions.length > 0 && (
+						<div className='flex items-center justify-between mt-6 pt-4 border-t'>
+							<div className='flex items-center space-x-2'>
+								<span className='text-sm text-muted-foreground'>
+									{(() => {
+										const startIndex = (page - 1) * pageSize + 1;
+										const endIndex = Math.min(page * pageSize, totalCount);
+										return `Showing ${startIndex} to ${endIndex} of ${totalCount} transactions`;
+									})()}
+								</span>
+							</div>
+
+							<div className='flex items-center space-x-4'>
+								{/* Page Size Selector */}
+								<div className='flex items-center space-x-2'>
+									<span className='text-sm text-muted-foreground'>Show:</span>
 									<Select
-										value={editingTransaction.type}
-										onValueChange={(value: 'income' | 'expense' | 'transfer') =>
-											setEditingTransaction({
-												...editingTransaction,
-												type: value,
-											})
+										value={pageSize.toString()}
+										onValueChange={(value) =>
+											handlePageSizeChange(Number(value))
 										}>
-										<SelectTrigger className='col-span-3'>
+										<SelectTrigger className='w-20'>
 											<SelectValue />
 										</SelectTrigger>
 										<SelectContent>
-											<SelectItem value='income'>Income</SelectItem>
-											<SelectItem value='expense'>Expense</SelectItem>
-											<SelectItem value='transfer'>Transfer</SelectItem>
+											{PAGE_SIZE_OPTIONS.map((size) => (
+												<SelectItem key={size} value={size.toString()}>
+													{size}
+												</SelectItem>
+											))}
 										</SelectContent>
 									</Select>
 								</div>
-								<div className='grid grid-cols-4 items-start gap-4'>
-									<Label className='text-right pt-2'>Category</Label>
-									<div className='col-span-3'>
-										<SimpleCategorySelector
-											categories={categories}
-											currentCategoryId={editingTransaction.categoryId}
-											onCategoryChange={(categoryId) =>
-												setEditingTransaction({
-													...editingTransaction,
-													categoryId,
-												})
-											}
-											compact={false}
-										/>
+
+								{/* Pagination Navigation */}
+								{totalPages > 1 && (
+									<div className='flex items-center space-x-2'>
+										<Button
+											variant='outline'
+											size='sm'
+											onClick={() => handlePageChange(1)}
+											disabled={!canGoPrevious}>
+											<ChevronsLeft className='h-4 w-4' />
+										</Button>
+										<Button
+											variant='outline'
+											size='sm'
+											onClick={() => handlePageChange(page - 1)}
+											disabled={!canGoPrevious}>
+											<ChevronLeft className='h-4 w-4' />
+										</Button>
+										<span className='text-sm text-muted-foreground min-w-[100px] text-center'>
+											Page {page} of {totalPages}
+										</span>
+										<Button
+											variant='outline'
+											size='sm'
+											onClick={() => handlePageChange(page + 1)}
+											disabled={!canGoNext}>
+											<ChevronRight className='h-4 w-4' />
+										</Button>
+										<Button
+											variant='outline'
+											size='sm'
+											onClick={() => handlePageChange(totalPages)}
+											disabled={!canGoNext}>
+											<ChevronsRight className='h-4 w-4' />
+										</Button>
 									</div>
-								</div>
-								<div className='flex justify-end space-x-2 pt-4'>
-									<Button
-										variant='outline'
-										onClick={() => setIsEditDialogOpen(false)}>
-										Cancel
-									</Button>
-									<Button onClick={handleSaveEdit}>Save Changes</Button>
+								)}
+							</div>
+						</div>
+					)}
+				</CardContent>
+			</Card>
+
+			{/* Edit Transaction Dialog */}
+			<Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+				<DialogContent className='sm:max-w-[425px]'>
+					<DialogHeader>
+						<DialogTitle>Edit Transaction</DialogTitle>
+						<DialogDescription>
+							Make changes to the transaction details below.
+						</DialogDescription>
+					</DialogHeader>
+					{editingTransaction && (
+						<div className='grid gap-4 py-4'>
+							{editError && (
+								<Alert variant='destructive'>
+									<AlertDescription>{editError}</AlertDescription>
+								</Alert>
+							)}
+							<div className='grid grid-cols-4 items-center gap-4'>
+								<Label htmlFor='edit-date' className='text-right'>
+									Date
+								</Label>
+								<Input
+									id='edit-date'
+									type='date'
+									value={editingTransaction.date}
+									onChange={(e) =>
+										setEditingTransaction({
+											...editingTransaction,
+											date: e.target.value,
+										})
+									}
+									className='col-span-3'
+								/>
+							</div>
+							<div className='grid grid-cols-4 items-center gap-4'>
+								<Label htmlFor='edit-description' className='text-right'>
+									Description
+								</Label>
+								<Textarea
+									id='edit-description'
+									value={editingTransaction.description}
+									onChange={(e) =>
+										setEditingTransaction({
+											...editingTransaction,
+											description: e.target.value,
+										})
+									}
+									className='col-span-3'
+									rows={2}
+								/>
+							</div>
+							<div className='grid grid-cols-4 items-center gap-4'>
+								<Label htmlFor='edit-amount' className='text-right'>
+									Amount
+								</Label>
+								<Input
+									id='edit-amount'
+									type='number'
+									step='0.01'
+									value={editingTransaction.amount}
+									onChange={(e) =>
+										setEditingTransaction({
+											...editingTransaction,
+											amount: e.target.value,
+										})
+									}
+									className='col-span-3'
+								/>
+							</div>
+							<div className='grid grid-cols-4 items-center gap-4'>
+								<Label htmlFor='edit-type' className='text-right'>
+									Type
+								</Label>
+								<Select
+									value={editingTransaction.type}
+									onValueChange={(value: 'income' | 'expense' | 'transfer') =>
+										setEditingTransaction({
+											...editingTransaction,
+											type: value,
+										})
+									}>
+									<SelectTrigger className='col-span-3'>
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value='income'>Income</SelectItem>
+										<SelectItem value='expense'>Expense</SelectItem>
+										<SelectItem value='transfer'>Transfer</SelectItem>
+									</SelectContent>
+								</Select>
+							</div>
+							<div className='grid grid-cols-4 items-start gap-4'>
+								<Label className='text-right pt-2'>Category</Label>
+								<div className='col-span-3'>
+									<SimpleCategorySelector
+										categories={categories}
+										currentCategoryId={editingTransaction.categoryId}
+										onCategoryChange={(categoryId) =>
+											setEditingTransaction({
+												...editingTransaction,
+												categoryId,
+											})
+										}
+										compact={false}
+									/>
 								</div>
 							</div>
-						)}
-					</DialogContent>
-				</Dialog>
-			</div>
-		</Layout>
+							<div className='flex justify-end space-x-2 pt-4'>
+								<Button
+									variant='outline'
+									onClick={() => setIsEditDialogOpen(false)}>
+									Cancel
+								</Button>
+								<Button onClick={handleSaveEdit}>Save Changes</Button>
+							</div>
+						</div>
+					)}
+				</DialogContent>
+			</Dialog>
+		</div>
 	);
 }
