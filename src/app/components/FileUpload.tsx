@@ -4,11 +4,24 @@ import React, { useState, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { Upload, FileText, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { Upload, FileText, AlertCircle, CheckCircle2, Loader2, TrendingUp } from 'lucide-react';
 import { Transaction, ErrorResponse } from '@/lib/types';
+import SubscriptionConfirmationDialog from './SubscriptionConfirmationDialog';
+import type { SubscriptionCandidate, SubscriptionMatch } from '@/lib/subscription-pattern-engine';
+
+interface SubscriptionDetectionData {
+	candidates: SubscriptionCandidate[];
+	matches: SubscriptionMatch[];
+	totalAnalyzed: number;
+	alreadyFlagged: number;
+}
 
 interface FileUploadProps {
-	onUploadSuccess?: (data: { transactions: Transaction[]; summary: any }) => void;
+	onUploadSuccess?: (data: {
+		transactions: Transaction[];
+		summary: any;
+		subscriptionDetection?: SubscriptionDetectionData;
+	}) => void;
 	onUploadError?: (error: string) => void;
 }
 
@@ -19,6 +32,9 @@ interface UploadState {
 	error: string | null;
 	success: boolean;
 	fileName: string | null;
+	subscriptionDetection: SubscriptionDetectionData | null;
+	showSubscriptionDialog: boolean;
+	uploadData: { transactions: Transaction[]; summary: any } | null;
 }
 
 export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploadProps) {
@@ -29,6 +45,9 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 		error: null,
 		success: false,
 		fileName: null,
+		subscriptionDetection: null,
+		showSubscriptionDialog: false,
+		uploadData: null,
 	});
 
 	const fileInputRef = useRef<HTMLInputElement>(null);
@@ -40,6 +59,9 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 			success: false,
 			uploadProgress: 0,
 			fileName: null,
+			subscriptionDetection: null,
+			showSubscriptionDialog: false,
+			uploadData: null,
 		}));
 	}, []);
 
@@ -113,9 +135,18 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 					isUploading: false,
 					uploadProgress: 100,
 					success: true,
+					subscriptionDetection: result.data.subscriptionDetection,
+					showSubscriptionDialog: !!result.data.subscriptionDetection,
+					uploadData: {
+						transactions: result.data.transactions,
+						summary: result.data.summary,
+					},
 				}));
 
-				onUploadSuccess?.(result.data);
+				// If no subscription detection, call success immediately
+				if (!result.data.subscriptionDetection) {
+					onUploadSuccess?.(result.data);
+				}
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : 'Upload failed';
 				setState((prev) => ({
@@ -169,9 +200,75 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 		fileInputRef.current?.click();
 	}, []);
 
+	const handleSubscriptionConfirm = useCallback(
+		async (confirmations: {
+			candidates: Array<{
+				candidate: SubscriptionCandidate;
+				overrides?: any;
+			}>;
+			matches: SubscriptionMatch[];
+		}) => {
+			try {
+				const response = await fetch('/api/subscriptions/confirm', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify(confirmations),
+				});
+
+				if (!response.ok) {
+					throw new Error('Failed to confirm subscriptions');
+				}
+
+				const result = await response.json();
+				console.log('Subscriptions confirmed:', result);
+
+				// Close dialog and call success callback
+				setState((prev) => ({
+					...prev,
+					showSubscriptionDialog: false,
+				}));
+
+				// Call success callback with original upload data
+				if (state.uploadData) {
+					onUploadSuccess?.({
+						...state.uploadData,
+						subscriptionDetection: state.subscriptionDetection || undefined,
+					});
+				}
+			} catch (error) {
+				console.error('Error confirming subscriptions:', error);
+				setState((prev) => ({
+					...prev,
+					error: 'Failed to confirm subscriptions',
+				}));
+			}
+		},
+		[state.subscriptionDetection, state.uploadData, onUploadSuccess],
+	);
+
+	const handleSubscriptionDialogClose = useCallback(() => {
+		setState((prev) => ({
+			...prev,
+			showSubscriptionDialog: false,
+		}));
+
+		// Call success callback even if user cancels subscription confirmation
+		if (state.uploadData) {
+			onUploadSuccess?.({
+				...state.uploadData,
+				subscriptionDetection: state.subscriptionDetection || undefined,
+			});
+		}
+	}, [state.subscriptionDetection, state.uploadData, onUploadSuccess]);
+
 	const getStatusIcon = () => {
 		if (state.isUploading) {
 			return <Loader2 className='h-8 w-8 animate-spin text-blue-500' />;
+		}
+		if (state.success && state.subscriptionDetection) {
+			return <TrendingUp className='h-8 w-8 text-blue-500' />;
 		}
 		if (state.success) {
 			return <CheckCircle2 className='h-8 w-8 text-green-500' />;
@@ -186,6 +283,11 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 		if (state.isUploading) {
 			return `Uploading ${state.fileName}... ${state.uploadProgress}%`;
 		}
+		if (state.success && state.subscriptionDetection) {
+			const { candidates, matches } = state.subscriptionDetection;
+			const total = candidates.length + matches.length;
+			return `Successfully uploaded ${state.fileName}. Found ${total} potential subscriptions to review.`;
+		}
 		if (state.success) {
 			return `Successfully uploaded ${state.fileName}`;
 		}
@@ -197,6 +299,7 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 
 	const getStatusColor = () => {
 		if (state.error) return 'text-red-600';
+		if (state.success && state.subscriptionDetection) return 'text-blue-600';
 		if (state.success) return 'text-green-600';
 		if (state.isUploading) return 'text-blue-600';
 		return 'text-muted-foreground';
@@ -209,7 +312,8 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 					border-2 border-dashed transition-all duration-200 cursor-pointer
 					${state.isDragOver ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/20' : 'border-muted-foreground/25'}
 					${state.error ? 'border-red-400 bg-red-50 dark:bg-red-950/20' : ''}
-					${state.success ? 'border-green-400 bg-green-50 dark:bg-green-950/20' : ''}
+					${state.success && !state.subscriptionDetection ? 'border-green-400 bg-green-50 dark:bg-green-950/20' : ''}
+					${state.success && state.subscriptionDetection ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/20' : ''}
 				`}
 				onDragOver={handleDragOver}
 				onDragLeave={handleDragLeave}
@@ -233,7 +337,21 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 						</div>
 					)}
 
-					{!state.isUploading && (
+					{state.success && state.subscriptionDetection && (
+						<div className='mt-4'>
+							<Button
+								onClick={(e) => {
+									e.stopPropagation();
+									setState((prev) => ({ ...prev, showSubscriptionDialog: true }));
+								}}
+								className='bg-blue-600 hover:bg-blue-700'>
+								<TrendingUp className='h-4 w-4 mr-2' />
+								Review Subscriptions
+							</Button>
+						</div>
+					)}
+
+					{!state.isUploading && !state.success && (
 						<div className='mt-4 flex flex-col sm:flex-row gap-2 items-center'>
 							<Button
 								variant='outline'
@@ -263,6 +381,16 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 					/>
 				</CardContent>
 			</Card>
+
+			{/* Subscription Confirmation Dialog */}
+			{state.subscriptionDetection && (
+				<SubscriptionConfirmationDialog
+					isOpen={state.showSubscriptionDialog}
+					onClose={handleSubscriptionDialogClose}
+					detectionData={state.subscriptionDetection}
+					onConfirm={handleSubscriptionConfirm}
+				/>
+			)}
 		</div>
 	);
 }

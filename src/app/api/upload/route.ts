@@ -2,6 +2,7 @@ import { parseCSV, validateCSVContent } from '@/lib/csv-parser';
 import { ErrorResponse } from '@/lib/types';
 import { createTransactionRepository } from '@/lib/database';
 import { BudgetTransactionIntegrationService } from '@/lib/budget-transaction-integration';
+import { createSubscriptionService } from '@/lib/subscription-service';
 
 function json(data: any, init?: { status?: number }) {
 	try {
@@ -141,7 +142,41 @@ export async function POST(request: any) {
 				}
 			}
 
-			// Return successful response with database result
+			// Detect subscriptions from uploaded transactions
+			let subscriptionDetection = null;
+			if (dbResult.created.length > 0) {
+				try {
+					const subscriptionService = createSubscriptionService(repository);
+
+					// Get all transactions for better pattern detection (not just uploaded ones)
+					const endDate = new Date();
+					const startDate = new Date();
+					startDate.setFullYear(endDate.getFullYear() - 2); // Last 2 years for pattern analysis
+					const allTransactions = await repository.findByDateRange(startDate, endDate);
+
+					// Detect subscriptions from all transactions
+					const detectionResult =
+						await subscriptionService.detectSubscriptions(allTransactions);
+
+					// Only return detection results if we found candidates or matches
+					if (
+						detectionResult.candidates.length > 0 ||
+						detectionResult.matches.length > 0
+					) {
+						subscriptionDetection = {
+							candidates: detectionResult.candidates,
+							matches: detectionResult.matches,
+							totalAnalyzed: detectionResult.totalTransactions,
+							alreadyFlagged: detectionResult.alreadyFlagged,
+						};
+					}
+				} catch (subscriptionError) {
+					console.error('Error detecting subscriptions after upload:', subscriptionError);
+					// Don't fail the upload if subscription detection fails
+				}
+			}
+
+			// Return successful response with database result and subscription detection
 			return json(
 				{
 					success: true,
@@ -157,6 +192,7 @@ export async function POST(request: any) {
 							totalProcessed: dbResult.totalProcessed,
 						},
 						errors: parseResult.errors.length > 0 ? parseResult.errors : undefined,
+						subscriptionDetection,
 					},
 				},
 				{ status: 200 },

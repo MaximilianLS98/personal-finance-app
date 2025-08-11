@@ -36,14 +36,14 @@ export default function SubscriptionsPage() {
 	return (
 		<div className='max-w-7xl mx-auto space-y-6'>
 			{/* Header */}
-			<div className='flex items-center justify-between'>
+			<div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
 				<div>
 					<h2 className='text-2xl font-semibold mb-2'>Subscription Tracker</h2>
 					<p className='text-muted-foreground'>
 						Manage and monitor your recurring subscriptions
 					</p>
 				</div>
-				<div className='flex gap-2'>
+				<div className='flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end'>
 					<Button asChild variant='outline'>
 						<Link href='/subscriptions/detect'>
 							<Search className='mr-2 h-4 w-4' />

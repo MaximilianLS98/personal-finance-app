@@ -143,14 +143,14 @@ export default function BudgetsPage() {
 	return (
 		<div className='container mx-auto px-4 py-8'>
 			{/* Header */}
-			<div className='flex justify-between items-center mb-8'>
+			<div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-8'>
 				<div>
 					<h1 className='text-3xl font-bold tracking-tight'>Budget Management</h1>
 					<p className='text-muted-foreground mt-2'>
 						Track your spending and stay within your financial goals
 					</p>
 				</div>
-				<div className='flex gap-2'>
+				<div className='flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end'>
 					<Button variant='outline' onClick={() => router.push('/budgets/scenarios')}>
 						<Settings className='w-4 h-4 mr-2' />
 						Scenarios

@@ -35,7 +35,7 @@
     <!-- -   Write tests for duplicate detection scenarios WE WILL HANDLE TESTING LATER IN ITS OWN SPEC -->
     -   _Requirements: 2.2, 2.5, 4.4_
 
--   [ ] 5. Add financial summary calculations with database queries
+-   [x] 5. Add financial summary calculations with database queries
 
     -   Implement calculateSummary method using efficient SQL aggregation
     -   Add date range filtering for summary calculations
@@ -44,7 +44,7 @@
     <!-- -   Write tests for summary calculation accuracy and performance WE WILL HANDLE TESTING LATER IN ITS OWN SPEC-->
     -   _Requirements: 1.4, 2.4, 3.1, 3.3_
 
--   [ ] 6. Integrate repository with upload API endpoint
+-   [x] 6. Integrate repository with upload API endpoint
 
     -   Update POST /api/upload route to use TransactionRepository instead of in-memory storage
     -   Implement transaction batching for efficient bulk inserts
@@ -53,7 +53,7 @@
     <!-- -   Write integration tests for upload endpoint with database WE WILL HANDLE TESTING LATER IN ITS OWN SPEC-->
     -   _Requirements: 1.2, 1.6, 2.1, 2.5, 3.2_
 
--   [ ] 7. Integrate repository with summary API endpoint
+-   [x] 7. Integrate repository with summary API endpoint
 
     -   Update GET /api/summary route to use repository calculateSummary method
     -   Implement caching strategy for frequently accessed summaries

@@ -500,7 +500,7 @@ export default function TransactionsPage() {
 	return (
 		<div className='max-w-7xl mx-auto p-6 space-y-8'>
 			{/* Header */}
-			<div className='flex justify-between items-center'>
+			<div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
 				<div>
 					<h1 className='text-3xl font-bold text-foreground'>Transactions</h1>
 					<p className='text-muted-foreground mt-2'>
@@ -508,7 +508,7 @@ export default function TransactionsPage() {
 						{totalCount})
 					</p>
 				</div>
-				<div className='flex gap-2'>
+				<div className='flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end'>
 					<Button
 						variant='outline'
 						onClick={handleBulkSuggestions}

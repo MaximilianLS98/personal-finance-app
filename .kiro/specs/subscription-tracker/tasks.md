@@ -123,7 +123,7 @@
         - Add export functionality for projection data and reports
         - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
 
-- [ ]   8. Integrate subscription detection with CSV upload workflow
+- [x]   8. Integrate subscription detection with CSV upload workflow
 
     - Modify existing CSV upload process to trigger subscription detection
     - Add user confirmation step for detected subscriptions before creation
