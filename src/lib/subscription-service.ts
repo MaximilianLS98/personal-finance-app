@@ -192,11 +192,14 @@ export class SubscriptionService {
 		const { candidate, overrides = {} } = request;
 
 		// Calculate next payment date based on the most recent transaction
-		const latestTransaction = candidate.matchingTransactions.sort(
-			(a, b) => b.date.getTime() - a.date.getTime(),
-		)[0];
+		const latestTransaction = candidate.matchingTransactions
+			.map((t) => ({
+				...t,
+				date: t.date instanceof Date ? t.date : new Date(t.date as unknown as string),
+			}))
+			.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
 
-		let nextPaymentDate = new Date(latestTransaction.date);
+		const nextPaymentDate = new Date(latestTransaction.date);
 
 		// Add billing frequency to get next payment
 		switch (candidate.billingFrequency) {

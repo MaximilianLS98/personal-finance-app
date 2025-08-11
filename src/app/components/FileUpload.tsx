@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Upload, FileText, AlertCircle, CheckCircle2, Loader2, TrendingUp } from 'lucide-react';
-import { Transaction, ErrorResponse } from '@/lib/types';
+import { Transaction, ErrorResponse, Category } from '@/lib/types';
 import SubscriptionConfirmationDialog from './SubscriptionConfirmationDialog';
 import type { SubscriptionCandidate, SubscriptionMatch } from '@/lib/subscription-pattern-engine';
+import { getJson } from '@/lib/api';
 
 interface SubscriptionDetectionData {
 	candidates: SubscriptionCandidate[];
@@ -49,6 +50,23 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 		showSubscriptionDialog: false,
 		uploadData: null,
 	});
+
+	const [categories, setCategories] = useState<Category[]>([]);
+
+	React.useEffect(() => {
+		let cancelled = false;
+		(async () => {
+			try {
+				const cats = await getJson<Category[]>('/api/categories');
+				if (!cancelled) setCategories(cats);
+			} catch (e) {
+				console.error('Failed to fetch categories for upload dialog:', e);
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -310,10 +328,22 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 			<Card
 				className={`
 					border-2 border-dashed transition-all duration-200 cursor-pointer
-					${state.isDragOver ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/20' : 'border-muted-foreground/25'}
+					${
+						state.isDragOver
+							? 'border-blue-400 bg-blue-50 dark:bg-blue-950/20'
+							: 'border-muted-foreground/25'
+					}
 					${state.error ? 'border-red-400 bg-red-50 dark:bg-red-950/20' : ''}
-					${state.success && !state.subscriptionDetection ? 'border-green-400 bg-green-50 dark:bg-green-950/20' : ''}
-					${state.success && state.subscriptionDetection ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/20' : ''}
+					${
+						state.success && !state.subscriptionDetection
+							? 'border-green-400 bg-green-50 dark:bg-green-950/20'
+							: ''
+					}
+					${
+						state.success && state.subscriptionDetection
+							? 'border-blue-400 bg-blue-50 dark:bg-blue-950/20'
+							: ''
+					}
 				`}
 				onDragOver={handleDragOver}
 				onDragLeave={handleDragLeave}
@@ -389,6 +419,9 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 					onClose={handleSubscriptionDialogClose}
 					detectionData={state.subscriptionDetection}
 					onConfirm={handleSubscriptionConfirm}
+					// categories are fetched here to reuse across dialog instances
+					// @ts-expect-error augmenting dialog to read categories from API internally as well
+					categories={categories}
 				/>
 			)}
 		</div>

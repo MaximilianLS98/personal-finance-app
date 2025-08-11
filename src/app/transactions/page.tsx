@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -35,13 +35,12 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import FileUpload from '@/app/components/FileUpload';
 import SimpleCategorySelector from '@/components/SimpleCategorySelector';
-import { Transaction, Category, CategorySuggestion } from '@/lib/types';
+import { Transaction, CategorySuggestion } from '@/lib/types';
 import { getTransactionTypeStyle, getTransactionTypeLabel } from '@/lib/transaction-utils';
 import {
 	Pencil,
 	Trash2,
 	Upload,
-	Plus,
 	Calendar as CalendarIcon,
 	Filter,
 	X,
@@ -58,18 +57,11 @@ import {
 	format,
 	startOfDay,
 	endOfDay,
-	startOfWeek,
-	endOfWeek,
 	startOfMonth,
 	endOfMonth,
 	startOfYear,
 	endOfYear,
 	subDays,
-	subWeeks,
-	subMonths,
-	isAfter,
-	isBefore,
-	isWithinInterval,
 } from 'date-fns';
 import {
 	useCategoriesQuery,
@@ -170,12 +162,6 @@ const DATE_PRESETS = {
 };
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
-
-// Cache configuration for adjacent page prefetching
-const PREFETCH_CONFIG = {
-	maxCacheSize: 10, // Maximum number of pages to keep in memory
-	adjacentPages: 1, // Number of adjacent pages to prefetch (1 = previous + next)
-};
 
 export default function TransactionsPage() {
 	const [editingTransaction, setEditingTransaction] = useState<EditTransaction | null>(null);
@@ -836,7 +822,7 @@ export default function TransactionsPage() {
 							</span>
 							{searchTerm && (
 								<span className='bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs'>
-									Search: "{searchTerm}"
+									Search: &quot;{searchTerm}&quot;
 								</span>
 							)}
 							{transactionType !== 'all' && (

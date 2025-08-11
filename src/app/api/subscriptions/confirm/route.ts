@@ -62,11 +62,22 @@ export async function POST(request: NextRequest) {
 							startDate: overrides.startDate
 								? new Date(overrides.startDate)
 								: undefined,
-						}
+					  }
 					: undefined;
 
+				// Hydrate candidate transaction dates (serialized from the client) back to Date objects
+				const hydratedCandidate: SubscriptionCandidate = {
+					...candidate,
+					matchingTransactions: candidate.matchingTransactions.map((t) => ({
+						...t,
+						// Support both Date and string inputs safely
+						date:
+							t.date instanceof Date ? t.date : new Date(t.date as unknown as string),
+					})),
+				};
+
 				const subscription = await subscriptionService.confirmSubscription({
-					candidate,
+					candidate: hydratedCandidate,
 					overrides: processedOverrides,
 				});
 
@@ -81,7 +92,7 @@ export async function POST(request: NextRequest) {
 		}
 
 		// Process subscription matches
-		if (matches.length > 0) {
+		if (matches.length > 0)
 			try {
 				await subscriptionService.confirmSubscriptionMatches(matches);
 
@@ -101,7 +112,6 @@ export async function POST(request: NextRequest) {
 				console.error(errorMessage, error);
 				results.errors.push(errorMessage);
 			}
-		}
 
 		// Return results
 		return NextResponse.json(

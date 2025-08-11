@@ -24,8 +24,10 @@ import {
 	SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, CreditCard, TrendingUp, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Calendar, CreditCard, TrendingUp, CheckCircle2 } from 'lucide-react';
 import type { SubscriptionCandidate, SubscriptionMatch } from '@/lib/subscription-pattern-engine';
+import type { Category } from '@/lib/types';
+import { getJson } from '@/lib/api';
 
 interface SubscriptionDetectionData {
 	candidates: SubscriptionCandidate[];
@@ -41,10 +43,12 @@ interface SubscriptionConfirmationDialogProps {
 	onConfirm: (confirmations: {
 		candidates: Array<{
 			candidate: SubscriptionCandidate;
-			overrides?: any;
+			overrides?: { name?: string; categoryId?: string; notes?: string };
 		}>;
 		matches: SubscriptionMatch[];
 	}) => Promise<void>;
+	/** Optional preloaded categories to populate the dropdown */
+	categories?: Category[];
 }
 
 interface CandidateSelection {
@@ -61,12 +65,15 @@ export default function SubscriptionConfirmationDialog({
 	onClose,
 	detectionData,
 	onConfirm,
+	categories: providedCategories,
 }: SubscriptionConfirmationDialogProps) {
 	const [candidateSelections, setCandidateSelections] = useState<
 		Record<number, CandidateSelection>
 	>({});
 	const [matchSelections, setMatchSelections] = useState<Record<number, boolean>>({});
 	const [isConfirming, setIsConfirming] = useState(false);
+	const [categoryOptions, setCategoryOptions] = useState<Category[]>([]);
+	const [isLoadingCategories, setIsLoadingCategories] = useState(false);
 
 	const { candidates, matches } = detectionData;
 
@@ -91,6 +98,30 @@ export default function SubscriptionConfirmationDialog({
 			setMatchSelections(initialMatchSelections);
 		}
 	}, [isOpen, candidates, matches]);
+
+	// Prefer provided categories; otherwise fetch when dialog opens
+	React.useEffect(() => {
+		if (providedCategories && providedCategories.length > 0) {
+			setCategoryOptions(providedCategories);
+			return;
+		}
+		if (!isOpen) return;
+		let isCancelled = false;
+		(async () => {
+			setIsLoadingCategories(true);
+			try {
+				const cats = await getJson<Category[]>('/api/categories');
+				if (!isCancelled) setCategoryOptions(cats);
+			} catch (e) {
+				console.error('Failed to load categories for subscription confirmation:', e);
+			} finally {
+				if (!isCancelled) setIsLoadingCategories(false);
+			}
+		})();
+		return () => {
+			isCancelled = true;
+		};
+	}, [isOpen, providedCategories]);
 
 	const handleCandidateToggle = (index: number, selected: boolean) => {
 		setCandidateSelections((prev) => ({
@@ -193,7 +224,7 @@ export default function SubscriptionConfirmationDialog({
 					<DialogDescription>
 						We found {candidates.length} potential new subscriptions and{' '}
 						{matches.length} existing subscription matches. Review and confirm which
-						ones you'd like to add or update.
+						ones you’d like to add or update.
 					</DialogDescription>
 				</DialogHeader>
 
@@ -314,20 +345,49 @@ export default function SubscriptionConfirmationDialog({
 														<Label htmlFor={`category-${index}`}>
 															Category
 														</Label>
-														<Input
-															id={`category-${index}`}
-															placeholder='Optional category override'
+														<Select
 															value={
 																selection.overrides.categoryId || ''
 															}
-															onChange={(e) =>
+															onValueChange={(value: string) =>
 																handleCandidateOverride(
 																	index,
 																	'categoryId',
-																	e.target.value,
+																	value,
 																)
 															}
-														/>
+															disabled={
+																isLoadingCategories ||
+																categoryOptions.length === 0
+															}>
+															<SelectTrigger>
+																<SelectValue
+																	placeholder={
+																		isLoadingCategories
+																			? 'Loading categories...'
+																			: 'Select category'
+																	}
+																/>
+															</SelectTrigger>
+															<SelectContent>
+																{categoryOptions.map((cat) => (
+																	<SelectItem
+																		key={cat.id}
+																		value={cat.id}>
+																		<div className='flex items-center gap-2'>
+																			<div
+																				className='h-3 w-3 rounded-full'
+																				style={{
+																					backgroundColor:
+																						cat.color,
+																				}}
+																			/>
+																			<span>{cat.name}</span>
+																		</div>
+																	</SelectItem>
+																))}
+															</SelectContent>
+														</Select>
 													</div>
 													<div className='md:col-span-2'>
 														<Label htmlFor={`notes-${index}`}>

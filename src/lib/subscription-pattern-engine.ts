@@ -103,7 +103,9 @@ export class SubscriptionPatternEngine {
 					confidence: pattern.confidence,
 					matchingTransactions: pattern.transactions,
 					detectedPatterns: this.generatePatterns(pattern.description),
-					reason: `Detected ${pattern.billingFrequency} recurring payment of ${pattern.amount.toFixed(2)} ${pattern.currency}`,
+					reason: `Detected ${
+						pattern.billingFrequency
+					} recurring payment of ${pattern.amount.toFixed(2)} ${pattern.currency}`,
 				};
 
 				candidates.push(candidate);
@@ -154,7 +156,9 @@ export class SubscriptionPatternEngine {
 	 * Filter out monthly subscription candidates that appear to have been canceled
 	 * (no payments in the last 4 months relative to today)
 	 */
-	private filterStaleMonthlyCandidates(candidates: SubscriptionCandidate[]): SubscriptionCandidate[] {
+	private filterStaleMonthlyCandidates(
+		candidates: SubscriptionCandidate[],
+	): SubscriptionCandidate[] {
 		const now = new Date();
 		const fourMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 4, now.getDate());
 
@@ -166,10 +170,14 @@ export class SubscriptionPatternEngine {
 
 			// Find the most recent transaction
 			const mostRecentTransaction = candidate.matchingTransactions
-				.sort((a, b) => b.date.getTime() - a.date.getTime())[0];
+				.map((t) => ({
+					...t,
+					date: t.date instanceof Date ? t.date : new Date(t.date as unknown as string),
+				}))
+				.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
 
 			// If the most recent payment is within the last 4 months, keep it
-			const isRecentEnough = mostRecentTransaction.date >= fourMonthsAgo;
+			const isRecentEnough = new Date(mostRecentTransaction.date) >= fourMonthsAgo;
 
 			return isRecentEnough;
 		});
@@ -674,11 +682,12 @@ export class SubscriptionPatternEngine {
 	 */
 	private calculateStringSimilarity(str1: string, str2: string): number {
 		// Normalize strings by removing punctuation and converting to lowercase
-		const normalize = (str: string) => str
-			.toLowerCase()
-			.replace(/[^\w\s]/g, ' ')  // Replace punctuation with spaces
-			.replace(/\s+/g, ' ')      // Collapse multiple spaces
-			.trim();
+		const normalize = (str: string) =>
+			str
+				.toLowerCase()
+				.replace(/[^\w\s]/g, ' ') // Replace punctuation with spaces
+				.replace(/\s+/g, ' ') // Collapse multiple spaces
+				.trim();
 
 		const s1 = normalize(str1);
 		const s2 = normalize(str2);
@@ -694,14 +703,14 @@ export class SubscriptionPatternEngine {
 		}
 
 		// Word-based similarity using Jaccard similarity
-		const words1 = new Set(s1.split(/\s+/).filter(word => word.length > 0));
-		const words2 = new Set(s2.split(/\s+/).filter(word => word.length > 0));
+		const words1 = new Set(s1.split(/\s+/).filter((word) => word.length > 0));
+		const words2 = new Set(s2.split(/\s+/).filter((word) => word.length > 0));
 
 		if (words1.size === 0 && words2.size === 0) return 1.0;
 		if (words1.size === 0 || words2.size === 0) return 0.0;
 
 		// Calculate intersection and union
-		const intersection = new Set([...words1].filter(word => words2.has(word)));
+		const intersection = new Set([...words1].filter((word) => words2.has(word)));
 		const union = new Set([...words1, ...words2]);
 
 		// Jaccard similarity = |intersection| / |union|
