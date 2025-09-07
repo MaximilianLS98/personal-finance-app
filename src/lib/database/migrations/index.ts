@@ -42,6 +42,17 @@ export class MigrationRunner {
 	 */
 	private getCurrentVersion(): number {
 		try {
+			// First check if schema_metadata table exists
+			const tableExists = this.db
+				.query(
+					"SELECT name FROM sqlite_master WHERE type='table' AND name='schema_metadata'",
+				)
+				.get();
+
+			if (!tableExists) {
+				return 0;
+			}
+
 			const result = this.db
 				.query('SELECT MAX(version) as version FROM schema_metadata')
 				.get() as { version: number } | null;
@@ -57,6 +68,17 @@ export class MigrationRunner {
 	 */
 	private isMigrationApplied(version: number): boolean {
 		try {
+			// First check if schema_metadata table exists
+			const tableExists = this.db
+				.query(
+					"SELECT name FROM sqlite_master WHERE type='table' AND name='schema_metadata'",
+				)
+				.get();
+
+			if (!tableExists) {
+				return false;
+			}
+
 			const result = this.db
 				.query('SELECT 1 FROM schema_metadata WHERE version = ?')
 				.get(version);
@@ -142,6 +164,17 @@ export class MigrationRunner {
 	 */
 	getAppliedMigrations(): number[] {
 		try {
+			// First check if schema_metadata table exists
+			const tableExists = this.db
+				.query(
+					"SELECT name FROM sqlite_master WHERE type='table' AND name='schema_metadata'",
+				)
+				.get();
+
+			if (!tableExists) {
+				return [];
+			}
+
 			const results = this.db
 				.query('SELECT version FROM schema_metadata ORDER BY version')
 				.all() as { version: number }[];
