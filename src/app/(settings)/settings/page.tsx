@@ -1,5 +1,6 @@
 'use client';
 
+import { BackupSettings } from '@/app/components/BackupSettings';
 import { useCurrencySettings } from '@/app/providers';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -52,6 +53,7 @@ export default function SettingsPage() {
 	return (
 		<div className='container mx-auto max-w-4xl space-y-6 p-4'>
 			<h1 className='text-2xl font-semibold'>Settings</h1>
+			<BackupSettings />
 
 			<Card>
 				<CardHeader>
@@ -114,11 +116,11 @@ export default function SettingsPage() {
 			<Card>
 				<CardHeader>
 					<CardTitle>Currency</CardTitle>
-					<CardDescription>Choose your default display currency.</CardDescription>
+					<CardDescription>Choose the default currency for new records.</CardDescription>
 				</CardHeader>
 				<CardContent className='flex items-center justify-between gap-6'>
 					<div className='text-muted-foreground text-sm'>
-						All amounts will default to this currency.
+						Existing amounts retain their recorded currency. This setting does not convert money.
 					</div>
 					<Select value={currency} onValueChange={setCurrency}>
 						<SelectTrigger className='min-w-52'>
