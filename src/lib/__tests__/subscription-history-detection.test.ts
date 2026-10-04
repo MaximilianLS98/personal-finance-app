@@ -19,6 +19,7 @@ describe('historical subscription evidence', () => {
 	beforeEach(() => {
 		jest.useFakeTimers({ now: new Date('2026-10-05T12:00:00Z') });
 		repository.findActiveSubscriptions.mockResolvedValue([]);
+		repository.findPatternsBySubscription.mockResolvedValue([]);
 		engine = new SubscriptionPatternEngine(repository);
 	});
 	afterEach(() => jest.useRealTimers());
@@ -91,6 +92,21 @@ describe('historical subscription evidence', () => {
 		]);
 		expect(await engine.detectSubscriptions(series(['2026-01-12', '2026-02-12']))).toHaveLength(1);
 	});
+	it('offers a price-changed payment once as an existing match rather than a duplicate subscription', async () => {
+		repository.findActiveSubscriptions.mockResolvedValue([
+			{ id: 'existing', name: 'Example Gym', amount: 450, currency: 'NOK' } as never,
+		]);
+		repository.findPatternsBySubscription.mockResolvedValue([
+			{ id: 'exact', pattern: 'Example Gym AS', patternType: 'exact', confidenceScore: 1 },
+			{ id: 'contains', pattern: 'Example Gym', patternType: 'contains', confidenceScore: 1 },
+		] as never);
+		const rows = series(['2026-07-12', '2026-08-12', '2026-09-12'], { amount: -475 });
+		expect(await engine.detectSubscriptions(rows)).toHaveLength(0);
+		const matches = await engine.matchExistingSubscriptions(rows);
+		expect(matches).toHaveLength(3);
+		expect(matches.every((m) => m.pattern.id === 'exact')).toBe(true);
+	});
+
 	it('does not rediscover transactions already linked to inactive history', async () => {
 		expect(
 			await engine.detectSubscriptions(

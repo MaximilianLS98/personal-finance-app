@@ -123,9 +123,23 @@ export class SubscriptionPatternEngine {
 
 		// Filter out candidates that match existing active subscriptions
 		const filteredCandidates = await this.filterExistingSubscriptions(candidates);
+		const existingMatches = await this.matchExistingSubscriptions(transactions);
+		const matchedBySubscription = new Map<string, Set<string>>();
+		for (const match of existingMatches) {
+			const ids = matchedBySubscription.get(match.subscription.id) ?? new Set<string>();
+			ids.add(match.transaction.id);
+			matchedBySubscription.set(match.subscription.id, ids);
+		}
 
 		// Historical recurrence remains useful evidence even after payments stop.
-		return filteredCandidates.sort((a, b) => b.confidence - a.confidence);
+		return filteredCandidates
+			.filter(
+				(candidate) =>
+					![...matchedBySubscription.values()].some((ids) =>
+						candidate.matchingTransactions.every((t) => ids.has(t.id)),
+					),
+			)
+			.sort((a, b) => b.confidence - a.confidence);
 	}
 
 	/**
@@ -225,7 +239,15 @@ export class SubscriptionPatternEngine {
 			}
 		}
 
-		return matches.sort((a, b) => b.confidence - a.confidence);
+		// Multiple saved patterns can describe the same payment; review it only once
+		// for each possible subscription, preserving the strongest evidence.
+		const strongest = new Map<string, SubscriptionMatch>();
+		for (const match of matches) {
+			const key = JSON.stringify([match.subscription.id, match.transaction.id]);
+			if (!strongest.has(key) || strongest.get(key)!.confidence < match.confidence)
+				strongest.set(key, match);
+		}
+		return [...strongest.values()].sort((a, b) => b.confidence - a.confidence);
 	}
 
 	/**
