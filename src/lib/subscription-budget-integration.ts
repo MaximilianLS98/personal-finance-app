@@ -1,17 +1,11 @@
+import { monthlySubscriptionCost } from '@/lib/subscription-costs';
 /**
  * Subscription Budget Integration Service
  * Handles automatic subscription cost allocation in budget calculations
  * and subscription change impact analysis for affected budgets
  */
 
-import type {
-	Subscription,
-	Budget,
-	BudgetProgress,
-	BudgetAlert,
-	Transaction,
-	TransactionRepository,
-} from './types';
+import type { Budget, BudgetAlert, Subscription, TransactionRepository } from './types';
 export interface SubscriptionBudgetIntegration {
 	/**
 	 * Update budgets when subscriptions are created
@@ -149,18 +143,10 @@ export class SubscriptionBudgetIntegrationService implements SubscriptionBudgetI
 			// Handle category changes
 			if (oldSubscription.categoryId !== newSubscription.categoryId) {
 				// Remove impact from old category
-				await this.handleSubscriptionCategoryChange(
-					oldSubscription,
-					newSubscription,
-					'removed',
-				);
+				await this.handleSubscriptionCategoryChange(oldSubscription, newSubscription, 'removed');
 
 				// Add impact to new category
-				await this.handleSubscriptionCategoryChange(
-					oldSubscription,
-					newSubscription,
-					'added',
-				);
+				await this.handleSubscriptionCategoryChange(oldSubscription, newSubscription, 'added');
 			}
 
 			// Handle amount changes
@@ -299,10 +285,7 @@ export class SubscriptionBudgetIntegrationService implements SubscriptionBudgetI
 					reason = `Increase budget to accommodate new subscription "${subscription.name}"`;
 				} else if (changeType === 'deleted') {
 					// Suggest decreasing budget or reallocating funds
-					const newAmount = Math.max(
-						budget.amount - monthlyImpact,
-						currentProgress.currentSpent,
-					);
+					const newAmount = Math.max(budget.amount - monthlyImpact, currentProgress.currentSpent);
 					suggestedAmount = newAmount;
 					reason = `Decrease budget after removing subscription "${subscription.name}"`;
 				} else {
@@ -339,8 +322,7 @@ export class SubscriptionBudgetIntegrationService implements SubscriptionBudgetI
 			const allocation = await this.calculateSubscriptionAllocation(categoryId);
 
 			// Convert to appropriate period
-			const fixedCosts =
-				period === 'yearly' ? allocation.fixedAmount * 12 : allocation.fixedAmount;
+			const fixedCosts = period === 'yearly' ? allocation.fixedAmount * 12 : allocation.fixedAmount;
 
 			// Calculate variable budget suggestion
 			const variableBudget = Math.max(0, historicalSpending - fixedCosts);
@@ -398,9 +380,7 @@ export class SubscriptionBudgetIntegrationService implements SubscriptionBudgetI
 
 			for (const subscription of upcomingSubscriptions) {
 				// Find budgets for this subscription's category
-				const budgets = await this.repository.findBudgetsByCategory(
-					subscription.categoryId,
-				);
+				const budgets = await this.repository.findBudgetsByCategory(subscription.categoryId);
 				const activeBudgets = budgets.filter((b) => b.isActive);
 
 				for (const budget of activeBudgets) {
@@ -410,8 +390,7 @@ export class SubscriptionBudgetIntegrationService implements SubscriptionBudgetI
 
 					const subscriptionAmount = subscription.amount;
 					const daysUntilPayment = Math.ceil(
-						(subscription.nextPaymentDate.getTime() - Date.now()) /
-							(1000 * 60 * 60 * 24),
+						(subscription.nextPaymentDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24),
 					);
 
 					let alertMessage = '';
@@ -449,21 +428,7 @@ export class SubscriptionBudgetIntegrationService implements SubscriptionBudgetI
 	 * Calculate monthly amount for any subscription frequency
 	 */
 	private calculateMonthlyAmount(subscription: Subscription): number {
-		switch (subscription.billingFrequency) {
-			case 'monthly':
-				return subscription.amount;
-			case 'quarterly':
-				return subscription.amount / 3;
-			case 'annually':
-				return subscription.amount / 12;
-			case 'custom':
-				if (subscription.customFrequencyDays) {
-					return (subscription.amount * 30.44) / subscription.customFrequencyDays; // Average month length
-				}
-				return subscription.amount; // Fallback to monthly
-			default:
-				return subscription.amount;
-		}
+		return monthlySubscriptionCost(subscription);
 	}
 
 	/**
@@ -573,8 +538,7 @@ export class SubscriptionBudgetIntegrationService implements SubscriptionBudgetI
 		const parts: string[] = [];
 
 		if (allocation.subscriptionCount > 0) {
-			const fixedCosts =
-				period === 'yearly' ? allocation.fixedAmount * 12 : allocation.fixedAmount;
+			const fixedCosts = period === 'yearly' ? allocation.fixedAmount * 12 : allocation.fixedAmount;
 			parts.push(`Fixed subscription costs: ${fixedCosts.toFixed(2)} ${period}`);
 
 			if (allocation.subscriptionCount === 1) {

@@ -2,8 +2,8 @@
  * Intelligent categorization engine that learns from user behavior
  */
 
-import type { Category, CategoryRule, CategorySuggestion } from './types';
 import { createTransactionRepository } from './database';
+import type { Category, CategoryRule, CategorySuggestion } from './types';
 
 export class CategoryLearningEngine {
 	private repository = createTransactionRepository();
@@ -16,15 +16,15 @@ export class CategoryLearningEngine {
 
 		try {
 			await this.repository.initialize();
-			
+
 			// Get all active category rules ordered by confidence
 			const rules = await this.getCategoryRules();
 			const categories = await this.getCategories();
-			const categoryMap = new Map(categories.map(cat => [cat.id, cat]));
+			const categoryMap = new Map(categories.map((cat) => [cat.id, cat]));
 
 			// Find matching rules
 			const matches = rules
-				.filter(rule => this.matchesPattern(description, rule))
+				.filter((rule) => this.matchesPattern(description, rule))
 				.sort((a, b) => b.confidenceScore - a.confidenceScore); // Highest confidence first
 
 			if (matches.length === 0) {
@@ -53,9 +53,9 @@ export class CategoryLearningEngine {
 	 * Learn from user categorization action
 	 */
 	async learnFromUserAction(
-		description: string, 
-		categoryId: string, 
-		wasCorrectSuggestion: boolean = false
+		description: string,
+		categoryId: string,
+		wasCorrectSuggestion: boolean = false,
 	): Promise<void> {
 		if (!description || !categoryId) return;
 
@@ -78,7 +78,9 @@ export class CategoryLearningEngine {
 	/**
 	 * Extract patterns from a transaction description
 	 */
-	private extractPatterns(description: string): Array<{pattern: string, type: CategoryRule['patternType']}> {
+	private extractPatterns(
+		description: string,
+	): Array<{ pattern: string; type: CategoryRule['patternType'] }> {
 		const patterns = [];
 		const cleanDesc = description.trim().toUpperCase();
 
@@ -86,10 +88,11 @@ export class CategoryLearningEngine {
 		patterns.push({ pattern: cleanDesc, type: 'exact' as const });
 
 		// Contains patterns - extract meaningful words
-		const words = cleanDesc.split(/\s+/).filter(word => 
-			word.length > 2 && 
-			!/^\d+$/.test(word) && // Not just numbers
-			!['THE', 'AND', 'FOR', 'WITH', 'FROM'].includes(word) // Not common words
+		const words = cleanDesc.split(/\s+/).filter(
+			(word) =>
+				word.length > 2 &&
+				!/^\d+$/.test(word) && // Not just numbers
+				!['THE', 'AND', 'FOR', 'WITH', 'FROM'].includes(word), // Not common words
 		);
 
 		for (const word of words) {
@@ -133,9 +136,9 @@ export class CategoryLearningEngine {
 	/**
 	 * Generate human-readable reason for suggestion
 	 */
-	private generateReason(rule: CategoryRule, description: string): string {
+	private generateReason(rule: CategoryRule, _description: string): string {
 		const confidence = Math.round(rule.confidenceScore * 100);
-		
+
 		switch (rule.patternType) {
 			case 'exact':
 				return `Exact match (${confidence}% confidence)`;
@@ -155,21 +158,22 @@ export class CategoryLearningEngine {
 	 */
 	private async createOrUpdateUserRule(description: string, categoryId: string): Promise<void> {
 		const patterns = this.extractPatterns(description);
-		
+
 		// Find the most specific pattern (prefer exact > starts_with > contains)
 		const priorityOrder = ['exact', 'starts_with', 'contains'];
-		const bestPattern = patterns.sort((a, b) => 
-			priorityOrder.indexOf(a.type) - priorityOrder.indexOf(b.type)
+		const bestPattern = patterns.sort(
+			(a, b) => priorityOrder.indexOf(a.type) - priorityOrder.indexOf(b.type),
 		)[0];
 
 		if (!bestPattern) return;
 
 		// Check if rule already exists
 		const existingRules = await this.getCategoryRules();
-		const existingRule = existingRules.find(rule => 
-			rule.pattern.toUpperCase() === bestPattern.pattern.toUpperCase() &&
-			rule.patternType === bestPattern.type &&
-			rule.categoryId === categoryId
+		const existingRule = existingRules.find(
+			(rule) =>
+				rule.pattern.toUpperCase() === bestPattern.pattern.toUpperCase() &&
+				rule.patternType === bestPattern.type &&
+				rule.categoryId === categoryId,
 		);
 
 		if (existingRule) {
@@ -190,11 +194,13 @@ export class CategoryLearningEngine {
 	/**
 	 * Boost confidence of matching rule
 	 */
-	private async boostMatchingRuleConfidence(description: string, categoryId: string): Promise<void> {
+	private async boostMatchingRuleConfidence(
+		description: string,
+		categoryId: string,
+	): Promise<void> {
 		const rules = await this.getCategoryRules();
-		const matchingRule = rules.find(rule => 
-			rule.categoryId === categoryId && 
-			this.matchesPattern(description, rule)
+		const matchingRule = rules.find(
+			(rule) => rule.categoryId === categoryId && this.matchesPattern(description, rule),
 		);
 
 		if (matchingRule) {
@@ -205,11 +211,13 @@ export class CategoryLearningEngine {
 	/**
 	 * Reduce confidence of conflicting rules
 	 */
-	private async reduceConflictingRuleConfidence(description: string, correctCategoryId: string): Promise<void> {
+	private async reduceConflictingRuleConfidence(
+		description: string,
+		correctCategoryId: string,
+	): Promise<void> {
 		const rules = await this.getCategoryRules();
-		const conflictingRules = rules.filter(rule => 
-			rule.categoryId !== correctCategoryId && 
-			this.matchesPattern(description, rule)
+		const conflictingRules = rules.filter(
+			(rule) => rule.categoryId !== correctCategoryId && this.matchesPattern(description, rule),
 		);
 
 		for (const rule of conflictingRules) {

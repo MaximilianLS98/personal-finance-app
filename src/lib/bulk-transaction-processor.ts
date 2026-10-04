@@ -1,13 +1,14 @@
+import type { Budget } from './types';
 /**
  * Bulk Transaction Processing Utilities
  * Optimized processing for large transaction operations with budget integration
  */
 
-import type { Transaction, TransactionRepository } from './types';
 import {
 	BudgetTransactionIntegrationService,
 	type TransactionChange,
 } from './budget-transaction-integration';
+import type { Transaction, TransactionRepository } from './types';
 
 export interface BulkProcessingOptions {
 	batchSize?: number;
@@ -42,11 +43,7 @@ export class BulkTransactionProcessor {
 		operations: BulkUpdateOperation[],
 		options: BulkProcessingOptions = {},
 	): Promise<BulkProcessingResult> {
-		const {
-			batchSize = 50,
-			enableBudgetUpdates = true,
-			enableProgressReporting = false,
-		} = options;
+		const { batchSize = 50, enableBudgetUpdates = true, enableProgressReporting = false } = options;
 
 		const result: BulkProcessingResult = {
 			totalProcessed: 0,
@@ -71,9 +68,7 @@ export class BulkTransactionProcessor {
 			for (const operation of batch) {
 				try {
 					// Get original transaction
-					const originalTransaction = await this.repository.findById(
-						operation.transactionId,
-					);
+					const originalTransaction = await this.repository.findById(operation.transactionId);
 					if (!originalTransaction) {
 						result.errors.push({
 							index: result.totalProcessed,
@@ -142,11 +137,7 @@ export class BulkTransactionProcessor {
 		transactionIds: string[],
 		options: BulkProcessingOptions = {},
 	): Promise<BulkProcessingResult> {
-		const {
-			batchSize = 50,
-			enableBudgetUpdates = true,
-			enableProgressReporting = false,
-		} = options;
+		const { batchSize = 50, enableBudgetUpdates = true, enableProgressReporting = false } = options;
 
 		const result: BulkProcessingResult = {
 			totalProcessed: 0,
@@ -260,15 +251,10 @@ export class BulkTransactionProcessor {
 				try {
 					// Recalculate progress for all budgets in this category
 					await Promise.all(
-						categoryBudgets.map((budget) =>
-							this.repository.calculateBudgetProgress(budget.id),
-						),
+						categoryBudgets.map((budget) => this.repository.calculateBudgetProgress(budget.id)),
 					);
 				} catch (error) {
-					console.error(
-						`Error optimizing budget calculations for category ${categoryId}:`,
-						error,
-					);
+					console.error(`Error optimizing budget calculations for category ${categoryId}:`, error);
 				}
 			}
 		} catch (error) {
@@ -325,10 +311,7 @@ export class BulkTransactionProcessor {
 					});
 				}
 			} catch (error) {
-				console.error(
-					`Error flagging transaction ${transaction.id} for budget impact:`,
-					error,
-				);
+				console.error(`Error flagging transaction ${transaction.id} for budget impact:`, error);
 			}
 		}
 
@@ -340,7 +323,7 @@ export class BulkTransactionProcessor {
 	/**
 	 * Check if transaction falls within budget period
 	 */
-	private isTransactionInBudgetPeriod(transaction: Transaction, budget: any): boolean {
+	private isTransactionInBudgetPeriod(transaction: Transaction, budget: Budget): boolean {
 		const transactionDate = new Date(transaction.date);
 		const now = new Date();
 

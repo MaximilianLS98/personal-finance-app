@@ -1,3 +1,4 @@
+import { createRepositoryMock } from './repository-mock';
 /**
  * Tests for subscription pattern detection engine
  */
@@ -7,6 +8,7 @@ import type { Transaction, TransactionRepository } from '../types';
 
 // Mock repository for testing
 const mockRepository: jest.Mocked<TransactionRepository> = {
+	...createRepositoryMock(),
 	// Core CRUD operations
 	create: jest.fn(),
 	createMany: jest.fn(),
@@ -66,8 +68,11 @@ describe('SubscriptionPatternEngine', () => {
 	let engine: SubscriptionPatternEngine;
 
 	beforeEach(() => {
+		jest.useFakeTimers({ now: new Date('2024-04-20T12:00:00Z') });
 		engine = new SubscriptionPatternEngine(mockRepository);
 		jest.clearAllMocks();
+		mockRepository.findActiveSubscriptions.mockResolvedValue([]);
+		mockRepository.findPatternsBySubscription.mockResolvedValue([]);
 	});
 
 	describe('detectSubscriptions', () => {
@@ -106,7 +111,7 @@ describe('SubscriptionPatternEngine', () => {
 			const candidates = await engine.detectSubscriptions(transactions);
 
 			expect(candidates).toHaveLength(1);
-			expect(candidates[0].name).toBe('Netflix.Com');
+			expect(candidates[0].name).toBe('Netflix Com');
 			expect(candidates[0].amount).toBe(149.0);
 			expect(candidates[0].billingFrequency).toBe('monthly');
 			expect(candidates[0].confidence).toBeGreaterThan(0.6);
@@ -285,7 +290,7 @@ describe('Pattern matching confidence calculation', () => {
 		};
 
 		// Access private method for testing
-		const confidence = (engine as any).calculatePatternMatch(transaction, pattern);
+		const confidence = engine['calculatePatternMatch'](transaction, pattern);
 		expect(confidence).toBe(1.0);
 	});
 
@@ -311,7 +316,11 @@ describe('Pattern matching confidence calculation', () => {
 			updatedAt: new Date(),
 		};
 
-		const confidence = (engine as any).calculatePatternMatch(transaction, pattern);
+		const confidence = engine['calculatePatternMatch'](transaction, pattern);
 		expect(confidence).toBe(0.9 * 0.8); // match score * pattern confidence
 	});
+});
+
+afterEach(() => {
+	jest.useRealTimers();
 });

@@ -6,13 +6,13 @@
 
 import type {
 	Budget,
-	BudgetProgress,
-	BudgetSuggestion,
-	BudgetScenario,
 	BudgetAlert,
+	BudgetPeriod,
+	BudgetProgress,
+	BudgetScenario,
+	BudgetSuggestion,
 	CreateBudgetRequest,
 	TransactionRepository,
-	BudgetPeriod,
 	VarianceAnalysis,
 } from './types';
 
@@ -34,7 +34,6 @@ export class BudgetService {
 	 * Create a new budget with validation and suggestion integration
 	 */
 	async createBudget(request: CreateBudgetRequest): Promise<Budget> {
-		// Test implementation - should be tested for production use
 		try {
 			// Validate the category exists
 			const category = await this.repository.getCategoryById(request.categoryId);
@@ -82,9 +81,7 @@ export class BudgetService {
 			return budget;
 		} catch (error) {
 			throw new Error(
-				`Failed to create budget: ${
-					error instanceof Error ? error.message : 'Unknown error'
-				}`,
+				`Failed to create budget: ${error instanceof Error ? error.message : 'Unknown error'}`,
 			);
 		}
 	}
@@ -98,7 +95,6 @@ export class BudgetService {
 		activeOnly?: boolean;
 		dateRange?: { start: Date; end: Date };
 	}): Promise<Budget[]> {
-		// Test implementation - should be tested for production use
 		try {
 			let budgets: Budget[];
 
@@ -123,9 +119,7 @@ export class BudgetService {
 			return budgets;
 		} catch (error) {
 			throw new Error(
-				`Failed to fetch budgets: ${
-					error instanceof Error ? error.message : 'Unknown error'
-				}`,
+				`Failed to fetch budgets: ${error instanceof Error ? error.message : 'Unknown error'}`,
 			);
 		}
 	}
@@ -137,7 +131,6 @@ export class BudgetService {
 		budget: Budget;
 		progress: BudgetProgress;
 	} | null> {
-		// Test implementation - should be tested for production use
 		try {
 			const budget = await this.repository.findBudgetById(budgetId);
 			if (!budget) {
@@ -166,7 +159,6 @@ export class BudgetService {
 		budgetId: string,
 		updates: Partial<Omit<Budget, 'id' | 'createdAt' | 'updatedAt'>>,
 	): Promise<Budget | null> {
-		// Test implementation - should be tested for production use
 		try {
 			// Validate category if being updated
 			if (updates.categoryId) {
@@ -191,9 +183,7 @@ export class BudgetService {
 			return updatedBudget;
 		} catch (error) {
 			throw new Error(
-				`Failed to update budget: ${
-					error instanceof Error ? error.message : 'Unknown error'
-				}`,
+				`Failed to update budget: ${error instanceof Error ? error.message : 'Unknown error'}`,
 			);
 		}
 	}
@@ -202,7 +192,6 @@ export class BudgetService {
 	 * Delete a budget
 	 */
 	async deleteBudget(budgetId: string): Promise<boolean> {
-		// Test implementation - should be tested for production use
 		return await this.repository.deleteBudget(budgetId);
 	}
 
@@ -211,11 +200,7 @@ export class BudgetService {
 	/**
 	 * Get intelligent budget suggestions for a category
 	 */
-	async getBudgetSuggestions(
-		categoryId: string,
-		period: BudgetPeriod,
-	): Promise<BudgetSuggestion> {
-		// Test implementation - should be tested for production use
+	async getBudgetSuggestions(categoryId: string, period: BudgetPeriod): Promise<BudgetSuggestion> {
 		return await this.suggestionGenerator.generateSuggestions(categoryId, period);
 	}
 
@@ -234,7 +219,6 @@ export class BudgetService {
 			recommendedDailySpend: number;
 		};
 	}> {
-		// Test implementation - should be tested for production use
 		try {
 			const budget = await this.repository.findBudgetById(budgetId);
 			if (!budget) {
@@ -277,7 +261,6 @@ export class BudgetService {
 		overallStatus: 'on-track' | 'at-risk' | 'over-budget';
 		alerts: BudgetAlert[];
 	}> {
-		// Test implementation - should be tested for production use
 		try {
 			const activeBudgets = await this.repository.findBudgetsByActiveScenario();
 
@@ -291,10 +274,7 @@ export class BudgetService {
 
 			// Calculate totals
 			const totalBudgeted = activeBudgets.reduce((sum, budget) => sum + budget.amount, 0);
-			const totalSpent = budgetProgress.reduce(
-				(sum, progress) => sum + progress.currentSpent,
-				0,
-			);
+			const totalSpent = budgetProgress.reduce((sum, progress) => sum + progress.currentSpent, 0);
 
 			// Determine overall status
 			const overBudgetCount = budgetProgress.filter((p) => p.status === 'over-budget').length;
@@ -338,7 +318,6 @@ export class BudgetService {
 		description?: string,
 		copyFromScenarioId?: string,
 	): Promise<BudgetScenario> {
-		// Test implementation - should be tested for production use
 		try {
 			const scenario = await this.repository.createBudgetScenario({
 				name,
@@ -365,7 +344,6 @@ export class BudgetService {
 	 * Activate a budget scenario (deactivates others)
 	 */
 	async activateBudgetScenario(scenarioId: string): Promise<void> {
-		// Test implementation - should be tested for production use
 		await this.repository.activateBudgetScenario(scenarioId);
 	}
 
@@ -375,7 +353,6 @@ export class BudgetService {
 	 * Create initial alert thresholds for a new budget
 	 */
 	private async createInitialAlerts(budget: Budget): Promise<void> {
-		// Test implementation - should be tested for production use
 		try {
 			// Create threshold-based alerts
 			const alertPromises = budget.alertThresholds.map((threshold) =>
@@ -399,7 +376,6 @@ export class BudgetService {
 	 * Update budget alerts when thresholds change
 	 */
 	private async updateBudgetAlerts(budget: Budget): Promise<void> {
-		// Test implementation - should be tested for production use
 		try {
 			// Get existing alerts for this budget
 			const existingAlerts = await this.repository.findBudgetAlerts(budget.id);
@@ -425,7 +401,6 @@ export class BudgetService {
 		sourceScenarioId: string,
 		targetScenarioId: string,
 	): Promise<void> {
-		// Test implementation - should be tested for production use
 		try {
 			const sourceBudgets = await this.repository.findBudgetsByScenario(sourceScenarioId);
 

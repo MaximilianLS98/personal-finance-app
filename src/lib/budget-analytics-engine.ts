@@ -6,15 +6,13 @@
 
 import type {
 	Budget,
-	BudgetProgress,
-	BudgetSuggestion,
 	BudgetAmount,
-	SpendingAnalysis,
-	VarianceAnalysis,
-	MonthlyVariance,
-	Transaction,
-	TransactionRepository,
 	BudgetPeriod,
+	BudgetSuggestion,
+	MonthlyVariance,
+	SpendingAnalysis,
+	TransactionRepository,
+	VarianceAnalysis,
 } from './types';
 
 export class BudgetAnalyticsEngine {
@@ -28,7 +26,6 @@ export class BudgetAnalyticsEngine {
 		categoryId: string,
 		period: BudgetPeriod,
 	): Promise<BudgetSuggestion> {
-		// Test implementation - should be tested for production use
 		try {
 			// Get category information
 			const category = await this.repository.getCategoryById(categoryId);
@@ -37,16 +34,16 @@ export class BudgetAnalyticsEngine {
 			}
 
 			// Analyze spending for different time periods to get comprehensive data
-			const [threeMonthAnalysis, sixMonthAnalysis, twelveMonthAnalysis] = 
-				await Promise.all([
-					this.repository.analyzeHistoricalSpending(categoryId, 3),
-					this.repository.analyzeHistoricalSpending(categoryId, 6),
-					this.repository.analyzeHistoricalSpending(categoryId, 12),
-				]);
+			const [threeMonthAnalysis, sixMonthAnalysis, twelveMonthAnalysis] = await Promise.all([
+				this.repository.analyzeHistoricalSpending(categoryId, 3),
+				this.repository.analyzeHistoricalSpending(categoryId, 6),
+				this.repository.analyzeHistoricalSpending(categoryId, 12),
+			]);
 
 			// Use the analysis with the highest confidence, or combine them intelligently
-			const primaryAnalysis = [threeMonthAnalysis, sixMonthAnalysis, twelveMonthAnalysis]
-				.sort((a, b) => b.confidence - a.confidence)[0];
+			const primaryAnalysis = [threeMonthAnalysis, sixMonthAnalysis, twelveMonthAnalysis].sort(
+				(a, b) => b.confidence - a.confidence,
+			)[0];
 
 			// Calculate subscription costs for this category
 			const subscriptionCosts = {
@@ -73,9 +70,11 @@ export class BudgetAnalyticsEngine {
 				confidence: primaryAnalysis.confidence,
 			};
 		} catch (error) {
-			throw new Error(`Failed to generate budget suggestions: ${
-				error instanceof Error ? error.message : 'Unknown error'
-			}`);
+			throw new Error(
+				`Failed to generate budget suggestions: ${
+					error instanceof Error ? error.message : 'Unknown error'
+				}`,
+			);
 		}
 	}
 
@@ -83,7 +82,6 @@ export class BudgetAnalyticsEngine {
 	 * Calculate variance analysis comparing budgeted vs actual spending
 	 */
 	async calculateBudgetVariance(budget: Budget): Promise<VarianceAnalysis> {
-		// Test implementation - should be tested for production use
 		try {
 			const monthlyVariances: MonthlyVariance[] = [];
 			let totalOverspend = 0;
@@ -91,9 +89,7 @@ export class BudgetAnalyticsEngine {
 			const variances: number[] = [];
 
 			// Calculate monthly budget amount based on period
-			const monthlyBudgetAmount = budget.period === 'monthly' 
-				? budget.amount 
-				: budget.amount / 12; // Yearly budget divided by 12
+			const monthlyBudgetAmount = budget.period === 'monthly' ? budget.amount : budget.amount / 12; // Yearly budget divided by 12
 
 			// Get the date range for analysis
 			const startDate = budget.startDate;
@@ -104,7 +100,7 @@ export class BudgetAnalyticsEngine {
 			while (currentDate <= endDate) {
 				const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
 				const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-				
+
 				// Don't analyze future months
 				if (monthStart > new Date()) {
 					break;
@@ -115,17 +111,14 @@ export class BudgetAnalyticsEngine {
 				// Get transactions for this month and category
 				const monthTransactions = await this.repository.findByDateRange(monthStart, monthEnd);
 				const categoryTransactions = monthTransactions.filter(
-					t => t.categoryId === budget.categoryId && t.type === 'expense'
+					(t) => t.categoryId === budget.categoryId && t.type === 'expense',
 				);
 
-				const actualSpending = categoryTransactions.reduce(
-					(sum, t) => sum + Math.abs(t.amount), 0
-				);
+				const actualSpending = categoryTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
 				const variance = actualSpending - monthlyBudgetAmount;
-				const variancePercentage = monthlyBudgetAmount > 0 
-					? (variance / monthlyBudgetAmount) * 100 
-					: 0;
+				const variancePercentage =
+					monthlyBudgetAmount > 0 ? (variance / monthlyBudgetAmount) * 100 : 0;
 
 				monthlyVariances.push({
 					month: monthKey,
@@ -148,16 +141,23 @@ export class BudgetAnalyticsEngine {
 			}
 
 			// Calculate overall statistics
-			const averageVariance = variances.length > 0 
-				? variances.reduce((sum, v) => sum + v, 0) / variances.length 
-				: 0;
+			const averageVariance =
+				variances.length > 0 ? variances.reduce((sum, v) => sum + v, 0) / variances.length : 0;
 
-			const varianceStdDev = variances.length > 1 
-				? Math.sqrt(variances.reduce((sum, v) => sum + Math.pow(v - averageVariance, 2), 0) / (variances.length - 1))
-				: 0;
+			const varianceStdDev =
+				variances.length > 1
+					? Math.sqrt(
+							variances.reduce((sum, v) => sum + Math.pow(v - averageVariance, 2), 0) /
+								(variances.length - 1),
+						)
+					: 0;
 
 			// Generate insights based on the variance analysis
-			const insights = this.generateVarianceInsights(monthlyVariances, totalOverspend, totalUnderspend);
+			const insights = this.generateVarianceInsights(
+				monthlyVariances,
+				totalOverspend,
+				totalUnderspend,
+			);
 
 			return {
 				budgetId: budget.id,
@@ -171,9 +171,11 @@ export class BudgetAnalyticsEngine {
 				insights,
 			};
 		} catch (error) {
-			throw new Error(`Failed to calculate budget variance: ${
-				error instanceof Error ? error.message : 'Unknown error'
-			}`);
+			throw new Error(
+				`Failed to calculate budget variance: ${
+					error instanceof Error ? error.message : 'Unknown error'
+				}`,
+			);
 		}
 	}
 
@@ -181,38 +183,27 @@ export class BudgetAnalyticsEngine {
 	 * Calculate budget tiers (conservative, moderate, aggressive) based on historical analysis
 	 */
 	private calculateBudgetTiers(
-		analysis: SpendingAnalysis, 
-		periodType: 'monthly' | 'yearly'
+		analysis: SpendingAnalysis,
+		periodType: 'monthly' | 'yearly',
 	): {
 		conservative: BudgetAmount;
 		moderate: BudgetAmount;
 		aggressive: BudgetAmount;
 	} {
-		const baseAmount = periodType === 'monthly' 
-			? analysis.averageMonthly 
-			: analysis.averageMonthly * 12;
+		const baseAmount =
+			periodType === 'monthly' ? analysis.averageMonthly : analysis.averageMonthly * 12;
 
-		const subscriptionFloor = periodType === 'monthly'
-			? analysis.subscriptionCosts
-			: analysis.subscriptionCosts * 12;
+		const subscriptionFloor =
+			periodType === 'monthly' ? analysis.subscriptionCosts : analysis.subscriptionCosts * 12;
 
 		// Conservative: Add buffer for unexpected expenses (average + 20% or subscription floor, whichever is higher)
-		const conservativeAmount = Math.max(
-			baseAmount * 1.2,
-			subscriptionFloor * 1.1
-		);
+		const conservativeAmount = Math.max(baseAmount * 1.2, subscriptionFloor * 1.1);
 
 		// Moderate: Based on average with small buffer (average + 10% or subscription floor)
-		const moderateAmount = Math.max(
-			baseAmount * 1.1,
-			subscriptionFloor
-		);
+		const moderateAmount = Math.max(baseAmount * 1.1, subscriptionFloor);
 
 		// Aggressive: Tight budget encouraging savings (average - 10% but not below subscription floor)
-		const aggressiveAmount = Math.max(
-			baseAmount * 0.9,
-			subscriptionFloor
-		);
+		const aggressiveAmount = Math.max(baseAmount * 0.9, subscriptionFloor);
 
 		return {
 			conservative: {
@@ -237,9 +228,9 @@ export class BudgetAnalyticsEngine {
 	 * Generate insights based on variance analysis patterns
 	 */
 	private generateVarianceInsights(
-		monthlyVariances: MonthlyVariance[], 
-		totalOverspend: number, 
-		totalUnderspend: number
+		monthlyVariances: MonthlyVariance[],
+		_totalOverspend: number,
+		_totalUnderspend: number,
 	): string[] {
 		const insights: string[] = [];
 
@@ -248,45 +239,62 @@ export class BudgetAnalyticsEngine {
 		}
 
 		// Analyze overspending patterns
-		const overspendMonths = monthlyVariances.filter(m => m.variance > 0);
+		const overspendMonths = monthlyVariances.filter((m) => m.variance > 0);
 		const overspendPercentage = (overspendMonths.length / monthlyVariances.length) * 100;
 
 		if (overspendPercentage > 70) {
-			insights.push('You frequently exceed your budget. Consider increasing your budget amount or identifying areas to reduce spending.');
+			insights.push(
+				'You frequently exceed your budget. Consider increasing your budget amount or identifying areas to reduce spending.',
+			);
 		} else if (overspendPercentage > 30) {
-			insights.push('You occasionally overspend. Review months with high variance to identify spending triggers.');
+			insights.push(
+				'You occasionally overspend. Review months with high variance to identify spending triggers.',
+			);
 		}
 
 		// Analyze underspending patterns
-		const underspendMonths = monthlyVariances.filter(m => m.variance < -10);
+		const underspendMonths = monthlyVariances.filter((m) => m.variance < -10);
 		if (underspendMonths.length > monthlyVariances.length / 2) {
-			insights.push('You consistently spend less than budgeted. Consider reducing your budget to allocate funds elsewhere.');
+			insights.push(
+				'You consistently spend less than budgeted. Consider reducing your budget to allocate funds elsewhere.',
+			);
 		}
 
 		// Analyze spending consistency
-		const varianceRange = Math.max(...monthlyVariances.map(m => m.variancePercentage)) - 
-			Math.min(...monthlyVariances.map(m => m.variancePercentage));
+		const varianceRange =
+			Math.max(...monthlyVariances.map((m) => m.variancePercentage)) -
+			Math.min(...monthlyVariances.map((m) => m.variancePercentage));
 
 		if (varianceRange > 100) {
-			insights.push('Your spending varies significantly month-to-month. Consider tracking specific spending triggers or seasonal patterns.');
+			insights.push(
+				'Your spending varies significantly month-to-month. Consider tracking specific spending triggers or seasonal patterns.',
+			);
 		} else if (varianceRange < 20) {
-			insights.push('Your spending is very consistent. Your budget appears well-calibrated to your needs.');
+			insights.push(
+				'Your spending is very consistent. Your budget appears well-calibrated to your needs.',
+			);
 		}
 
 		// Trend analysis
 		if (monthlyVariances.length >= 3) {
-			const recentVariances = monthlyVariances.slice(-3).map(m => m.variance);
+			const recentVariances = monthlyVariances.slice(-3).map((m) => m.variance);
 			const isIncreasingTrend = recentVariances.every((v, i, arr) => i === 0 || v > arr[i - 1]);
 			const isDecreasingTrend = recentVariances.every((v, i, arr) => i === 0 || v < arr[i - 1]);
 
 			if (isIncreasingTrend) {
-				insights.push('Your spending has been trending upward recently. Monitor this closely to avoid budget overruns.');
+				insights.push(
+					'Your spending has been trending upward recently. Monitor this closely to avoid budget overruns.',
+				);
 			} else if (isDecreasingTrend) {
-				insights.push('Great progress! Your spending has been trending downward, showing improved budget discipline.');
+				insights.push(
+					'Great progress! Your spending has been trending downward, showing improved budget discipline.',
+				);
 			}
 		}
 
-		return insights.length > 0 ? insights : ['Your budget performance looks normal with no significant patterns detected.'];
+		return insights.length > 0
+			? insights
+			: ['Your budget performance looks normal with no significant patterns detected.'];
 	}
 
 	/**
@@ -295,8 +303,8 @@ export class BudgetAnalyticsEngine {
 	private async getSubscriptionCount(categoryId: string): Promise<number> {
 		try {
 			const subscriptions = await this.repository.findSubscriptionsByCategory(categoryId);
-			return subscriptions.filter(s => s.isActive).length;
-		} catch (error) {
+			return subscriptions.filter((s) => s.isActive).length;
+		} catch {
 			// Return 0 if there's an error getting subscriptions
 			return 0;
 		}
@@ -312,7 +320,6 @@ export class BudgetAnalyticsEngine {
 		daysUntilDepletion: number | null;
 		recommendedDailySpend: number;
 	}> {
-		// Test implementation - should be tested for production use
 		try {
 			const progress = await this.repository.calculateBudgetProgress(budgetId);
 			if (!progress) {
@@ -320,10 +327,10 @@ export class BudgetAnalyticsEngine {
 			}
 
 			const { budget, currentSpent, averageDailySpend, daysRemaining } = progress;
-			
+
 			// Calculate projected spending
-			const projectedTotalSpent = currentSpent + (averageDailySpend * daysRemaining);
-			
+			const projectedTotalSpent = currentSpent + averageDailySpend * daysRemaining;
+
 			// Calculate risk level
 			let riskLevel: 'low' | 'medium' | 'high' = 'low';
 			const spentPercentage = (currentSpent / budget.amount) * 100;
@@ -337,14 +344,11 @@ export class BudgetAnalyticsEngine {
 
 			// Calculate days until budget depletion at current rate
 			const remainingBudget = budget.amount - currentSpent;
-			const daysUntilDepletion = averageDailySpend > 0 
-				? Math.floor(remainingBudget / averageDailySpend)
-				: null;
+			const daysUntilDepletion =
+				averageDailySpend > 0 ? Math.floor(remainingBudget / averageDailySpend) : null;
 
 			// Calculate recommended daily spend to stay within budget
-			const recommendedDailySpend = daysRemaining > 0 
-				? remainingBudget / daysRemaining
-				: 0;
+			const recommendedDailySpend = daysRemaining > 0 ? remainingBudget / daysRemaining : 0;
 
 			return {
 				projectedEndDate: budget.endDate,
@@ -354,9 +358,11 @@ export class BudgetAnalyticsEngine {
 				recommendedDailySpend: Math.round(recommendedDailySpend),
 			};
 		} catch (error) {
-			throw new Error(`Failed to project budget performance: ${
-				error instanceof Error ? error.message : 'Unknown error'
-			}`);
+			throw new Error(
+				`Failed to project budget performance: ${
+					error instanceof Error ? error.message : 'Unknown error'
+				}`,
+			);
 		}
 	}
 }

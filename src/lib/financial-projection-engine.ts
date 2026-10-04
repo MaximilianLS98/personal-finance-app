@@ -1,3 +1,4 @@
+import { monthlySubscriptionCost } from '@/lib/subscription-costs';
 /**
  * Financial Projection Engine for Subscription Tracker
  *
@@ -166,11 +167,7 @@ export class FinancialProjectionEngine {
 		const investmentValue = {} as Record<TimeHorizon, number>;
 
 		for (const years of TIME_HORIZONS) {
-			investmentValue[years] = this.calculateCompoundReturns(
-				monthlyAmount,
-				years,
-				effectiveConfig,
-			);
+			investmentValue[years] = this.calculateCompoundReturns(monthlyAmount, years, effectiveConfig);
 		}
 
 		return {
@@ -205,11 +202,7 @@ export class FinancialProjectionEngine {
 				years,
 				effectiveConfig,
 			);
-			investmentValue[years] = this.calculateCompoundReturns(
-				monthlyAmount,
-				years,
-				effectiveConfig,
-			);
+			investmentValue[years] = this.calculateCompoundReturns(monthlyAmount, years, effectiveConfig);
 			potentialSavings[years] = investmentValue[years] - subscriptionCost[years];
 		}
 
@@ -243,25 +236,7 @@ export class FinancialProjectionEngine {
 	 * @returns Monthly amount
 	 */
 	private getMonthlyAmount(subscription: Subscription): number {
-		const { amount, billingFrequency, customFrequencyDays } = subscription;
-
-		switch (billingFrequency) {
-			case 'monthly':
-				return amount;
-			case 'quarterly':
-				return amount / 3;
-			case 'annually':
-				return amount / 12;
-			case 'custom':
-				if (!customFrequencyDays) {
-					throw new Error('Custom frequency requires customFrequencyDays');
-				}
-				// Convert custom frequency to monthly
-				const monthsPerCustomPeriod = customFrequencyDays / 30.44; // Average days per month
-				return amount / monthsPerCustomPeriod;
-			default:
-				throw new Error(`Unsupported billing frequency: ${billingFrequency}`);
-		}
+		return monthlySubscriptionCost(subscription);
 	}
 
 	/**
@@ -293,16 +268,8 @@ export class FinancialProjectionEngine {
 
 		// Verify the result
 		const finalYears = (low + high) / 2;
-		const finalInvestmentValue = this.calculateCompoundReturns(
-			monthlyAmount,
-			finalYears,
-			config,
-		);
-		const finalSubscriptionCost = this.calculateSubscriptionCost(
-			subscription,
-			finalYears,
-			config,
-		);
+		const finalInvestmentValue = this.calculateCompoundReturns(monthlyAmount, finalYears, config);
+		const finalSubscriptionCost = this.calculateSubscriptionCost(subscription, finalYears, config);
 
 		return finalInvestmentValue > finalSubscriptionCost ? finalYears : Infinity;
 	}
@@ -537,7 +504,7 @@ export class LongTermCostAnalyzer {
 		});
 
 		// Calculate totals for the longest time horizon
-		const longestHorizon = Math.max(...TIME_HORIZONS);
+		const longestHorizon = TIME_HORIZONS[TIME_HORIZONS.length - 1];
 		const totalSubscriptionCost = comparison.subscriptionCost[longestHorizon];
 		const totalInvestmentValue = comparison.investmentValue[longestHorizon];
 		const totalPotentialSavings = comparison.potentialSavings[longestHorizon];
@@ -605,10 +572,7 @@ export class LongTermCostAnalyzer {
 
 		for (const years of TIME_HORIZONS) {
 			const subscriptionCost = subscriptions.reduce((total, subscription) => {
-				return (
-					total +
-					this.engine.calculateSubscriptionCost(subscription, years, effectiveConfig)
-				);
+				return total + this.engine.calculateSubscriptionCost(subscription, years, effectiveConfig);
 			}, 0);
 
 			const investmentValue = this.engine.calculateCompoundReturns(
@@ -718,24 +682,7 @@ export class LongTermCostAnalyzer {
 	 * Get monthly amount for a subscription (helper method)
 	 */
 	private getMonthlyAmount(subscription: Subscription): number {
-		const { amount, billingFrequency, customFrequencyDays } = subscription;
-
-		switch (billingFrequency) {
-			case 'monthly':
-				return amount;
-			case 'quarterly':
-				return amount / 3;
-			case 'annually':
-				return amount / 12;
-			case 'custom':
-				if (!customFrequencyDays) {
-					throw new Error('Custom frequency requires customFrequencyDays');
-				}
-				const monthsPerCustomPeriod = customFrequencyDays / 30.44;
-				return amount / monthsPerCustomPeriod;
-			default:
-				throw new Error(`Unsupported billing frequency: ${billingFrequency}`);
-		}
+		return monthlySubscriptionCost(subscription);
 	}
 }
 

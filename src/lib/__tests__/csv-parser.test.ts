@@ -2,8 +2,7 @@
  * Unit tests for CSV parsing utility functions
  */
 
-import { parseCSV, validateCSVContent, ParseResult } from '../csv-parser';
-import { Transaction } from '../types';
+import { parseCSV, validateCSVContent } from '../csv-parser';
 
 describe('CSV Parser', () => {
 	describe('parseCSV', () => {
@@ -46,7 +45,7 @@ describe('CSV Parser', () => {
 			expect(result.errors).toHaveLength(0);
 			expect(result.transactions).toHaveLength(3);
 
-			const [salary, groceries, coffee] = result.transactions;
+			const [salary, groceries] = result.transactions;
 
 			expect(salary.description).toBe('Lønn');
 			expect(salary.amount).toBe(25000.0);
