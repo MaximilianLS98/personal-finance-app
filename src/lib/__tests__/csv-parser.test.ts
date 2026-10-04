@@ -24,7 +24,7 @@ describe('CSV Parser', () => {
 			expect(salary.description).toBe('Salary');
 			expect(salary.amount).toBe(2500.0);
 			expect(salary.type).toBe('income');
-			expect(salary.date).toEqual(new Date(2024, 0, 15));
+			expect(salary.date).toEqual(new Date(Date.UTC(2024, 0, 15)));
 
 			expect(groceries.description).toBe('Groceries');
 			expect(groceries.amount).toBe(-85.5);
@@ -50,7 +50,7 @@ describe('CSV Parser', () => {
 			expect(salary.description).toBe('Lønn');
 			expect(salary.amount).toBe(25000.0);
 			expect(salary.type).toBe('income');
-			expect(salary.date).toEqual(new Date(2024, 0, 15));
+			expect(salary.date).toEqual(new Date(Date.UTC(2024, 0, 15)));
 
 			expect(groceries.description).toBe('Dagligvarer');
 			expect(groceries.amount).toBe(-855.5);
@@ -87,7 +87,7 @@ describe('CSV Parser', () => {
 			expect(result.transactions).toHaveLength(4);
 
 			// All should parse to the same date
-			const expectedDate = new Date(2024, 0, 15);
+			const expectedDate = new Date(Date.UTC(2024, 0, 15));
 			result.transactions.forEach((transaction) => {
 				expect(transaction.date).toEqual(expectedDate);
 			});

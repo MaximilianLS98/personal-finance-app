@@ -76,7 +76,8 @@ export class TransactionsRepository {
 			const existingDuplicates = await this.checkDuplicates(transactions);
 			const duplicateSet = new Set(
 				existingDuplicates.map(
-					(dup) => `${dup.date.toISOString()}-${dup.description}-${dup.amount}`,
+					(dup) =>
+						`${dup.date.toISOString()}-${dup.description}-${dup.amount}-${dup.currency || ''}`,
 				),
 			);
 
@@ -96,7 +97,7 @@ export class TransactionsRepository {
 				for (const transaction of transactions) {
 					const transactionKey = `${transaction.date.toISOString()}-${
 						transaction.description
-					}-${transaction.amount}`;
+					}-${transaction.amount}-${transaction.currency || ''}`;
 
 					// Check if this transaction is a known duplicate
 					if (duplicateSet.has(transactionKey)) {
@@ -106,6 +107,7 @@ export class TransactionsRepository {
 
 						duplicates.push({
 							date: transaction.date,
+							currency: transaction.currency,
 							description: transaction.description,
 							amount: transaction.amount,
 							type: transaction.type,
@@ -141,6 +143,7 @@ export class TransactionsRepository {
 
 							duplicates.push({
 								date: transaction.date,
+								currency: transaction.currency,
 								description: transaction.description,
 								amount: transaction.amount,
 								type: transaction.type,
@@ -429,6 +432,7 @@ export class TransactionsRepository {
 				date: string;
 				description: string;
 				amount: number;
+				currency: string | null;
 				type: 'income' | 'expense' | 'transfer';
 				category_id: string | null;
 			}>;
@@ -438,6 +442,7 @@ export class TransactionsRepository {
 				date: new Date(row.date),
 				description: row.description,
 				amount: row.amount,
+				currency: row.currency || undefined,
 				type: row.type,
 				categoryId: row.category_id || undefined,
 			}));
@@ -569,7 +574,7 @@ export class TransactionsRepository {
 			const duplicates: DuplicateInfo[] = [];
 			const stmt = db.prepare(`
 				SELECT id FROM transactions
-				WHERE date = ? AND description = ? AND amount = ?
+				WHERE date = ? AND description = ? AND amount = ? AND COALESCE(currency,'') = ?
 				LIMIT 1
 			`);
 
@@ -578,6 +583,7 @@ export class TransactionsRepository {
 					transaction.date.toISOString(),
 					transaction.description,
 					transaction.amount,
+					transaction.currency || '',
 				);
 
 				if (existing) {
@@ -587,6 +593,7 @@ export class TransactionsRepository {
 
 					duplicates.push({
 						date: transaction.date,
+						currency: transaction.currency,
 						description: transaction.description,
 						amount: transaction.amount,
 						type: transaction.type,

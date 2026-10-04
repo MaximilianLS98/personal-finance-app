@@ -21,6 +21,7 @@ export const migration009: Migration = {
 			ALTER TABLE transactions ADD COLUMN source_key TEXT;
 			DROP INDEX IF EXISTS idx_transactions_unique;
 			CREATE INDEX idx_transaction_identity ON transactions(date, description, amount, currency, account_id);
+			CREATE UNIQUE INDEX idx_transaction_legacy_identity ON transactions(date, description, amount, COALESCE(currency,''), COALESCE(account_id,'')) WHERE source_key IS NULL;
 			CREATE UNIQUE INDEX idx_transaction_source ON transactions(source_key) WHERE source_key IS NOT NULL;
 			CREATE INDEX idx_transaction_import ON transactions(import_id);
 			CREATE TABLE transfer_matches (

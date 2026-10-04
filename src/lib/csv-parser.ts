@@ -3,6 +3,7 @@
  * Supports both English and Norwegian CSV formats
  */
 
+import Papa from 'papaparse';
 import { determineTransactionType } from './transaction-utils';
 import { Transaction } from './types';
 
@@ -52,6 +53,7 @@ export interface ParseOptions {
 	delimiter?: string;
 	skipEmptyLines?: boolean;
 	trimWhitespace?: boolean;
+	columns?: { date: number; description: number; amount: number; currency?: number };
 }
 
 /**
@@ -71,29 +73,26 @@ export function parseCSV(csvContent: string, options: ParseOptions = {}): ParseR
 	};
 
 	try {
-		// Split content into lines
-		const lines = csvContent
-			.split('\n')
-			.filter((line) => (skipEmptyLines ? line.trim().length > 0 : true));
-
-		if (lines.length === 0) {
+		const parsed = Papa.parse<string[]>(csvContent.replace(/^\uFEFF/, ''), {
+			delimiter,
+			skipEmptyLines: skipEmptyLines ? 'greedy' : false,
+		});
+		const rows = parsed.data.map((row) => row.map((cell) => (trimWhitespace ? cell.trim() : cell)));
+		if (!rows.length) {
 			result.errors.push('CSV file is empty');
 			return result;
 		}
-
-		// Parse header row
-		const headers = parseCSVRow(lines[0], delimiter, trimWhitespace);
-		const columnIndices = mapColumns(headers);
-
+		const headers = rows[0];
+		const columnIndices = options.columns || mapColumns(headers);
 		if (!columnIndices) {
 			result.errors.push('Required columns not found. Expected: Date, Description, Amount');
 			return result;
 		}
 
 		// Parse data rows
-		for (let i = 1; i < lines.length; i++) {
+		for (let i = 1; i < rows.length; i++) {
 			result.totalRows++;
-			const row = parseCSVRow(lines[i], delimiter, trimWhitespace);
+			const row = rows[i];
 
 			if (row.length === 0) continue;
 
@@ -139,45 +138,6 @@ function detectDelimiter(csvContent: string): string {
 	const best = counts.reduce((max, current) => (current.count > max.count ? current : max));
 
 	return best.count > 0 ? best.delimiter : ',';
-}
-
-/**
- * Parses a single CSV row, handling quoted values and delimiters
- */
-function parseCSVRow(row: string, delimiter: string, trimWhitespace: boolean): string[] {
-	const result: string[] = [];
-	let current = '';
-	let inQuotes = false;
-	let i = 0;
-
-	while (i < row.length) {
-		const char = row[i];
-		const nextChar = row[i + 1];
-
-		if (char === '"') {
-			if (inQuotes && nextChar === '"') {
-				// Escaped quote
-				current += '"';
-				i += 2;
-			} else {
-				// Toggle quote state
-				inQuotes = !inQuotes;
-				i++;
-			}
-		} else if (char === delimiter && !inQuotes) {
-			// End of field
-			result.push(trimWhitespace ? current.trim() : current);
-			current = '';
-			i++;
-		} else {
-			current += char;
-			i++;
-		}
-	}
-
-	// Add the last field
-	result.push(trimWhitespace ? current.trim() : current);
-	return result;
 }
 
 /**
@@ -237,6 +197,9 @@ function parseTransactionRow(
 		throw new Error('Missing required fields (date, description, or amount)');
 	}
 
+	if (/^(reservert|reserved|pending)$/i.test(dateStr.trim()))
+		throw new Error('Pending transaction has no booking date; import it after it is booked');
+
 	// Parse date (parseDate handles its own trimming)
 	const date = parseDate(dateStr);
 	if (!date) {
@@ -245,15 +208,17 @@ function parseTransactionRow(
 
 	// Parse amount (parseAmount handles its own trimming)
 	const amount = parseAmount(amountStr);
-	if (isNaN(amount)) {
+	if (!Number.isFinite(amount)) {
 		throw new Error(`Invalid amount format: ${amountStr}`);
 	}
 
 	// Optional currency column
 	const currency =
 		columnIndices.currency !== undefined && row[columnIndices.currency]
-			? row[columnIndices.currency].trim()
+			? row[columnIndices.currency].trim().toUpperCase()
 			: undefined;
+
+	if (currency && !/^[A-Z]{3}$/.test(currency)) throw new Error('Invalid currency code');
 
 	// Categorize transaction type using enhanced detection
 	const type = determineTransactionType(amount, description);
@@ -317,15 +282,20 @@ function parseDate(dateStr: string): Date | null {
 					break;
 			}
 
-			const date = new Date(year, month, day);
+			const date = new Date(Date.UTC(year, month, day));
 
 			// Validate the date is valid
-			if (date.getFullYear() === year && date.getMonth() === month && date.getDate() === day) {
+			if (
+				date.getUTCFullYear() === year &&
+				date.getUTCMonth() === month &&
+				date.getUTCDate() === day
+			) {
 				return date;
 			}
 		}
 	}
 
+	if (formats.some((format) => format.regex.test(cleaned))) return null;
 	// Try native Date parsing as fallback
 	const fallbackDate = new Date(cleaned);
 	return isNaN(fallbackDate.getTime()) ? null : fallbackDate;
@@ -367,7 +337,7 @@ function parseAmount(amountStr: string): number {
 	// Remove any remaining spaces
 	cleaned = cleaned.replace(/\s+/g, '');
 
-	return parseFloat(cleaned);
+	return /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(cleaned) ? Number(cleaned) : NaN;
 }
 
 /**
