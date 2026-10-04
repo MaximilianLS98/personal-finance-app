@@ -1,3 +1,4 @@
+import { currencyCode } from './money';
 /**
  * Service for reconciling subscriptions with actual transactions
  * Updates subscription payment dates based on matching transactions
@@ -49,7 +50,9 @@ export class SubscriptionReconciliationService {
 		}
 
 		// Find transactions that match any of the subscription patterns
-		const matchingTransactions = await this.findMatchingTransactions(patterns);
+		const matchingTransactions = (await this.findMatchingTransactions(patterns)).filter(
+			(transaction) => currencyCode(transaction.currency) === currencyCode(subscription.currency),
+		);
 
 		if (matchingTransactions.length === 0) {
 			return false; // No matching transactions found

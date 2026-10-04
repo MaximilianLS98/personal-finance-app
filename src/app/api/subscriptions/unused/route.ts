@@ -1,3 +1,4 @@
+import { currencyCode } from '@/lib/money';
 import { createTransactionRepository } from '@/lib/database';
 import { ErrorResponse } from '@/lib/types';
 import { NextRequest, NextResponse } from 'next/server';
@@ -42,7 +43,15 @@ export async function GET(request: NextRequest) {
 		}
 
 		// Get potentially unused subscriptions
-		const unusedSubscriptions = await repository.findUnusedSubscriptions(daysSinceLastUse);
+		const allSubscriptions = await repository.findUnusedSubscriptions(daysSinceLastUse);
+		const availableCurrencies = [
+			...new Set(allSubscriptions.map((s) => currencyCode(s.currency))),
+		].sort();
+		const currency =
+			new URL(request.url).searchParams.get('currency') || availableCurrencies[0] || 'NOK';
+		const unusedSubscriptions = allSubscriptions.filter(
+			(s) => currencyCode(s.currency) === currency,
+		);
 
 		// Enhance with additional analysis
 		const enhancedUnusedSubscriptions = unusedSubscriptions.map((subscription) => {
@@ -190,6 +199,8 @@ export async function GET(request: NextRequest) {
 				success: true,
 				data: {
 					summary: {
+						currency,
+						availableCurrencies,
 						totalUnused: filteredSubscriptions.length,
 						totalMonthlyWaste,
 						totalAnnualWaste,

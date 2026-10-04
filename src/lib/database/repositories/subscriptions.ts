@@ -1,3 +1,4 @@
+import { currencyCode } from '../../money';
 import { monthlySubscriptionCost } from '../../subscription-costs';
 import type { Subscription, SubscriptionPattern, TransactionWithSubscription } from '../../types';
 import { DatabaseConnectionError } from '../connection';
@@ -593,6 +594,8 @@ export class SubscriptionsRepository {
 	 */
 	async calculateTotalMonthlyCost(): Promise<number> {
 		const subscriptions = await this.findActiveSubscriptions();
+		if (new Set(subscriptions.map((s) => currencyCode(s.currency))).size > 1)
+			throw new Error('Subscription totals require a single currency');
 		return subscriptions.reduce(
 			(total, subscription) => total + monthlySubscriptionCost(subscription),
 			0,
@@ -615,7 +618,7 @@ export class SubscriptionsRepository {
 				       last_used_date, usage_rating, created_at, updated_at
 				FROM subscriptions
 				WHERE is_active = 1
-				  AND (last_used_date IS NULL OR last_used_date < ?)
+				  AND (last_used_date IS NOT NULL AND last_used_date < ?)
 				ORDER BY amount DESC
 			`);
 

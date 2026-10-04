@@ -94,6 +94,9 @@ export default function SubscriptionsPage() {
 					<CardContent className='space-y-4'>
 						<div className='grid grid-cols-1 gap-3'>
 							<Button asChild variant='outline' className='justify-start'>
+								<Link href='/subscriptions/calendar'>Bill calendar &amp; reminders</Link>
+							</Button>
+							<Button asChild variant='outline' className='justify-start'>
 								<Link href='/subscriptions/manage'>
 									<Settings className='mr-2 h-4 w-4' />
 									Manage All Subscriptions

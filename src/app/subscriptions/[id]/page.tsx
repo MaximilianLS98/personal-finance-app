@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { formatCurrency } from '@/lib/financial-calculator';
+import { displayMoney as formatCurrency } from '@/lib/money';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
 	AlertCircle,
@@ -39,7 +39,7 @@ export default function SubscriptionDetailsPage({ params }: SubscriptionDetailsP
 	const resolvedParams = React.use(params);
 	const router = useRouter();
 	const queryClient = useQueryClient();
-	const { currency, locale } = useCurrencySettings();
+	const { locale } = useCurrencySettings();
 	const [isEditing, setIsEditing] = useState(false);
 	const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -302,7 +302,11 @@ export default function SubscriptionDetailsPage({ params }: SubscriptionDetailsP
 									<div>
 										<label className='text-sm font-medium text-muted-foreground'>Amount</label>
 										<p className='text-2xl font-bold'>
-											{formatCurrency(subscription?.amount || 0, currency, locale)}
+											{formatCurrency(
+												subscription?.amount || 0,
+												subscription?.currency || 'UNKNOWN',
+												locale,
+											)}
 										</p>
 										<p className='text-sm text-muted-foreground capitalize'>
 											{subscription?.billingFrequency}
@@ -403,7 +407,7 @@ export default function SubscriptionDetailsPage({ params }: SubscriptionDetailsP
 															: subscription.customFrequencyDays
 																? (subscription.amount * 30.44) / subscription.customFrequencyDays
 																: 0,
-												currency,
+												subscription?.currency || 'UNKNOWN',
 												locale,
 											)}
 									</span>
@@ -422,7 +426,7 @@ export default function SubscriptionDetailsPage({ params }: SubscriptionDetailsP
 															: subscription.customFrequencyDays
 																? (subscription.amount * 365) / subscription.customFrequencyDays
 																: 0,
-												currency,
+												subscription?.currency || 'UNKNOWN',
 												locale,
 											)}
 									</span>

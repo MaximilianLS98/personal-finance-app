@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { Subscription } from '../../../../lib/types';
 import { SubscriptionOverview } from '../SubscriptionOverview';
 
@@ -118,5 +118,22 @@ describe('SubscriptionOverview', () => {
 		// Monthly total should be 300 (100 + 100 + 100)
 		// This is tested indirectly through the component rendering
 		expect(screen.getByText('Managing 3 active subscriptions')).toBeInTheDocument();
+	});
+	it('keeps mixed-currency costs in separate labeled sections', () => {
+		render(
+			<SubscriptionOverview
+				subscriptions={[
+					{ ...mockSubscriptions[0], amount: 100 },
+					{ ...mockSubscriptions[1], amount: 10, currency: 'USD' },
+				]}
+			/>,
+		);
+		const nok = screen.getByRole('region', { name: 'NOK subscriptions' });
+		const usd = screen.getByRole('region', { name: 'USD subscriptions' });
+		expect(within(nok).getByText('Managing 1 active subscription')).toBeInTheDocument();
+		expect(within(usd).getByText('Managing 1 active subscription')).toBeInTheDocument();
+		expect(nok.textContent).toContain('100,00');
+		expect(usd.textContent).toContain('10,00');
+		expect(nok.textContent).not.toContain('110,00');
 	});
 });
