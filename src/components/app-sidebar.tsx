@@ -41,6 +41,7 @@ const navigation = [
 			{ title: 'Manage', url: '/subscriptions/manage' },
 			{ title: 'Detect', url: '/subscriptions/detect' },
 			{ title: 'Insights', url: '/subscriptions/insights' },
+			{ title: 'Bill calendar', url: '/subscriptions/calendar' },
 			{ title: 'Projections', url: '/subscriptions/projections' },
 			{ title: 'New', url: '/subscriptions/new' },
 		],
