@@ -4,6 +4,7 @@
  */
 
 import Papa from 'papaparse';
+import { money } from './money';
 import { determineTransactionType } from './transaction-utils';
 import { Transaction } from './types';
 
@@ -46,6 +47,18 @@ export interface ColumnIndices {
 	currency?: number;
 }
 export interface ParseResult {
+	format?: 'generic' | 'revolut';
+	products?: string[];
+	requiresProductSelection?: boolean;
+	skippedRows?: Array<{ rowNumber: number; reason: string }>;
+	sourceMetadata?: Array<{
+		product: string;
+		startedDate: string;
+		completedDate: string;
+		originalAmount: number;
+		fee: number;
+		type: string;
+	}>;
 	sourceRowNumbers: number[];
 	columns?: ColumnIndices;
 	transactions: Transaction[];
@@ -58,6 +71,8 @@ export interface ParseResult {
  * Configuration options for CSV parsing
  */
 export interface ParseOptions {
+	revolutProduct?: string;
+	revolutFeeMode?: 'deduct' | 'included';
 	delimiter?: string;
 	skipEmptyLines?: boolean;
 	trimWhitespace?: boolean;
@@ -82,6 +97,11 @@ export function parseCSV(csvContent: string, options: ParseOptions = {}): ParseR
 	};
 
 	try {
+		if (
+			options.revolutFeeMode !== undefined &&
+			!['deduct', 'included'].includes(options.revolutFeeMode)
+		)
+			throw new Error('Invalid Revolut fee handling');
 		const content = csvContent.replace(/^\uFEFF/, '');
 		const records: { cells: string[]; line: number; errors: string[] }[] = [];
 		let line = 1,
@@ -110,11 +130,54 @@ export function parseCSV(csvContent: string, options: ParseOptions = {}): ParseR
 			return result;
 		}
 		const headers = header.cells;
-		const automatic = mapColumns(headers);
+		const revolutHeaders = [
+			'Type',
+			'Product',
+			'Started Date',
+			'Completed Date',
+			'Description',
+			'Amount',
+			'Fee',
+			'Currency',
+			'State',
+			'Balance',
+		];
+		const named = Object.fromEntries(
+			headers.map((name, index) => [name.toLowerCase().trim(), index]),
+		);
+		const revolut = revolutHeaders.every((name) => named[name.toLowerCase()] !== undefined);
+		result.format = revolut ? 'revolut' : 'generic';
+		result.skippedRows = [];
+		result.sourceMetadata = [];
+		if (revolut) {
+			result.products = [
+				...new Set(
+					nonempty
+						.slice(1)
+						.map((record) => record.cells[named.product])
+						.filter(Boolean),
+				),
+			].sort();
+			result.requiresProductSelection = result.products.length > 1 && !options.revolutProduct;
+			if (options.revolutProduct && !result.products.includes(options.revolutProduct)) {
+				result.errors.push('Selected Revolut product is absent from this statement');
+				return result;
+			}
+		}
+		const automatic = revolut
+			? {
+					date: named['completed date'],
+					description: named.description,
+					amount: named.amount,
+					currency: named.currency,
+				}
+			: mapColumns(headers);
 		const columnIndices = {
 			...automatic,
 			...Object.fromEntries(
-				Object.entries(options.columns || {}).filter(([, value]) => value !== undefined),
+				Object.entries(revolut ? {} : options.columns || {}).filter(
+					([, value]) => value !== undefined,
+				),
 			),
 		};
 		const required = ['date', 'description', 'amount'] as const;
@@ -148,6 +211,64 @@ export function parseCSV(csvContent: string, options: ParseOptions = {}): ParseR
 					throw new Error(
 						`Expected ${headers.length} columns, found ${record.cells.length}; quote fields containing delimiters`,
 					);
+				if (revolut) {
+					const state = record.cells[named.state].toUpperCase();
+					if (
+						['PENDING', 'REVERTED', 'DECLINED', 'FAILED', 'CANCELLED', 'CANCELED'].includes(state)
+					) {
+						result.skippedRows!.push({
+							rowNumber: record.line,
+							reason: `${state}: not a completed account movement`,
+						});
+						continue;
+					}
+					if (state !== 'COMPLETED')
+						throw new Error('Unrecognized Revolut State; expected COMPLETED');
+					if (!record.cells[named.product]) throw new Error('Missing Revolut Product');
+					if (options.revolutProduct && record.cells[named.product] !== options.revolutProduct) {
+						result.skippedRows!.push({
+							rowNumber: record.line,
+							reason: `Different product: ${record.cells[named.product]}`,
+						});
+						continue;
+					}
+					if (!/^[A-Z]{3}$/.test(record.cells[named.currency].trim().toUpperCase()))
+						throw new Error('Completed Revolut rows require a valid Currency');
+					const completed = parseRevolutTimestamp(record.cells[named['completed date']]);
+					const started = parseRevolutTimestamp(record.cells[named['started date']]);
+					if (!completed || !started)
+						throw new Error(
+							'Completed Revolut rows require valid Started Date and Completed Date timestamps',
+						);
+					const originalAmount = parseAmount(record.cells[named.amount]);
+					const fee = record.cells[named.fee] ? parseAmount(record.cells[named.fee]) : 0;
+					if (!Number.isFinite(originalAmount) || !Number.isFinite(fee))
+						throw new Error('Invalid Revolut Amount or Fee');
+					if (fee !== 0 && !options.revolutFeeMode)
+						throw new Error(
+							'Nonzero Revolut Fee: choose whether Amount already includes the fee and preview again',
+						);
+					const adjusted = record.cells.slice();
+					adjusted[named.amount] = String(
+						money(originalAmount - (options.revolutFeeMode === 'deduct' ? fee : 0)),
+					);
+					adjusted[named['completed date']] = completed.toISOString();
+					const transaction = parseTransactionRow(adjusted, result.columns, record.line);
+					if (transaction) {
+						result.transactions.push(transaction);
+						result.sourceRowNumbers.push(record.line);
+						result.validRows++;
+						result.sourceMetadata!.push({
+							product: record.cells[named.product],
+							startedDate: started.toISOString(),
+							completedDate: completed.toISOString(),
+							originalAmount,
+							fee,
+							type: record.cells[named.type],
+						});
+					}
+					continue;
+				}
 				const transaction = parseTransactionRow(record.cells, result.columns, record.line);
 				if (transaction) {
 					result.transactions.push(transaction);
@@ -168,6 +289,21 @@ export function parseCSV(csvContent: string, options: ParseOptions = {}): ParseR
 		);
 		return result;
 	}
+}
+
+/** Preserve the statement clock when Revolut omits a timezone; never use the machine's zone. */
+function parseRevolutTimestamp(value: string): Date | null {
+	const match = value
+		.trim()
+		.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}):(\d{2}):(\d{2})(\.\d{1,3})?(Z|[+-]\d{2}:?\d{2})?$/);
+	if (!match || Number(match[2]) > 23 || Number(match[3]) > 59 || Number(match[4]) > 59)
+		return null;
+	const day = parseDate(match[1]);
+	if (!day || day.toISOString().slice(0, 10) !== match[1]) return null;
+	const parsed = new Date(
+		`${match[1]}T${match[2]}:${match[3]}:${match[4]}${match[5] ?? ''}${match[6] ?? 'Z'}`,
+	);
+	return Number.isFinite(parsed.getTime()) ? parsed : null;
 }
 
 /**

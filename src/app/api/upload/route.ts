@@ -93,6 +93,14 @@ export async function POST(request: Request) {
 
 		// Parse CSV content
 		const parseResult = parseCSV(csvContent);
+		if (parseResult.format === 'revolut')
+			return NextResponse.json(
+				{
+					error: 'REVOLUT_ACCOUNT_REQUIRED',
+					message: 'Use Statements to preview this Revolut file and select an account and product.',
+				},
+				{ status: 400 },
+			);
 
 		// Check if parsing was successful
 		if (parseResult.errors.length > 0 && parseResult.transactions.length === 0) {
