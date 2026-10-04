@@ -49,3 +49,6 @@ finance-tracker.db*
 # SQLite journals
 *.db-shm
 *.db-wal
+
+# Private recovery copies created before a restore
+/data/backups/

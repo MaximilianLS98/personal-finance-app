@@ -1,5 +1,6 @@
 'use client';
 
+import { BackupSettings } from '@/app/components/BackupSettings';
 import { useCurrencySettings } from '@/app/providers';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,7 +13,7 @@ import {
 } from '@/components/ui/select';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 // Extensible registry for base color themes. Keys should map to CSS var sets in globals.css
 const BASE_COLOR_THEMES = [
@@ -35,23 +36,31 @@ export default function SettingsPage() {
 	const { theme, setTheme, resolvedTheme } = useTheme();
 	const { currency, setCurrency } = useCurrencySettings();
 
-	// Base color theme state persisted to localStorage; applied as data attribute on <html>
-	const [baseColor, setBaseColor] = useState<string>(() => {
-		if (typeof window === 'undefined') return 'neutral';
-		return localStorage.getItem(THEME_STORAGE_KEY) ?? 'neutral';
-	});
-
-	// Apply base color to <html data-theme="..."> for future CSS scoping if needed
-	useMemo(() => {
-		if (typeof document !== 'undefined') {
-			document.documentElement.setAttribute('data-theme', baseColor);
-			localStorage.setItem(THEME_STORAGE_KEY, baseColor);
+	const [mounted, setMounted] = useState(false);
+	const [baseColor, setBaseColor] = useState('neutral');
+	useEffect(() => {
+		try {
+			const saved = localStorage.getItem(THEME_STORAGE_KEY);
+			if (BASE_COLOR_THEMES.some((item) => item.key === saved)) setBaseColor(saved!);
+		} catch {
+			/* Keep the default when storage is unavailable. */
 		}
-	}, [baseColor]);
+		setMounted(true);
+	}, []);
+	useEffect(() => {
+		if (!mounted) return;
+		document.documentElement.setAttribute('data-theme', baseColor);
+		try {
+			localStorage.setItem(THEME_STORAGE_KEY, baseColor);
+		} catch {
+			/* Session-only preference. */
+		}
+	}, [baseColor, mounted]);
 
 	return (
 		<div className='container mx-auto max-w-4xl space-y-6 p-4'>
 			<h1 className='text-2xl font-semibold'>Settings</h1>
+			<BackupSettings />
 
 			<Card>
 				<CardHeader>
@@ -59,7 +68,7 @@ export default function SettingsPage() {
 					<CardDescription>Configure dark mode and the base color theme.</CardDescription>
 				</CardHeader>
 				<CardContent className='flex flex-col gap-4'>
-					<div className='flex items-center justify-between gap-6'>
+					<div className='flex flex-wrap items-center justify-between gap-6'>
 						<div className='space-y-0.5'>
 							<div className='font-medium'>Color scheme</div>
 							<div className='text-muted-foreground text-sm'>
@@ -68,19 +77,19 @@ export default function SettingsPage() {
 						</div>
 						<div className='flex flex-wrap items-center gap-3'>
 							<Button
-								variant={resolvedTheme === 'light' ? 'default' : 'outline'}
+								variant={mounted && resolvedTheme === 'light' ? 'default' : 'outline'}
 								onClick={() => setTheme('light')}
 							>
 								Light
 							</Button>
 							<Button
-								variant={resolvedTheme === 'dark' ? 'default' : 'outline'}
+								variant={mounted && resolvedTheme === 'dark' ? 'default' : 'outline'}
 								onClick={() => setTheme('dark')}
 							>
 								Dark
 							</Button>
 							<Button
-								variant={theme === 'system' ? 'default' : 'outline'}
+								variant={mounted && theme === 'system' ? 'default' : 'outline'}
 								onClick={() => setTheme('system')}
 							>
 								System
@@ -88,7 +97,7 @@ export default function SettingsPage() {
 						</div>
 					</div>
 
-					<div className='flex items-center justify-between gap-6'>
+					<div className='flex flex-wrap items-center justify-between gap-6'>
 						<div className='space-y-0.5'>
 							<div className='font-medium'>Base color theme</div>
 							<div className='text-muted-foreground text-sm'>
@@ -114,11 +123,11 @@ export default function SettingsPage() {
 			<Card>
 				<CardHeader>
 					<CardTitle>Currency</CardTitle>
-					<CardDescription>Choose your default display currency.</CardDescription>
+					<CardDescription>Choose the default currency for new records.</CardDescription>
 				</CardHeader>
-				<CardContent className='flex items-center justify-between gap-6'>
+				<CardContent className='flex flex-wrap items-center justify-between gap-6'>
 					<div className='text-muted-foreground text-sm'>
-						All amounts will default to this currency.
+						Existing amounts retain their recorded currency. This setting does not convert money.
 					</div>
 					<Select value={currency} onValueChange={setCurrency}>
 						<SelectTrigger className='min-w-52'>
@@ -140,7 +149,7 @@ export default function SettingsPage() {
 					<CardTitle>Categories</CardTitle>
 					<CardDescription>Manage your transaction categories and rules.</CardDescription>
 				</CardHeader>
-				<CardContent className='flex items-center justify-between gap-6'>
+				<CardContent className='flex flex-wrap items-center justify-between gap-6'>
 					<div className='text-muted-foreground text-sm'>
 						Go to Categories to configure and organize your categories.
 					</div>
