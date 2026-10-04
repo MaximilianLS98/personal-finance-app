@@ -22,6 +22,8 @@ import { migration010 } from './010_review_allocations';
 
 import { migration011 } from './011_planning';
 
+import { migration010 as migration012 } from './010_subscription_history';
+
 export const migrations: Migration[] = [
 	migration001,
 	migration002,
@@ -34,6 +36,7 @@ export const migrations: Migration[] = [
 	migration009,
 	migration010,
 	migration011,
+	migration012,
 ];
 
 /**

@@ -112,6 +112,17 @@ export async function POST(request: NextRequest) {
 			}
 		}
 
+		if (
+			body.lastUsedDate != null &&
+			(!Number.isFinite(new Date(body.lastUsedDate).getTime()) ||
+				new Date(body.lastUsedDate).getTime() > Date.now())
+		) {
+			return NextResponse.json(
+				{ message: 'Last-used date must be a valid date in the past' },
+				{ status: 400 },
+			);
+		}
+
 		// Validate billing frequency
 		const validFrequencies = ['monthly', 'quarterly', 'annually', 'custom'];
 		if (!validFrequencies.includes(body.billingFrequency)) {

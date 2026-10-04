@@ -54,6 +54,7 @@ export interface SubscriptionFormData {
 	website?: string;
 	cancellationUrl?: string;
 	usageRating?: number;
+	lastUsedDate?: string | null;
 }
 
 /**
@@ -86,6 +87,9 @@ export function SubscriptionForm({
 		website: subscription?.website || '',
 		cancellationUrl: subscription?.cancellationUrl || '',
 		usageRating: subscription?.usageRating,
+		lastUsedDate: subscription?.lastUsedDate
+			? new Date(subscription.lastUsedDate).toISOString().slice(0, 10)
+			: null,
 	}));
 
 	const [errors, setErrors] = React.useState<Record<string, string>>({});
@@ -405,6 +409,14 @@ export function SubscriptionForm({
 						</div>
 
 						<div className='space-y-2'>
+							<Label htmlFor='lastUsedDate'>Last used (leave empty if unknown)</Label>
+							<Input
+								id='lastUsedDate'
+								type='date'
+								max={new Date().toISOString().slice(0, 10)}
+								value={formData.lastUsedDate ?? ''}
+								onChange={(e) => handleInputChange('lastUsedDate', e.target.value || null)}
+							/>
 							<Label htmlFor='usageRating'>Usage Rating (1-5)</Label>
 							<Select
 								value={formData.usageRating?.toString() || 'none'}
