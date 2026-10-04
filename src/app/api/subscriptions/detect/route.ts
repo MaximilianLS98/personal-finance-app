@@ -46,11 +46,8 @@ export async function POST(request: NextRequest) {
 				new Date(dateRange.to),
 			);
 		} else {
-			// Detect from all transactions (last 2 years by default)
-			const endDate = new Date();
-			const startDate = new Date();
-			startDate.setFullYear(endDate.getFullYear() - 2);
-			transactions = await repository.findByDateRange(startDate, endDate);
+			// Include imported history; recency is surfaced separately from recurrence.
+			transactions = await repository.findAll();
 		}
 
 		if (transactions.length === 0) {

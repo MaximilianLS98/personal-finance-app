@@ -20,6 +20,9 @@ export interface Transaction {
 	type: 'income' | 'expense' | 'transfer';
 	/** Category ID for expense categorization */
 	categoryId?: string;
+	/** Subscription linkage, when loaded from the ledger. */
+	isSubscription?: boolean;
+	subscriptionId?: string;
 }
 
 /**
