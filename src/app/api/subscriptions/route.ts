@@ -139,13 +139,13 @@ export async function POST(request: NextRequest) {
 		// Validate custom frequency days if needed
 		if (
 			body.billingFrequency === 'custom' &&
-			(!body.customFrequencyDays || body.customFrequencyDays <= 0)
+			(!Number.isSafeInteger(body.customFrequencyDays) || body.customFrequencyDays <= 0)
 		) {
 			return NextResponse.json(
 				{
 					error: 'VALIDATION_ERROR',
 					message:
-						'customFrequencyDays is required and must be positive when billingFrequency is custom',
+						'customFrequencyDays must be a positive whole number when billingFrequency is custom',
 				} as ErrorResponse,
 				{ status: 400 },
 			);

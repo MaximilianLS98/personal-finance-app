@@ -84,7 +84,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 		}
 
 		// Validate billing frequency if provided
-		if (body.billingFrequency) {
+		if (body.billingFrequency !== undefined) {
 			const validFrequencies = ['monthly', 'quarterly', 'annually', 'custom'];
 			if (!validFrequencies.includes(body.billingFrequency)) {
 				return NextResponse.json(
@@ -98,16 +98,25 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 			}
 		}
 
+		// Partial edits must validate the resulting schedule, including its persisted interval.
+		const billingFrequency =
+			body.billingFrequency !== undefined
+				? body.billingFrequency
+				: existingSubscription.billingFrequency;
+		const customFrequencyDays =
+			body.customFrequencyDays !== undefined
+				? body.customFrequencyDays
+				: existingSubscription.customFrequencyDays;
 		// Validate custom frequency days if needed
 		if (
-			body.billingFrequency === 'custom' &&
-			(!body.customFrequencyDays || body.customFrequencyDays <= 0)
+			billingFrequency === 'custom' &&
+			(!Number.isSafeInteger(customFrequencyDays) || customFrequencyDays <= 0)
 		) {
 			return NextResponse.json(
 				{
 					error: 'VALIDATION_ERROR',
 					message:
-						'customFrequencyDays is required and must be positive when billingFrequency is custom',
+						'customFrequencyDays must be a positive whole number when billingFrequency is custom',
 				} as ErrorResponse,
 				{ status: 400 },
 			);
