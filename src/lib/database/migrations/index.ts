@@ -20,6 +20,8 @@ import { migration008 } from './008_expand_budget_alert_types';
 import { migration009 } from './009_accounts_imports';
 import { migration010 } from './010_review_allocations';
 
+import { migration010 } from './010_planning';
+
 export const migrations: Migration[] = [
 	migration001,
 	migration002,

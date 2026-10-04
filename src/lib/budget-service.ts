@@ -1,3 +1,4 @@
+import { currencyCode } from './money';
 /**
  * Budget Management Service
  * Core service layer for budget operations, integrating repository,
@@ -258,6 +259,7 @@ export class BudgetService {
 		budgetProgress: Array<BudgetProgress>;
 		totalBudgeted: number;
 		totalSpent: number;
+		totalsByCurrency: Record<string, { budgeted: number; spent: number }>;
 		overallStatus: 'on-track' | 'at-risk' | 'over-budget';
 		alerts: BudgetAlert[];
 	}> {
@@ -272,9 +274,18 @@ export class BudgetService {
 			const progressResults = await Promise.all(progressPromises);
 			const budgetProgress = progressResults.filter((p) => p !== null) as BudgetProgress[];
 
-			// Calculate totals
-			const totalBudgeted = activeBudgets.reduce((sum, budget) => sum + budget.amount, 0);
-			const totalSpent = budgetProgress.reduce((sum, progress) => sum + progress.currentSpent, 0);
+			// Keep currency domains separate; legacy totals are provided only for one currency.
+			const totalsByCurrency: Record<string, { budgeted: number; spent: number }> = {};
+			for (const progress of budgetProgress) {
+				const currency = currencyCode(progress.budget.currency);
+				const total = totalsByCurrency[currency] ?? { budgeted: 0, spent: 0 };
+				total.budgeted += progress.availableAmount ?? progress.budget.amount;
+				total.spent += progress.currentSpent;
+				totalsByCurrency[currency] = total;
+			}
+			const single = Object.values(totalsByCurrency);
+			const totalBudgeted = single.length === 1 ? single[0].budgeted : 0;
+			const totalSpent = single.length === 1 ? single[0].spent : 0;
 
 			// Determine overall status
 			const overBudgetCount = budgetProgress.filter((p) => p.status === 'over-budget').length;
@@ -295,6 +306,7 @@ export class BudgetService {
 				activeBudgets,
 				budgetProgress,
 				totalBudgeted,
+				totalsByCurrency,
 				totalSpent,
 				overallStatus,
 				alerts,

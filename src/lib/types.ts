@@ -255,6 +255,13 @@ export interface Budget {
  * Budget progress tracking
  */
 export interface BudgetProgress {
+	subscriptionPaid?: number;
+	upcomingCommitted?: number;
+	discretionaryRemaining?: number;
+	rolloverAmount?: number;
+	availableAmount?: number;
+	periodStart?: string;
+	periodEnd?: string;
 	/** Budget ID this progress relates to */
 	budgetId: string;
 	/** The budget this progress is for */
