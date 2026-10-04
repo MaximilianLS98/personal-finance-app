@@ -18,6 +18,7 @@ import { migration007 } from './007_add_default_scenario';
  */
 import { migration008 } from './008_expand_budget_alert_types';
 import { migration009 } from './009_accounts_imports';
+import { migration010 } from './010_review_allocations';
 
 export const migrations: Migration[] = [
 	migration001,
@@ -29,6 +30,7 @@ export const migrations: Migration[] = [
 	migration007,
 	migration008,
 	migration009,
+	migration010,
 ];
 
 /**
