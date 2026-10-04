@@ -101,3 +101,43 @@ it('retains resolved automatic indices when overriding one column and supports r
 	expect(JSON.parse(latest[1].body.get('options')).columns.amount).toBeUndefined();
 	expect(screen.getByLabelText('Import row 2')).toBeInTheDocument();
 });
+it('requires a selected Revolut product and a fresh preview after changing fee handling', async () => {
+	fetchMock.mockImplementation(async (url: string, options?: RequestInit) => {
+		if (url === '/api/accounts')
+			return response([{ id: 'account', name: 'Synthetic account', currency: 'NOK' }]);
+		if (options?.method === 'POST') {
+			const input = JSON.parse((options.body as FormData).get('options') as string);
+			return response({
+				...preview,
+				format: 'revolut',
+				products: ['Current', 'Savings'],
+				requiresProductSelection: !input.revolutProduct,
+				rows: input.revolutProduct ? preview.rows : [],
+				skippedRows: [{ rowNumber: 3, reason: 'REVERTED: not a completed account movement' }],
+			});
+		}
+		return response([]);
+	});
+	mount();
+	await selectFile();
+	fireEvent.click(screen.getByRole('button', { name: 'Preview statement' }));
+	await screen.findByText('Revolut statement detected');
+	expect(screen.getByRole('button', { name: 'Confirm import' })).toBeDisabled();
+	fireEvent.change(screen.getByLabelText('Revolut product'), { target: { value: 'Current' } });
+	fireEvent.click(screen.getByRole('button', { name: 'Apply Revolut options and preview again' }));
+	await screen.findByText('Synthetic');
+	await waitFor(() =>
+		expect(screen.getByRole('button', { name: 'Confirm import' })).not.toBeDisabled(),
+	);
+	fireEvent.change(screen.getByLabelText('Nonzero fee handling'), { target: { value: 'deduct' } });
+	expect(screen.getByRole('button', { name: 'Confirm import' })).toBeDisabled();
+	fireEvent.click(screen.getByRole('button', { name: 'Apply Revolut options and preview again' }));
+	await waitFor(() =>
+		expect(screen.getByRole('button', { name: 'Confirm import' })).not.toBeDisabled(),
+	);
+	const latest = fetchMock.mock.calls.filter(([, options]) => options?.method === 'POST').at(-1)!;
+	expect(JSON.parse(latest[1].body.get('options'))).toMatchObject({
+		revolutProduct: 'Current',
+		revolutFeeMode: 'deduct',
+	});
+});

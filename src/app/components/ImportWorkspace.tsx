@@ -10,6 +10,10 @@ import { displayMoney } from '@/lib/money';
 import type { Account, ImportOptions } from '@/lib/ledger-service';
 import Link from 'next/link';
 type Preview = {
+	format?: string;
+	products?: string[];
+	requiresProductSelection?: boolean;
+	skippedRows?: Array<{ rowNumber: number; reason: string }>;
 	headers: string[];
 	columns?: NonNullable<ImportOptions['columns']>;
 	errors: string[];
@@ -17,6 +21,7 @@ type Preview = {
 	validRows: number;
 	rows: {
 		rowNumber: number;
+		source?: { product: string; type: string; fee: number; originalAmount: number };
 		duplicate: boolean;
 		duplicateReason?: string;
 		transaction: { date: string; description: string; amount: number; currency: string };
@@ -49,6 +54,8 @@ export default function ImportWorkspace() {
 		[busy, setBusy] = useState(false),
 		[confirmedErrors, setConfirmedErrors] = useState(false);
 	const [mappingDirty, setMappingDirty] = useState(false);
+	const [revolutProduct, setRevolutProduct] = useState('');
+	const [revolutFeeMode, setRevolutFeeMode] = useState<ImportOptions['revolutFeeMode']>();
 	const [keep, setKeep] = useState<number[]>([]),
 		[exclude, setExclude] = useState<number[]>([]),
 		[mapping, setMapping] = useState<NonNullable<ImportOptions['columns']> | undefined>();
@@ -65,6 +72,8 @@ export default function ImportWorkspace() {
 				'options',
 				JSON.stringify({
 					accountId,
+					revolutProduct: revolutProduct || undefined,
+					revolutFeeMode,
 					columns: mapping,
 					acceptErrors: confirmedErrors,
 					keepDuplicates: keep,
@@ -154,6 +163,8 @@ export default function ImportWorkspace() {
 								accept='.csv'
 								onChange={(e) => {
 									setFile(e.target.files?.[0] || null);
+									setRevolutProduct('');
+									setRevolutFeeMode(undefined);
 									setPreview(null);
 									setMapping(undefined);
 									setMessage('');
@@ -182,6 +193,64 @@ export default function ImportWorkspace() {
 						)}
 						{preview && (
 							<div className='space-y-4'>
+								{preview.format === 'revolut' && (
+									<div className='space-y-3 rounded border p-3'>
+										<h3 className='font-medium'>Revolut statement detected</h3>
+										<p className='text-sm'>
+											Only COMPLETED movements are imported using Completed Date. Timestamps without
+											a timezone retain the statement clock. Choose one product per account; use
+											separate accounts for Current, Savings, and Pocket balances. Transfers remain
+											cash flows until matched in Accounts.
+										</p>
+										<label className='block'>
+											Revolut product
+											<select
+												className='block border rounded p-2 bg-background w-full'
+												value={revolutProduct}
+												onChange={(e) => {
+													setRevolutProduct(e.target.value);
+													setMappingDirty(true);
+												}}
+											>
+												<option value=''>
+													{(preview.products?.length ?? 0) > 1
+														? 'Choose a product before importing'
+														: 'Automatic (single product)'}
+												</option>
+												{preview.products?.map((product) => (
+													<option key={product} value={product}>
+														{product}
+													</option>
+												))}
+											</select>
+										</label>
+										<label className='block'>
+											Nonzero fee handling
+											<select
+												className='block border rounded p-2 bg-background w-full'
+												value={revolutFeeMode ?? ''}
+												onChange={(e) => {
+													setRevolutFeeMode(
+														(e.target.value || undefined) as ImportOptions['revolutFeeMode'],
+													);
+													setMappingDirty(true);
+												}}
+											>
+												<option value=''>Review nonzero fees before importing</option>
+												<option value='deduct'>Amount excludes fee — subtract Fee once</option>
+												<option value='included'>Amount already includes fee — keep Amount</option>
+											</select>
+										</label>
+										<p className='text-sm text-muted-foreground'>
+											Check your statement balance to select fee handling. No extra fee transaction
+											is created. Zero-fee rows need no fee choice. Revolut column mapping uses its
+											recognized headers.
+										</p>
+										<Button variant='outline' onClick={() => process()}>
+											Apply Revolut options and preview again
+										</Button>
+									</div>
+								)}
 								<details>
 									<summary className='cursor-pointer'>Column mapping and saved profile</summary>
 									<div className='grid gap-3 sm:grid-cols-4 mt-3'>
@@ -256,6 +325,20 @@ export default function ImportWorkspace() {
 									{preview.rows.filter((r) => r.duplicate).length} suspected duplicates are skipped
 									unless selected. Identical repeated purchases within this statement are preserved.
 								</p>
+								{(preview.skippedRows?.length ?? 0) > 0 && (
+									<details className='border rounded p-3'>
+										<summary>
+											{preview.skippedRows!.length} excluded rows (state or another product)
+										</summary>
+										<ul className='max-h-40 overflow-auto text-sm'>
+											{preview.skippedRows!.map((row) => (
+												<li key={row.rowNumber}>
+													Row {row.rowNumber}: {row.reason}
+												</li>
+											))}
+										</ul>
+									</details>
+								)}
 								{preview.errors.length > 0 && (
 									<div role='alert' className='border rounded p-3'>
 										<p>{preview.errors.length} rejected rows</p>
@@ -307,7 +390,16 @@ export default function ImportWorkspace() {
 													<td className='p-2 whitespace-nowrap'>
 														{r.transaction.date.slice(0, 10)}
 													</td>
-													<td className='p-2'>{r.transaction.description}</td>
+													<td className='p-2'>
+														{r.transaction.description}
+														{r.source && (
+															<p className='text-xs text-muted-foreground'>
+																{r.source.product} · {r.source.type} · Amount{' '}
+																{displayMoney(r.source.originalAmount, r.transaction.currency)} ·
+																Fee {displayMoney(r.source.fee, r.transaction.currency)}
+															</p>
+														)}
+													</td>
 													<td className='p-2 whitespace-nowrap'>
 														{displayMoney(r.transaction.amount, r.transaction.currency)}
 													</td>
@@ -324,6 +416,7 @@ export default function ImportWorkspace() {
 										busy ||
 										mappingDirty ||
 										!preview.rows.length ||
+										preview.requiresProductSelection ||
 										(preview.errors.length > 0 && !confirmedErrors)
 									}
 									onClick={() => process(true)}
