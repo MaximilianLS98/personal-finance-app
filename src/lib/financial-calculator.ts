@@ -1,3 +1,4 @@
+import { displayMoney } from './money';
 /**
  * Financial calculation utilities for processing transaction data
  */
@@ -55,12 +56,7 @@ export function formatCurrency(
 	currency: string = 'NOK',
 	locale: string = 'nb-NO',
 ): string {
-	return new Intl.NumberFormat(locale, {
-		style: 'currency',
-		currency: currency,
-		minimumFractionDigits: 2,
-		maximumFractionDigits: 2,
-	}).format(amount);
+	return displayMoney(amount, currency, locale);
 }
 
 /**

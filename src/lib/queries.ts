@@ -43,18 +43,21 @@ export const useDashboardQuery = (params: {
 	from?: Date;
 	to?: Date;
 	interval: 'day' | 'week' | 'month';
+	currency?: string;
 }) =>
 	useQuery({
 		queryKey: queryKeys.dashboard({
 			from: params.from ? formatDate(params.from, 'yyyy-MM-dd') : undefined,
 			to: params.to ? formatDate(params.to, 'yyyy-MM-dd') : undefined,
 			interval: params.interval,
+			currency: params.currency,
 		}),
 		queryFn: async () => {
 			const search = new URLSearchParams();
 			if (params.from) search.append('from', formatDate(params.from, 'yyyy-MM-dd'));
 			if (params.to) search.append('to', formatDate(params.to, 'yyyy-MM-dd'));
 			search.append('interval', params.interval);
+			if (params.currency) search.append('currency', params.currency);
 			return getJson<DashboardData>(`/api/dashboard?${search.toString()}`);
 		},
 	});

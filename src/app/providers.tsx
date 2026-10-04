@@ -114,3 +114,12 @@ export function useCurrencyFormatter() {
 			currency: override?.currency ?? currency,
 		}).format(amount);
 }
+
+export function CurrencyScope({ currency, children }: { currency: string; children: ReactNode }) {
+	const settings = useCurrencySettings();
+	return (
+		<CurrencyContext.Provider value={{ ...settings, currency }}>
+			{children}
+		</CurrencyContext.Provider>
+	);
+}

@@ -1,4 +1,6 @@
 export interface DashboardData {
+	currency?: string;
+	currencies?: string[];
 	expenseIncomeOverTime: Array<{
 		date: string;
 		dateKeyIso: string; // ISO-like key for interval start (yyyy-MM-dd)

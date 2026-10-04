@@ -1,18 +1,25 @@
 import { createTransactionRepository } from '@/lib/database';
 import { ErrorResponse } from '@/lib/types';
+import { currencySummaries } from '@/lib/currency-report';
 import { NextResponse } from 'next/server';
 
 // Runtime-safe JSON response helper that works in Jest without web Request globals
 /**
  * GET /api/summary - Retrieve financial summary
  */
-export async function GET() {
+export async function GET(request: Request) {
 	const repository = createTransactionRepository();
 
 	try {
 		await repository.initialize();
 
-		const summary = await repository.calculateSummary();
+		const summaries = currencySummaries(await repository.findAll());
+		const selected = request ? new URL(request.url).searchParams.get('currency') : null;
+		const summary =
+			summaries.find((s) => s.currency === selected) ||
+			(!selected && summaries.length === 1
+				? summaries[0]
+				: { totalIncome: 0, totalExpenses: 0, netAmount: 0, transactionCount: 0 });
 
 		// Include an empty-state message for a new database.
 		const hasData = summary.transactionCount > 0;
@@ -21,10 +28,12 @@ export async function GET() {
 				? {
 						success: true,
 						data: summary,
+						currencies: summaries,
 					}
 				: {
 						success: true,
 						data: summary,
+						currencies: summaries,
 						message: 'No transaction data available',
 					},
 			{ status: 200 },
