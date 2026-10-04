@@ -1,19 +1,21 @@
+import type { Database as BunDatabase } from 'bun:sqlite';
 /**
  * Database connection manager using Bun's native SQLite
  */
 
-import type { DatabaseConfig, DatabaseManager, DatabaseError } from './types';
+import type { DatabaseConfig, DatabaseError, DatabaseManager } from './types';
 import { DatabaseErrorType } from './types';
 
 // Dynamic import to avoid webpack build issues with bun:sqlite
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let Database: any = null;
+let Database: typeof BunDatabase | null = null;
 
 /**
  * Default database configuration
  */
 const DEFAULT_CONFIG: DatabaseConfig = {
-	filename: process.env.NODE_ENV === 'test' ? ':memory:' : 'data/finance-tracker.db',
+	filename:
+		process.env.FINANCE_DATABASE_PATH ||
+		(process.env.NODE_ENV === 'test' ? ':memory:' : 'data/finance-tracker.db'),
 	readonly: false,
 	create: true,
 	strict: true,
@@ -41,10 +43,11 @@ export class DatabaseConnectionError extends Error implements DatabaseError {
  * SQLite database connection manager with health checks and error handling
  */
 export class SQLiteConnectionManager implements DatabaseManager {
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	private db: any | null = null;
+	private db: BunDatabase | null = null;
 	private config: DatabaseConfig;
 	private isInitialized = false;
+	private initialization?: Promise<void>;
+	private migrations?: Promise<void>;
 
 	constructor(config: Partial<DatabaseConfig> = {}) {
 		this.config = { ...DEFAULT_CONFIG, ...config };
@@ -53,8 +56,7 @@ export class SQLiteConnectionManager implements DatabaseManager {
 	/**
 	 * Get the database connection instance
 	 */
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	getConnection(): any {
+	getConnection(): BunDatabase {
 		if (!this.db) {
 			throw new DatabaseConnectionError(
 				DatabaseErrorType.CONNECTION_FAILED,
@@ -68,6 +70,16 @@ export class SQLiteConnectionManager implements DatabaseManager {
 	 * Initialize the database connection
 	 */
 	async initialize(): Promise<void> {
+		if (this.isReady()) return;
+		if (!this.initialization) {
+			this.initialization = this.openConnection().finally(() => {
+				this.initialization = undefined;
+			});
+		}
+		return this.initialization;
+	}
+
+	private async openConnection(): Promise<void> {
 		try {
 			// Dynamic import of Database to avoid build issues with Next.js webpack
 			if (!Database) {
@@ -75,7 +87,7 @@ export class SQLiteConnectionManager implements DatabaseManager {
 					const bunSqliteModule = 'bun:sqlite';
 					const bunSqlite = await import(/* webpackIgnore: true */ bunSqliteModule);
 					Database = bunSqlite.Database;
-				} catch (error) {
+				} catch {
 					throw new DatabaseConnectionError(
 						DatabaseErrorType.CONNECTION_FAILED,
 						'bun:sqlite is not available. This application requires Bun runtime.',
@@ -94,6 +106,7 @@ export class SQLiteConnectionManager implements DatabaseManager {
 			}
 
 			// Create database connection
+			if (!Database) throw new Error('SQLite driver unavailable');
 			this.db = new Database(this.config.filename, {
 				readonly: this.config.readonly,
 				create: this.config.create,
@@ -126,6 +139,16 @@ export class SQLiteConnectionManager implements DatabaseManager {
 	 * Run database migrations
 	 */
 	async runMigrations(): Promise<void> {
+		if (!this.migrations) {
+			this.migrations = this.applyMigrations().catch((error) => {
+				this.migrations = undefined;
+				throw error;
+			});
+		}
+		return this.migrations;
+	}
+
+	private async applyMigrations(): Promise<void> {
 		if (!this.isInitialized) {
 			throw new DatabaseConnectionError(
 				DatabaseErrorType.MIGRATION_FAILED,
@@ -168,7 +191,7 @@ export class SQLiteConnectionManager implements DatabaseManager {
 				health_check: number;
 			} | null;
 			return result !== null && result.health_check === 1;
-		} catch (error) {
+		} catch {
 			return false;
 		}
 	}
@@ -177,6 +200,9 @@ export class SQLiteConnectionManager implements DatabaseManager {
 	 * Close the database connection
 	 */
 	async close(): Promise<void> {
+		await this.initialization?.catch(() => {});
+		await this.migrations?.catch(() => {});
+		this.migrations = undefined;
 		try {
 			if (this.db) {
 				this.db.close();
@@ -186,9 +212,7 @@ export class SQLiteConnectionManager implements DatabaseManager {
 		} catch (error) {
 			throw new DatabaseConnectionError(
 				DatabaseErrorType.CONNECTION_FAILED,
-				`Failed to close database: ${
-					error instanceof Error ? error.message : 'Unknown error'
-				}`,
+				`Failed to close database: ${error instanceof Error ? error.message : 'Unknown error'}`,
 			);
 		}
 	}

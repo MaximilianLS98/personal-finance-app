@@ -7,7 +7,7 @@ import type { Migration } from '../types';
 
 export const migration007: Migration = {
 	version: 7,
-	name: 'Add default budget scenario',
+	description: 'Add default budget scenario',
 	up: (db) => {
 		// Insert default scenario
 		db.exec(`

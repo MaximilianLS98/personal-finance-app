@@ -201,8 +201,7 @@ export interface ErrorResponse {
 	/** Human-readable error message */
 	message: string;
 	/** Optional additional error details */
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	details?: any;
+	details?: unknown;
 }
 
 /**
@@ -472,47 +471,4 @@ export interface CreateBudgetRequest {
 	scenarioId?: string;
 }
 
-/**
- * Transaction Repository Interface
- * Re-export from database/repository for type safety
- */
-export interface TransactionRepository {
-	// Core CRUD operations
-	create(transaction: Omit<Transaction, 'id'>): Promise<Transaction>;
-	findAll(): Promise<Transaction[]>;
-	findById(id: string): Promise<Transaction | null>;
-	findByDateRange(startDate: Date, endDate: Date): Promise<Transaction[]>;
-	calculateSummary(startDate?: Date, endDate?: Date): Promise<FinancialSummary>;
-
-	// Category operations
-	getCategories(): Promise<Category[]>;
-	getCategoryById(id: string): Promise<Category | null>;
-
-	// Subscription operations
-	findAllSubscriptions(): Promise<Subscription[]>;
-	findSubscriptionsByCategory(categoryId: string): Promise<Subscription[]>;
-
-	// Budget operations
-	createBudget(budget: Omit<Budget, 'id' | 'createdAt' | 'updatedAt'>): Promise<Budget>;
-	findAllBudgets(): Promise<Budget[]>;
-	findBudgetById(id: string): Promise<Budget | null>;
-	findBudgetsByCategory(categoryId: string): Promise<Budget[]>;
-	findActiveBudgets(): Promise<Budget[]>;
-	findBudgetsByPeriod(startDate: Date, endDate: Date): Promise<Budget[]>;
-	findBudgetsByScenario(scenarioId: string): Promise<Budget[]>;
-	calculateBudgetProgress(budgetId: string): Promise<BudgetProgress | null>;
-	analyzeHistoricalSpending(categoryId: string, months: number): Promise<SpendingAnalysis>;
-
-	// Budget scenario operations
-	createBudgetScenario(
-		scenario: Omit<BudgetScenario, 'id' | 'budgets' | 'totalBudgeted'>,
-	): Promise<BudgetScenario>;
-	findAllBudgetScenarios(): Promise<BudgetScenario[]>;
-	findBudgetScenarioById(id: string): Promise<BudgetScenario | null>;
-	activateBudgetScenario(id: string): Promise<void>;
-
-	// Budget alert operations
-	createBudgetAlert(alert: Omit<BudgetAlert, 'id'>): Promise<BudgetAlert>;
-	findBudgetAlerts(budgetId?: string): Promise<BudgetAlert[]>;
-	findUnreadBudgetAlerts(): Promise<BudgetAlert[]>;
-}
+export type { TransactionRepository } from './database/contracts';

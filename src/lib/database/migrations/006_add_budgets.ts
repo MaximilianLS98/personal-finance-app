@@ -7,7 +7,7 @@ import type { Migration } from '../types';
 
 export const migration006: Migration = {
 	version: 6,
-	name: 'Add budget management tables',
+	description: 'Add budget management tables',
 	up: (db) => {
 		// Create budget scenarios table first (referenced by budgets)
 		db.exec(`

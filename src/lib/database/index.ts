@@ -3,18 +3,18 @@
  */
 
 export {
+	DatabaseConnectionError,
 	SQLiteConnectionManager,
 	getConnectionManager,
 	resetConnectionManager,
-	DatabaseConnectionError,
 } from './connection';
 export { SQLiteTransactionRepository, createTransactionRepository } from './repository';
+export { DatabaseErrorType } from './types';
 export type {
 	DatabaseConfig,
-	DatabaseManager,
 	DatabaseError,
+	DatabaseManager,
 	DatabaseTransaction,
 	Migration,
 	TransactionRepository,
 } from './types';
-export { DatabaseErrorType } from './types';
