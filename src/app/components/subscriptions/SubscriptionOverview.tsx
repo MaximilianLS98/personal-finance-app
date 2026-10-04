@@ -1,5 +1,7 @@
 'use client';
+import { monthlySubscriptionCost } from '@/lib/subscription-costs';
 
+import { Calendar, CreditCard, TrendingUp, Users } from 'lucide-react';
 import React from 'react';
 import {
 	Card,
@@ -8,10 +10,9 @@ import {
 	CardHeader,
 	CardTitle,
 } from '../../../components/ui/card';
-import { Subscription } from '../../../lib/types';
 import { formatCurrency } from '../../../lib/financial-calculator';
+import { Subscription } from '../../../lib/types';
 import { useCurrencySettings } from '../../providers';
-import { Calendar, CreditCard, TrendingUp, Users } from 'lucide-react';
 
 interface SubscriptionOverviewProps {
 	/** Array of active subscriptions */
@@ -46,23 +47,10 @@ export function SubscriptionOverview({
 
 		const activeSubscriptions = subscriptions.filter((sub) => sub.isActive);
 
-		const monthlyTotal = activeSubscriptions.reduce((total, sub) => {
-			switch (sub.billingFrequency) {
-				case 'monthly':
-					return total + sub.amount;
-				case 'quarterly':
-					return total + sub.amount / 3;
-				case 'annually':
-					return total + sub.amount / 12;
-				case 'custom':
-					if (sub.customFrequencyDays) {
-						return total + (sub.amount * 30.44) / sub.customFrequencyDays; // Average month = 30.44 days
-					}
-					return total;
-				default:
-					return total;
-			}
-		}, 0);
+		const monthlyTotal = activeSubscriptions.reduce(
+			(total, sub) => total + monthlySubscriptionCost(sub),
+			0,
+		);
 
 		return {
 			monthlyTotal,

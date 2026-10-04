@@ -3,9 +3,9 @@
  * Allows the system to learn from user categorization choices
  */
 
-import { NextRequest, NextResponse } from 'next/server';
 import { getCategoryEngine } from '@/lib/categorization-engine';
 import type { ErrorResponse } from '@/lib/types';
+import { NextRequest, NextResponse } from 'next/server';
 
 interface LearnRequest {
 	description: string;
@@ -17,7 +17,9 @@ interface LearnRequest {
  * POST /api/categories/learn - Learn from user categorization
  * Body: { description: string, categoryId: string, wasCorrectSuggestion?: boolean }
  */
-export async function POST(request: NextRequest): Promise<NextResponse<{ success: true } | ErrorResponse>> {
+export async function POST(
+	request: NextRequest,
+): Promise<NextResponse<{ success: true } | ErrorResponse>> {
 	try {
 		const body: LearnRequest = await request.json();
 		const { description, categoryId, wasCorrectSuggestion = false } = body;
@@ -28,7 +30,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<{ success
 					error: 'INVALID_INPUT',
 					message: 'Description is required and must be a string',
 				} as ErrorResponse,
-				{ status: 400 }
+				{ status: 400 },
 			);
 		}
 
@@ -38,7 +40,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<{ success
 					error: 'INVALID_INPUT',
 					message: 'Category ID is required and must be a string',
 				} as ErrorResponse,
-				{ status: 400 }
+				{ status: 400 },
 			);
 		}
 
@@ -54,7 +56,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<{ success
 				message: 'Failed to learn from user categorization',
 				details: error instanceof Error ? error.message : 'Unknown error',
 			} as ErrorResponse,
-			{ status: 500 }
+			{ status: 500 },
 		);
 	}
 }

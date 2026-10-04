@@ -3,8 +3,8 @@
  * Supports both English and Norwegian CSV formats
  */
 
-import { Transaction } from './types';
 import { determineTransactionType } from './transaction-utils';
+import { Transaction } from './types';
 
 /**
  * Supported CSV column mappings for different formats
@@ -226,7 +226,7 @@ function mapColumns(
 function parseTransactionRow(
 	row: string[],
 	columnIndices: { date: number; description: number; amount: number; currency?: number },
-	rowNumber: number,
+	_rowNumber: number,
 ): Transaction | null {
 	const dateStr = row[columnIndices.date];
 	const description = row[columnIndices.description];
@@ -320,11 +320,7 @@ function parseDate(dateStr: string): Date | null {
 			const date = new Date(year, month, day);
 
 			// Validate the date is valid
-			if (
-				date.getFullYear() === year &&
-				date.getMonth() === month &&
-				date.getDate() === day
-			) {
+			if (date.getFullYear() === year && date.getMonth() === month && date.getDate() === day) {
 				return date;
 			}
 		}

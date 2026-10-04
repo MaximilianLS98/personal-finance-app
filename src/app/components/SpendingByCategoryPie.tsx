@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import { useCurrencySettings } from '@/app/providers';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ResponsiveContainer, PieChart, Pie, Tooltip, Legend, Cell } from 'recharts';
 import { useDashboardQuery } from '@/lib/queries';
 import { useDashboardFilters } from '@/lib/stores/filters';
-import { useCurrencySettings } from '@/app/providers';
+import React, { useMemo } from 'react';
+import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
 const SpendingByCategoryPie: React.FC = () => {
 	const { dateRange, interval } = useDashboardFilters();
@@ -23,7 +23,7 @@ const SpendingByCategoryPie: React.FC = () => {
 	});
 
 	const pieData = useMemo(() => {
-		const source = ((data as any)?.categoryBreakdown ?? []).slice(0, 10) as Array<{
+		const source = (data?.categoryBreakdown ?? []).slice(0, 10) as Array<{
 			categoryName: string;
 			amount: number;
 			categoryColor: string;
@@ -51,12 +51,7 @@ const SpendingByCategoryPie: React.FC = () => {
 					) : (
 						<ResponsiveContainer width='100%' height='100%'>
 							<PieChart>
-								<Tooltip
-									formatter={(value: any, name: any) => [
-										formatCurrency(value as number),
-										name,
-									]}
-								/>
+								<Tooltip formatter={(value, name) => [formatCurrency(value as number), name]} />
 								<Legend />
 								<Pie
 									data={pieData}
@@ -66,7 +61,8 @@ const SpendingByCategoryPie: React.FC = () => {
 									cy='50%'
 									innerRadius={60}
 									outerRadius={100}
-									paddingAngle={2}>
+									paddingAngle={2}
+								>
 									{pieData.map((entry, idx) => (
 										<Cell key={`cell-${idx}`} fill={entry.color} />
 									))}

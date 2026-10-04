@@ -3,13 +3,13 @@
  * Integrates with existing categorization system for subscription detection
  */
 
+import type { TransactionRepository } from './database/repository';
 import type {
-	Transaction,
 	Subscription,
 	SubscriptionPattern,
+	Transaction,
 	TransactionWithSubscription,
 } from './types';
-import type { TransactionRepository } from './database/repository';
 
 /**
  * Candidate subscription detected from transaction patterns
@@ -352,8 +352,7 @@ export class SubscriptionPatternEngine {
 		}
 
 		// Analyze frequency pattern
-		const avgInterval =
-			intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length;
+		const avgInterval = intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length;
 		const intervalVariance = this.calculateVariance(intervals);
 
 		// Determine billing frequency and confidence

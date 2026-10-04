@@ -1,7 +1,6 @@
-import React from 'react';
 import { render, screen } from '@testing-library/react';
-import { SubscriptionOverview } from '../SubscriptionOverview';
 import { Subscription } from '../../../../lib/types';
+import { SubscriptionOverview } from '../SubscriptionOverview';
 
 // Mock the providers
 jest.mock('../../../providers', () => ({
@@ -13,7 +12,7 @@ jest.mock('../../../providers', () => ({
 
 // Mock the financial calculator
 jest.mock('../../../../lib/financial-calculator', () => ({
-	formatCurrency: (amount: number, currency: string, locale: string) =>
+	formatCurrency: (amount: number, currency: string, _locale: string) =>
 		`${currency} ${amount.toFixed(2)}`,
 }));
 

@@ -1,25 +1,24 @@
+'use client';
 /**
  * Budget Analytics Page
  * Detailed analysis of budget performance including variance, projections, and insights
  */
 
-'use client';
-
-import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
-	ArrowLeft,
-	TrendingUp,
-	TrendingDown,
 	AlertTriangle,
+	ArrowLeft,
 	Calendar,
-	Target,
 	DollarSign,
+	Target,
+	TrendingDown,
+	TrendingUp,
 } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -89,20 +88,6 @@ export default function BudgetAnalyticsPage() {
 
 	const { budget, progress, variance, projection } = analytics;
 
-	// Risk level styling
-	const getRiskColor = (level: string) => {
-		switch (level) {
-			case 'low':
-				return 'text-green-600';
-			case 'medium':
-				return 'text-yellow-600';
-			case 'high':
-				return 'text-red-600';
-			default:
-				return 'text-gray-600';
-		}
-	};
-
 	const getRiskIcon = (level: string) => {
 		switch (level) {
 			case 'low':
@@ -140,13 +125,8 @@ export default function BudgetAnalyticsPage() {
 						<Target className='w-4 h-4 text-muted-foreground' />
 					</CardHeader>
 					<CardContent>
-						<div className='text-2xl font-bold'>
-							{progress.percentageSpent.toFixed(1)}%
-						</div>
-						<Progress
-							value={Math.min(progress.percentageSpent, 100)}
-							className='mt-2'
-						/>
+						<div className='text-2xl font-bold'>{progress.percentageSpent.toFixed(1)}%</div>
+						<Progress value={Math.min(progress.percentageSpent, 100)} className='mt-2' />
 						<p className='text-xs text-muted-foreground mt-1'>
 							{progress.currentSpent.toLocaleString('nb-NO', {
 								style: 'currency',
@@ -174,8 +154,7 @@ export default function BudgetAnalyticsPage() {
 							})}
 						</div>
 						<p className='text-xs text-muted-foreground'>
-							{((projection.projectedTotalSpent / budget.amount) * 100).toFixed(1)}%
-							of budget
+							{((projection.projectedTotalSpent / budget.amount) * 100).toFixed(1)}% of budget
 						</p>
 					</CardContent>
 				</Card>
@@ -194,7 +173,8 @@ export default function BudgetAnalyticsPage() {
 										? 'secondary'
 										: 'destructive'
 							}
-							className='text-sm'>
+							className='text-sm'
+						>
 							{projection.riskLevel.toUpperCase()}
 						</Badge>
 						<p className='text-xs text-muted-foreground mt-2'>
@@ -237,69 +217,47 @@ export default function BudgetAnalyticsPage() {
 						<Card>
 							<CardHeader>
 								<CardTitle>Overall Performance</CardTitle>
-								<CardDescription>
-									Summary of budget vs actual spending
-								</CardDescription>
+								<CardDescription>Summary of budget vs actual spending</CardDescription>
 							</CardHeader>
 							<CardContent>
 								<div className='space-y-4'>
 									<div className='grid grid-cols-2 gap-4'>
 										<div>
-											<p className='text-sm text-muted-foreground'>
-												Average Variance
-											</p>
+											<p className='text-sm text-muted-foreground'>Average Variance</p>
 											<p className='text-lg font-medium'>
-												{variance.overallVariance.averageVariance.toLocaleString(
-													'nb-NO',
-													{
-														style: 'currency',
-														currency: 'NOK',
-													},
-												)}
+												{variance.overallVariance.averageVariance.toLocaleString('nb-NO', {
+													style: 'currency',
+													currency: 'NOK',
+												})}
 											</p>
 										</div>
 										<div>
-											<p className='text-sm text-muted-foreground'>
-												Total Overspend
-											</p>
+											<p className='text-sm text-muted-foreground'>Total Overspend</p>
 											<p className='text-lg font-medium text-red-600'>
-												{variance.overallVariance.totalOverspend.toLocaleString(
-													'nb-NO',
-													{
-														style: 'currency',
-														currency: 'NOK',
-													},
-												)}
+												{variance.overallVariance.totalOverspend.toLocaleString('nb-NO', {
+													style: 'currency',
+													currency: 'NOK',
+												})}
 											</p>
 										</div>
 									</div>
 									<div className='grid grid-cols-2 gap-4'>
 										<div>
-											<p className='text-sm text-muted-foreground'>
-												Variance Std Dev
-											</p>
+											<p className='text-sm text-muted-foreground'>Variance Std Dev</p>
 											<p className='text-lg font-medium'>
-												{variance.overallVariance.varianceStdDev.toLocaleString(
-													'nb-NO',
-													{
-														style: 'currency',
-														currency: 'NOK',
-													},
-												)}
+												{variance.overallVariance.varianceStdDev.toLocaleString('nb-NO', {
+													style: 'currency',
+													currency: 'NOK',
+												})}
 											</p>
 										</div>
 										<div>
-											<p className='text-sm text-muted-foreground'>
-												Total Underspend
-											</p>
+											<p className='text-sm text-muted-foreground'>Total Underspend</p>
 											<p className='text-lg font-medium text-green-600'>
-												{variance.overallVariance.totalUnderspend.toLocaleString(
-													'nb-NO',
-													{
-														style: 'currency',
-														currency: 'NOK',
-													},
-												)}
+												{variance.overallVariance.totalUnderspend.toLocaleString('nb-NO', {
+													style: 'currency',
+													currency: 'NOK',
+												})}
 											</p>
 										</div>
 									</div>
@@ -318,7 +276,8 @@ export default function BudgetAnalyticsPage() {
 									{variance.monthlyVariances.slice(-6).map((month) => (
 										<div
 											key={month.month}
-											className='flex items-center justify-between p-2 border rounded'>
+											className='flex items-center justify-between p-2 border rounded'
+										>
 											<div>
 												<p className='font-medium'>{month.month}</p>
 												<p className='text-sm text-muted-foreground'>
@@ -331,7 +290,8 @@ export default function BudgetAnalyticsPage() {
 											</div>
 											<div className='text-right'>
 												<p
-													className={`font-medium ${month.variance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+													className={`font-medium ${month.variance > 0 ? 'text-red-600' : 'text-green-600'}`}
+												>
 													{month.variance > 0 ? '+' : ''}
 													{month.variance.toLocaleString('nb-NO', {
 														style: 'currency',
@@ -363,9 +323,7 @@ export default function BudgetAnalyticsPage() {
 						<CardContent>
 							<div className='space-y-4'>
 								{variance.insights.map((insight, index) => (
-									<div
-										key={index}
-										className='flex items-start p-4 border rounded-lg'>
+									<div key={index} className='flex items-start p-4 border rounded-lg'>
 										<AlertTriangle className='w-5 h-5 text-blue-600 mr-3 mt-0.5 flex-shrink-0' />
 										<p className='text-sm leading-relaxed'>{insight}</p>
 									</div>
@@ -389,13 +347,10 @@ export default function BudgetAnalyticsPage() {
 									<div className='flex justify-between items-center p-3 bg-blue-50 rounded'>
 										<span className='font-medium'>Subscription Costs</span>
 										<span className='font-bold'>
-											{progress.subscriptionAllocated.toLocaleString(
-												'nb-NO',
-												{
-													style: 'currency',
-													currency: 'NOK',
-												},
-											)}
+											{progress.subscriptionAllocated.toLocaleString('nb-NO', {
+												style: 'currency',
+												currency: 'NOK',
+											})}
 										</span>
 									</div>
 									<div className='flex justify-between items-center p-3 bg-green-50 rounded'>
@@ -424,16 +379,12 @@ export default function BudgetAnalyticsPage() {
 						<Card>
 							<CardHeader>
 								<CardTitle>Spending Rate</CardTitle>
-								<CardDescription>
-									Daily spending patterns and recommendations
-								</CardDescription>
+								<CardDescription>Daily spending patterns and recommendations</CardDescription>
 							</CardHeader>
 							<CardContent>
 								<div className='space-y-4'>
 									<div>
-										<p className='text-sm text-muted-foreground'>
-											Current Daily Average
-										</p>
+										<p className='text-sm text-muted-foreground'>Current Daily Average</p>
 										<p className='text-2xl font-bold'>
 											{progress.averageDailySpend.toLocaleString('nb-NO', {
 												style: 'currency',
@@ -442,30 +393,20 @@ export default function BudgetAnalyticsPage() {
 										</p>
 									</div>
 									<div>
-										<p className='text-sm text-muted-foreground'>
-											Recommended Daily Limit
-										</p>
+										<p className='text-sm text-muted-foreground'>Recommended Daily Limit</p>
 										<p className='text-2xl font-bold text-blue-600'>
-											{projection.recommendedDailySpend.toLocaleString(
-												'nb-NO',
-												{
-													style: 'currency',
-													currency: 'NOK',
-												},
-											)}
+											{projection.recommendedDailySpend.toLocaleString('nb-NO', {
+												style: 'currency',
+												currency: 'NOK',
+											})}
 										</p>
 									</div>
 									<div className='pt-2 border-t'>
-										<p className='text-sm text-muted-foreground mb-2'>
-											Days Remaining
-										</p>
+										<p className='text-sm text-muted-foreground mb-2'>Days Remaining</p>
 										<div className='flex items-center justify-between'>
-											<span className='text-lg font-medium'>
-												{progress.daysRemaining} days
-											</span>
+											<span className='text-lg font-medium'>{progress.daysRemaining} days</span>
 											<Badge variant='outline'>
-												{Math.round((progress.daysRemaining / 30) * 100)}%
-												of period left
+												{Math.round((progress.daysRemaining / 30) * 100)}% of period left
 											</Badge>
 										</div>
 									</div>

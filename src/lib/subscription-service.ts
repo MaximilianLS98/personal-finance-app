@@ -3,18 +3,18 @@
  * Provides business logic for subscription management and detection
  */
 
-import type {
-	Transaction,
-	Subscription,
-	SubscriptionPattern,
-	TransactionWithSubscription,
-} from './types';
 import type { TransactionRepository } from './database/repository';
 import {
 	SubscriptionPatternEngine,
 	type SubscriptionCandidate,
 	type SubscriptionMatch,
 } from './subscription-pattern-engine';
+import type {
+	Subscription,
+	SubscriptionPattern,
+	Transaction,
+	TransactionWithSubscription,
+} from './types';
 
 /**
  * Subscription creation request
@@ -91,8 +91,6 @@ export class SubscriptionService {
 			notes: request.notes,
 			website: request.website,
 			cancellationUrl: request.cancellationUrl,
-			createdAt: new Date(),
-			updatedAt: new Date(),
 		});
 
 		// Flag associated transactions if provided
@@ -106,10 +104,7 @@ export class SubscriptionService {
 			const validTransactions = transactions.filter((t) => t !== null) as Transaction[];
 
 			if (validTransactions.length > 0) {
-				await this.patternEngine.createPatternsForSubscription(
-					subscription.id,
-					validTransactions,
-				);
+				await this.patternEngine.createPatternsForSubscription(subscription.id, validTransactions);
 			}
 		}
 
@@ -374,8 +369,7 @@ export class SubscriptionService {
 		// Look for a "Subscriptions" category
 		const subscriptionCategory = categories.find(
 			(c) =>
-				c.name.toLowerCase().includes('subscription') ||
-				c.name.toLowerCase().includes('recurring'),
+				c.name.toLowerCase().includes('subscription') || c.name.toLowerCase().includes('recurring'),
 		);
 
 		if (subscriptionCategory) {

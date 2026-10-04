@@ -3,11 +3,11 @@
  */
 
 import {
-	calculateTotalIncome,
-	calculateTotalExpenses,
 	calculateFinancialSummary,
-	formatCurrency,
+	calculateTotalExpenses,
+	calculateTotalIncome,
 	formatAmount,
+	formatCurrency,
 } from '../financial-calculator';
 import { Transaction } from '../types';
 
@@ -199,7 +199,7 @@ describe('formatCurrency', () => {
 
 	it('should format negative amounts correctly', () => {
 		const result = formatCurrency(-1234.56);
-		expect(result).toMatch(/-\s?1\s?234,56/);
+		expect(result).toMatch(/[-−]\s?1\s?234,56/);
 		expect(result).toContain('kr');
 	});
 
@@ -237,7 +237,7 @@ describe('formatAmount', () => {
 
 	it('should format negative amounts correctly', () => {
 		const result = formatAmount(-1234.56);
-		expect(result).toMatch(/-\s?1\s?234,56/);
+		expect(result).toMatch(/[-−]\s?1\s?234,56/);
 	});
 
 	it('should format zero correctly', () => {

@@ -1,3 +1,4 @@
+import type { Budget } from '@/lib/types';
 /**
  * Individual Budget API Endpoints
  * GET /api/budgets/[id] - Get specific budget with progress
@@ -5,18 +6,15 @@
  * DELETE /api/budgets/[id] - Delete budget
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createTransactionRepository } from '@/lib/database/repository';
 import { BudgetService } from '@/lib/budget-service';
+import { createTransactionRepository } from '@/lib/database/repository';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * GET /api/budgets/[id]
  * Get specific budget with current progress
  */
-export async function GET(
-	request: NextRequest,
-	{ params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
 	try {
 		const { id } = await params;
 
@@ -27,7 +25,7 @@ export async function GET(
 
 		// Get budget with progress
 		const result = await budgetService.getBudgetWithProgress(id);
-		
+
 		await repository.close();
 
 		if (!result) {
@@ -36,7 +34,7 @@ export async function GET(
 					success: false,
 					error: 'Budget not found',
 				},
-				{ status: 404 }
+				{ status: 404 },
 			);
 		}
 
@@ -52,7 +50,7 @@ export async function GET(
 				error: 'Failed to fetch budget',
 				message: error instanceof Error ? error.message : 'Unknown error',
 			},
-			{ status: 500 }
+			{ status: 500 },
 		);
 	}
 }
@@ -61,10 +59,7 @@ export async function GET(
  * PUT /api/budgets/[id]
  * Update an existing budget
  */
-export async function PUT(
-	request: NextRequest,
-	{ params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
 	try {
 		const { id } = await params;
 		const body = await request.json();
@@ -75,10 +70,10 @@ export async function PUT(
 		const budgetService = new BudgetService(repository);
 
 		// Prepare updates (convert date strings to Date objects if provided)
-		const updates: any = { ...body };
+		const updates: Partial<Budget> = { ...body };
 		if (updates.startDate) updates.startDate = new Date(updates.startDate);
 		if (updates.endDate) updates.endDate = new Date(updates.endDate);
-		if (updates.amount) updates.amount = parseFloat(updates.amount);
+		if (updates.amount) updates.amount = Number(updates.amount);
 
 		// Update budget
 		const updatedBudget = await budgetService.updateBudget(id, updates);
@@ -91,7 +86,7 @@ export async function PUT(
 					success: false,
 					error: 'Budget not found',
 				},
-				{ status: 404 }
+				{ status: 404 },
 			);
 		}
 
@@ -107,7 +102,7 @@ export async function PUT(
 				error: 'Failed to update budget',
 				message: error instanceof Error ? error.message : 'Unknown error',
 			},
-			{ status: 500 }
+			{ status: 500 },
 		);
 	}
 }
@@ -118,7 +113,7 @@ export async function PUT(
  */
 export async function DELETE(
 	request: NextRequest,
-	{ params }: { params: Promise<{ id: string }> }
+	{ params }: { params: Promise<{ id: string }> },
 ) {
 	try {
 		const { id } = await params;
@@ -139,7 +134,7 @@ export async function DELETE(
 					success: false,
 					error: 'Budget not found',
 				},
-				{ status: 404 }
+				{ status: 404 },
 			);
 		}
 
@@ -155,7 +150,7 @@ export async function DELETE(
 				error: 'Failed to delete budget',
 				message: error instanceof Error ? error.message : 'Unknown error',
 			},
-			{ status: 500 }
+			{ status: 500 },
 		);
 	}
 }

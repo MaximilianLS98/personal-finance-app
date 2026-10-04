@@ -8,8 +8,7 @@ import type { Migration } from '../types';
 export const migration001: Migration = {
 	version: 1,
 	description: 'Initial schema creation with transactions table',
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	up: (db: any) => {
+	up: (db) => {
 		// Create transactions table with proper schema
 		db.exec(`
 			CREATE TABLE transactions (
@@ -44,8 +43,7 @@ export const migration001: Migration = {
 		// Insert initial version record
 		db.exec('INSERT INTO schema_metadata (version) VALUES (1);');
 	},
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	down: (db: any) => {
+	down: (db) => {
 		// Drop tables in reverse order
 		db.exec('DROP TABLE IF EXISTS schema_metadata;');
 		db.exec('DROP TABLE IF EXISTS transactions;');

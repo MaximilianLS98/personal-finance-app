@@ -1,8 +1,9 @@
+import type { Database } from 'bun:sqlite';
 /**
  * Database-specific types and interfaces for SQLite persistence layer
  */
 
-import type { Transaction, FinancialSummary } from '../types';
+import type { Transaction } from '../types';
 
 /**
  * Pagination options for database queries
@@ -94,8 +95,7 @@ export interface DatabaseError extends Error {
  * Database connection manager interface
  */
 export interface DatabaseManager {
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	getConnection(): any;
+	getConnection(): Database;
 	initialize(): Promise<void>;
 	runMigrations(): Promise<void>;
 	close(): Promise<void>;
@@ -126,10 +126,8 @@ export interface DatabaseTransactionWithSubscription extends DatabaseTransaction
 export interface Migration {
 	version: number;
 	description: string;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	up: (db: any) => void;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	down: (db: any) => void;
+	up: (db: Database) => void;
+	down: (db: Database) => void;
 }
 
 /**
@@ -160,22 +158,4 @@ export interface DuplicateInfo {
 	identifier: string;
 }
 
-/**
- * Repository interface for transaction database operations
- */
-export interface TransactionRepository {
-	// Core CRUD operations
-	create(transaction: Omit<Transaction, 'id'>): Promise<Transaction>;
-	createMany(transactions: Omit<Transaction, 'id'>[]): Promise<CreateManyResult>;
-	findAll(): Promise<Transaction[]>;
-	findById(id: string): Promise<Transaction | null>;
-	findByDateRange(startDate: Date, endDate: Date): Promise<Transaction[]>;
-
-	// Business logic operations
-	calculateSummary(startDate?: Date, endDate?: Date): Promise<FinancialSummary>;
-	checkDuplicates(transactions: Omit<Transaction, 'id'>[]): Promise<DuplicateInfo[]>;
-
-	// Database management
-	initialize(): Promise<void>;
-	close(): Promise<void>;
-}
+export type { TransactionRepository } from './contracts';

@@ -1,25 +1,23 @@
+'use client';
+import { Suspense } from 'react';
+import { invalidateFinanceQueries } from '@/lib/query-keys';
 /**
  * Create New Budget Page
  * Form for creating new budgets with intelligent suggestions
  */
 
-'use client';
-
-import { useState, useEffect } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, Calendar as CalendarIcon, Lightbulb } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-	ArrowLeft,
-	Lightbulb,
-	TrendingUp,
-	Calendar as CalendarIcon,
-	DollarSign,
-} from 'lucide-react';
+import { useEffect, useState } from 'react';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
 	Select,
 	SelectContent,
@@ -27,15 +25,12 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@/components/ui/select';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { format } from 'date-fns';
 import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+import { format } from 'date-fns';
 
-import type { Category, BudgetSuggestion, CreateBudgetRequest, BudgetScenario } from '@/lib/types';
+import type { BudgetScenario, BudgetSuggestion, Category, CreateBudgetRequest } from '@/lib/types';
 
 interface FormData {
 	name: string;
@@ -51,6 +46,14 @@ interface FormData {
 }
 
 export default function NewBudgetPage() {
+	return (
+		<Suspense fallback={<div>Loading budget form…</div>}>
+			<NewBudgetForm />
+		</Suspense>
+	);
+}
+
+function NewBudgetForm() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const queryClient = useQueryClient();
@@ -113,15 +116,12 @@ export default function NewBudgetPage() {
 				endDate: formData.endDate,
 			});
 
-			const response = await fetch(
-				`/api/budgets/suggestions/${formData.categoryId}?${params}`,
-			);
+			const response = await fetch(`/api/budgets/suggestions/${formData.categoryId}?${params}`);
 			if (!response.ok) throw new Error('Failed to fetch suggestions');
 			const result = await response.json();
 			return result.data;
 		},
-		enabled:
-			!!formData.categoryId && !!formData.startDate && !!formData.endDate && !isIndefinite,
+		enabled: !!formData.categoryId && !!formData.startDate && !!formData.endDate && !isIndefinite,
 	});
 
 	// Create budget mutation
@@ -139,7 +139,7 @@ export default function NewBudgetPage() {
 			return response.json();
 		},
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ['budget-dashboard'] });
+			void invalidateFinanceQueries(queryClient);
 			router.push('/budgets');
 		},
 	});
@@ -292,7 +292,8 @@ export default function NewBudgetPage() {
 										onValueChange={(value) =>
 											setFormData((prev) => ({ ...prev, categoryId: value }))
 										}
-										required>
+										required
+									>
 										<SelectTrigger>
 											<SelectValue placeholder='Select a category' />
 										</SelectTrigger>
@@ -316,7 +317,8 @@ export default function NewBudgetPage() {
 												...prev,
 												scenarioId: value === 'active' ? undefined : value,
 											}))
-										}>
+										}
+									>
 										<SelectTrigger>
 											<SelectValue placeholder='Select a scenario' />
 										</SelectTrigger>
@@ -340,7 +342,8 @@ export default function NewBudgetPage() {
 											value={formData.period}
 											onValueChange={(value: 'monthly' | 'yearly') =>
 												setFormData((prev) => ({ ...prev, period: value }))
-											}>
+											}
+										>
 											<SelectTrigger>
 												<SelectValue />
 											</SelectTrigger>
@@ -357,24 +360,18 @@ export default function NewBudgetPage() {
 											<PopoverTrigger asChild>
 												<Button
 													variant='outline'
-													className='w-full justify-start text-left font-normal'>
+													className='w-full justify-start text-left font-normal'
+												>
 													<CalendarIcon className='mr-2 h-4 w-4' />
 													{formData.startDate
-														? format(
-																new Date(formData.startDate),
-																'MMM dd, yyyy',
-															)
+														? format(new Date(formData.startDate), 'MMM dd, yyyy')
 														: 'Pick a date'}
 												</Button>
 											</PopoverTrigger>
 											<PopoverContent className='w-auto p-0'>
 												<Calendar
 													mode='single'
-													selected={
-														formData.startDate
-															? new Date(formData.startDate)
-															: undefined
-													}
+													selected={formData.startDate ? new Date(formData.startDate) : undefined}
 													onSelect={(date) => {
 														if (!date) return;
 														setFormData((prev) => ({
@@ -395,26 +392,20 @@ export default function NewBudgetPage() {
 												<Button
 													variant='outline'
 													className='w-full justify-start text-left font-normal'
-													disabled={isIndefinite}>
+													disabled={isIndefinite}
+												>
 													<CalendarIcon className='mr-2 h-4 w-4' />
 													{isIndefinite
 														? 'No end date'
 														: formData.endDate
-															? format(
-																	new Date(formData.endDate),
-																	'MMM dd, yyyy',
-																)
+															? format(new Date(formData.endDate), 'MMM dd, yyyy')
 															: 'Pick a date'}
 												</Button>
 											</PopoverTrigger>
 											<PopoverContent className='w-auto p-0'>
 												<Calendar
 													mode='single'
-													selected={
-														formData.endDate
-															? new Date(formData.endDate)
-															: undefined
-													}
+													selected={formData.endDate ? new Date(formData.endDate) : undefined}
 													onSelect={(date) => {
 														if (!date) return;
 														setFormData((prev) => ({
@@ -436,9 +427,7 @@ export default function NewBudgetPage() {
 										checked={isIndefinite}
 										onCheckedChange={setIsIndefinite}
 									/>
-									<Label htmlFor='indefinite'>
-										No end date (run indefinitely)
-									</Label>
+									<Label htmlFor='indefinite'>No end date (run indefinitely)</Label>
 								</div>
 
 								{/* Amount */}
@@ -501,9 +490,7 @@ export default function NewBudgetPage() {
 							) : suggestionsLoading ? (
 								<div className='space-y-3'>
 									{[1, 2, 3].map((i) => (
-										<div
-											key={i}
-											className='h-20 bg-gray-200 rounded animate-pulse'></div>
+										<div key={i} className='h-20 bg-gray-200 rounded animate-pulse'></div>
 									))}
 								</div>
 							) : suggestions ? (
@@ -515,50 +502,35 @@ export default function NewBudgetPage() {
 											<TabsTrigger value='aggressive'>Tight</TabsTrigger>
 										</TabsList>
 
-										{(['conservative', 'moderate', 'aggressive'] as const).map(
-											(type) => (
-												<TabsContent key={type} value={type}>
-													<div className='border rounded-lg p-4 space-y-3'>
-														<div className='flex items-center justify-between'>
-															<span className='font-medium text-lg'>
-																{suggestions.suggestions[
-																	type
-																].amount.toLocaleString('nb-NO', {
-																	style: 'currency',
-																	currency: 'NOK',
-																})}
-															</span>
-															<Badge variant='outline'>
-																{Math.round(
-																	suggestions.suggestions[type]
-																		.confidence * 100,
-																)}
-																% confidence
-															</Badge>
-														</div>
-														<p className='text-sm text-muted-foreground'>
-															{
-																suggestions.suggestions[type]
-																	.reasoning
-															}
-														</p>
-														<Button
-															size='sm'
-															variant={
-																selectedSuggestion === type
-																	? 'default'
-																	: 'outline'
-															}
-															onClick={() => applySuggestion(type)}
-															className='w-full'>
-															{selectedSuggestion === type
-																? 'Applied'
-																: 'Use This Amount'}
-														</Button>
+										{(['conservative', 'moderate', 'aggressive'] as const).map((type) => (
+											<TabsContent key={type} value={type}>
+												<div className='border rounded-lg p-4 space-y-3'>
+													<div className='flex items-center justify-between'>
+														<span className='font-medium text-lg'>
+															{suggestions.suggestions[type].amount.toLocaleString('nb-NO', {
+																style: 'currency',
+																currency: 'NOK',
+															})}
+														</span>
+														<Badge variant='outline'>
+															{Math.round(suggestions.suggestions[type].confidence * 100)}%
+															confidence
+														</Badge>
 													</div>
-												</TabsContent>
-											),
-										)}
+													<p className='text-sm text-muted-foreground'>
+														{suggestions.suggestions[type].reasoning}
+													</p>
+													<Button
+														size='sm'
+														variant={selectedSuggestion === type ? 'default' : 'outline'}
+														onClick={() => applySuggestion(type)}
+														className='w-full'
+													>
+														{selectedSuggestion === type ? 'Applied' : 'Use This Amount'}
+													</Button>
+												</div>
+											</TabsContent>
+										))}
 									</Tabs>
 
 									{/* Historical Context */}
@@ -568,33 +540,24 @@ export default function NewBudgetPage() {
 											<div>
 												<span>Average: </span>
 												<span className='font-medium'>
-													{suggestions.historicalData.averageSpending.toLocaleString(
-														'nb-NO',
-														{
-															style: 'currency',
-															currency: 'NOK',
-														},
-													)}
+													{suggestions.historicalData.averageSpending.toLocaleString('nb-NO', {
+														style: 'currency',
+														currency: 'NOK',
+													})}
 												</span>
 											</div>
 											<div>
 												<span>Range: </span>
 												<span className='font-medium'>
-													{suggestions.historicalData.minSpending.toLocaleString(
-														'nb-NO',
-														{
-															style: 'currency',
-															currency: 'NOK',
-														},
-													)}{' '}
+													{suggestions.historicalData.minSpending.toLocaleString('nb-NO', {
+														style: 'currency',
+														currency: 'NOK',
+													})}{' '}
 													-{' '}
-													{suggestions.historicalData.maxSpending.toLocaleString(
-														'nb-NO',
-														{
-															style: 'currency',
-															currency: 'NOK',
-														},
-													)}
+													{suggestions.historicalData.maxSpending.toLocaleString('nb-NO', {
+														style: 'currency',
+														currency: 'NOK',
+													})}
 												</span>
 											</div>
 										</div>
@@ -602,23 +565,12 @@ export default function NewBudgetPage() {
 											<div className='text-xs text-muted-foreground'>
 												<span>Fixed costs: </span>
 												<span className='font-medium'>
-													{suggestions.subscriptionCosts.fixedAmount.toLocaleString(
-														'nb-NO',
-														{
-															style: 'currency',
-															currency: 'NOK',
-														},
-													)}{' '}
-													from{' '}
-													{
-														suggestions.subscriptionCosts
-															.subscriptionCount
-													}{' '}
-													subscription
-													{suggestions.subscriptionCosts
-														.subscriptionCount > 1
-														? 's'
-														: ''}
+													{suggestions.subscriptionCosts.fixedAmount.toLocaleString('nb-NO', {
+														style: 'currency',
+														currency: 'NOK',
+													})}{' '}
+													from {suggestions.subscriptionCosts.subscriptionCount} subscription
+													{suggestions.subscriptionCosts.subscriptionCount > 1 ? 's' : ''}
 												</span>
 											</div>
 										)}

@@ -1,12 +1,13 @@
 'use client';
+import { invalidateFinanceQueries } from '@/lib/query-keys';
+import type { SubscriptionCandidate as WizardCandidate } from '@/app/components/subscriptions/DetectionWizard';
 
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DetectionWizard } from '@/app/components/subscriptions';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, ArrowLeft, Search, CheckCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertCircle, ArrowLeft, CheckCircle, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -71,7 +72,15 @@ export default function DetectSubscriptionsPage() {
 
 	// Create subscriptions from detection results mutation
 	const createSubscriptionsMutation = useMutation({
-		mutationFn: async (subscriptionCandidates: any[]) => {
+		mutationFn: async (
+			subscriptionCandidates: Array<{
+				name: string;
+				amount: number;
+				billingFrequency: string;
+				categoryId?: string;
+				transactionIds: string[];
+			}>,
+		) => {
 			const response = await fetch('/api/subscriptions/bulk-categorize', {
 				method: 'POST',
 				headers: {
@@ -89,13 +98,10 @@ export default function DetectSubscriptionsPage() {
 		},
 		onSuccess: (data) => {
 			// Invalidate and refetch subscriptions
-			queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
-			queryClient.invalidateQueries({ queryKey: ['transactions'] });
+			void invalidateFinanceQueries(queryClient);
 
-			const count = data.created?.length || 0;
-			setSuccessMessage(
-				`Successfully created ${count} subscription${count !== 1 ? 's' : ''}!`,
-			);
+			const count = data.data?.created?.length || 0;
+			setSuccessMessage(`Successfully created ${count} subscription${count !== 1 ? 's' : ''}!`);
 
 			// Redirect to subscriptions page after a short delay
 			setTimeout(() => {
@@ -104,25 +110,20 @@ export default function DetectSubscriptionsPage() {
 		},
 	});
 
-	const handleDetectionComplete = (confirmedSubscriptions: any[]) => {
+	const handleDetectionComplete = (confirmedSubscriptions: WizardCandidate[]) => {
 		if (confirmedSubscriptions.length > 0) {
 			// Transform the subscription candidates to the format expected by the API
 			const transformedSubscriptions = confirmedSubscriptions.map((candidate) => ({
 				name: candidate.name,
 				description: candidate.description || candidate.name,
 				amount: candidate.amount,
-				billingFrequency: candidate.frequency || candidate.billingFrequency, // Map frequency to billingFrequency
-				categoryId:
-					candidate.suggestedCategoryId || candidate.categoryId || categories?.[0]?.id, // Use suggested category or first available
-				transactionIds: (
-					candidate.transactions ||
-					candidate.matchingTransactions ||
-					[]
-				).map((t: any) => t.id), // Extract transaction IDs
+				billingFrequency: candidate.frequency, // Map frequency to billingFrequency
+				categoryId: candidate.suggestedCategoryId || categories?.[0]?.id, // Use suggested category or first available
+				transactionIds: candidate.transactions.map((t) => t.id), // Extract transaction IDs
 				isActive: true,
 				startDate: candidate.firstTransaction,
 				notes: `Detected subscription with ${Math.round((candidate.confidence || 0) * 100)}% confidence`,
-				patterns: candidate.detectedPatterns || [], // Use detected patterns if available
+				patterns: [], // Use detected patterns if available
 			}));
 
 			createSubscriptionsMutation.mutate(transformedSubscriptions);
@@ -197,22 +198,18 @@ export default function DetectSubscriptionsPage() {
 								<Search className='h-8 w-8 text-primary' />
 							</div>
 							<div>
-								<h3 className='text-xl font-semibold mb-2'>
-									Ready to detect subscriptions?
-								</h3>
+								<h3 className='text-xl font-semibold mb-2'>Ready to detect subscriptions?</h3>
 								<p className='text-muted-foreground max-w-2xl mx-auto'>
-									We'll analyze your transaction data to identify recurring
-									payments that might be subscriptions. You'll be able to review
-									and confirm each detection before creating subscription records.
+									We&apos;ll analyze your transaction data to identify recurring payments that might
+									be subscriptions. You&apos;ll be able to review and confirm each detection before
+									creating subscription records.
 								</p>
 							</div>
 							<div className='space-y-4'>
 								<div className='text-sm text-muted-foreground'>
-									<p>We'll look for:</p>
+									<p>We&apos;ll look for:</p>
 									<ul className='list-disc list-inside mt-2 space-y-1'>
-										<li>
-											Transactions with similar amounts occurring regularly
-										</li>
+										<li>Transactions with similar amounts occurring regularly</li>
 										<li>Recurring payments to the same merchant</li>
 										<li>Monthly, quarterly, and annual payment patterns</li>
 										<li>Consistent payment dates with some flexibility</li>
@@ -220,13 +217,10 @@ export default function DetectSubscriptionsPage() {
 								</div>
 								<Button
 									onClick={handleStartDetection}
-									disabled={
-										transactionsLoading || detectSubscriptionsMutation.isPending
-									}
-									size='lg'>
-									{detectSubscriptionsMutation.isPending
-										? 'Analyzing...'
-										: 'Start Detection'}
+									disabled={transactionsLoading || detectSubscriptionsMutation.isPending}
+									size='lg'
+								>
+									{detectSubscriptionsMutation.isPending ? 'Analyzing...' : 'Start Detection'}
 								</Button>
 							</div>
 						</div>
@@ -249,14 +243,10 @@ export default function DetectSubscriptionsPage() {
 				<Card className='border-dashed'>
 					<CardContent className='pt-6'>
 						<div className='text-sm text-muted-foreground space-y-4'>
-							<h4 className='font-medium text-foreground'>
-								How subscription detection works:
-							</h4>
+							<h4 className='font-medium text-foreground'>How subscription detection works:</h4>
 							<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
 								<div>
-									<h5 className='font-medium text-foreground mb-2'>
-										Pattern Analysis
-									</h5>
+									<h5 className='font-medium text-foreground mb-2'>Pattern Analysis</h5>
 									<ul className='list-disc list-inside space-y-1'>
 										<li>Identifies transactions with consistent amounts</li>
 										<li>Looks for regular payment intervals</li>
@@ -265,9 +255,7 @@ export default function DetectSubscriptionsPage() {
 									</ul>
 								</div>
 								<div>
-									<h5 className='font-medium text-foreground mb-2'>
-										Review Process
-									</h5>
+									<h5 className='font-medium text-foreground mb-2'>Review Process</h5>
 									<ul className='list-disc list-inside space-y-1'>
 										<li>Review each detected subscription candidate</li>
 										<li>Confirm or reject suggestions</li>
@@ -278,9 +266,8 @@ export default function DetectSubscriptionsPage() {
 							</div>
 							<div className='bg-blue-50 dark:bg-blue-950 p-4 rounded-lg'>
 								<p className='text-blue-800 dark:text-blue-200'>
-									<strong>Tip:</strong> Make sure you have uploaded recent
-									transaction data for the best detection results. The system
-									works best with at least 3-6 months of data.
+									<strong>Tip:</strong> Make sure you have uploaded recent transaction data for the
+									best detection results. The system works best with at least 3-6 months of data.
 								</p>
 							</div>
 						</div>

@@ -3,15 +3,13 @@
  */
 
 import {
-	FinancialProjectionEngine,
 	DEFAULT_INVESTMENT_CONFIG,
+	FinancialProjectionEngine,
 	formatCurrency,
 	formatPercentage,
-	LongTermCostAnalyzer,
-	getInvestmentDisclaimer,
 	getAllInvestmentDisclaimers,
-	type InvestmentConfig,
-	type ComparisonResult,
+	getInvestmentDisclaimer,
+	LongTermCostAnalyzer,
 } from '../financial-projection-engine';
 import { Subscription } from '../types';
 
@@ -272,9 +270,7 @@ describe('FinancialProjectionEngine', () => {
 
 			expect(updatedConfig.annualReturnRate).toBe(0.05);
 			expect(updatedConfig.inflationRate).toBe(0.03);
-			expect(updatedConfig.monthlyCompounding).toBe(
-				DEFAULT_INVESTMENT_CONFIG.monthlyCompounding,
-			);
+			expect(updatedConfig.monthlyCompounding).toBe(DEFAULT_INVESTMENT_CONFIG.monthlyCompounding);
 		});
 
 		it('should return copy of configuration', () => {
@@ -320,10 +316,7 @@ describe('FinancialProjectionEngine', () => {
 				annualReturnRate: 0,
 			};
 
-			const result = engine.compareSubscriptionVsInvestment(
-				mockSubscription,
-				zeroReturnConfig,
-			);
+			const result = engine.compareSubscriptionVsInvestment(mockSubscription, zeroReturnConfig);
 
 			expect(result.breakEvenYears).toBe(Infinity);
 			expect(result.recommendation).toBe('keep');
@@ -552,7 +545,7 @@ describe('disclaimer utilities', () => {
 			expect(getInvestmentDisclaimer('marketRisk')).toContain('risk');
 			expect(getInvestmentDisclaimer('inflation')).toContain('Inflation');
 			expect(getInvestmentDisclaimer('personalFinance')).toContain('informational');
-			expect(getInvestmentDisclaimer('assumptions')).toContain('assumptions');
+			expect(getInvestmentDisclaimer('assumptions')).toContain('consistent monthly investments');
 		});
 
 		it('should default to general disclaimer', () => {

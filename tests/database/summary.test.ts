@@ -1,18 +1,28 @@
+import { afterAll, beforeEach, describe, expect, it, jest } from 'bun:test';
+import { getConnectionManager } from '../../src/lib/database/connection';
+import { createTransactionRepository } from '../../src/lib/database/repository';
 /**
  * Tests for the financial summary API endpoint
  */
 
-import { GET } from '../route';
-import { storeTransactions, clearStoredTransactions } from '@/lib/storage';
 import { Transaction } from '@/lib/types';
+import { GET } from '../../src/app/api/summary/route';
+async function storeTransactions(transactions: Transaction[]) {
+	const repo = createTransactionRepository();
+	await repo.initialize();
+	await repo.createMany(transactions);
+}
+async function clearStoredTransactions() {
+	await getConnectionManager({ filename: ':memory:' }).close();
+}
 
 // Mock console.error to avoid noise in test output
 const mockConsoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
 
 describe('/api/summary', () => {
-	beforeEach(() => {
+	beforeEach(async () => {
 		// Clear stored transactions before each test
-		clearStoredTransactions();
+		await clearStoredTransactions();
 		mockConsoleError.mockClear();
 	});
 
@@ -71,7 +81,7 @@ describe('/api/summary', () => {
 				},
 			];
 
-			storeTransactions(testTransactions);
+			await storeTransactions(testTransactions);
 
 			// Act
 			const response = await GET();
@@ -109,7 +119,7 @@ describe('/api/summary', () => {
 				},
 			];
 
-			storeTransactions(testTransactions);
+			await storeTransactions(testTransactions);
 
 			// Act
 			const response = await GET();
@@ -144,7 +154,7 @@ describe('/api/summary', () => {
 				},
 			];
 
-			storeTransactions(testTransactions);
+			await storeTransactions(testTransactions);
 
 			// Act
 			const response = await GET();
@@ -172,7 +182,7 @@ describe('/api/summary', () => {
 				},
 			];
 
-			storeTransactions(testTransactions);
+			await storeTransactions(testTransactions);
 
 			// Act
 			const response = await GET();

@@ -4,8 +4,7 @@ export const migration005: Migration = {
 	version: 5,
 	description:
 		'Add subscriptions and subscription_patterns tables, extend transactions with subscription fields',
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	up: (db: any) => {
+	up: (db) => {
 		// Create subscriptions table
 		db.exec(`
 			CREATE TABLE IF NOT EXISTS subscriptions (
@@ -55,16 +54,14 @@ export const migration005: Migration = {
 			const hasSubscriptionId = info.some((c) => c.name === 'subscription_id');
 
 			if (!hasIsSubscription) {
-				db.exec(
-					'ALTER TABLE transactions ADD COLUMN is_subscription BOOLEAN DEFAULT FALSE',
-				);
+				db.exec('ALTER TABLE transactions ADD COLUMN is_subscription BOOLEAN DEFAULT FALSE');
 			}
 			if (!hasSubscriptionId) {
 				db.exec(
 					'ALTER TABLE transactions ADD COLUMN subscription_id TEXT REFERENCES subscriptions(id)',
 				);
 			}
-		} catch (e) {
+		} catch {
 			// Fallback: recreate table with new columns if ALTER failed (older SQLite)
 			db.exec(`
 				CREATE TABLE IF NOT EXISTS transactions_new (
@@ -95,9 +92,7 @@ export const migration005: Migration = {
 
 		// Create indexes for performance optimization
 		db.exec('CREATE INDEX IF NOT EXISTS idx_subscriptions_active ON subscriptions(is_active);');
-		db.exec(
-			'CREATE INDEX IF NOT EXISTS idx_subscriptions_category ON subscriptions(category_id);',
-		);
+		db.exec('CREATE INDEX IF NOT EXISTS idx_subscriptions_category ON subscriptions(category_id);');
 		db.exec(
 			'CREATE INDEX IF NOT EXISTS idx_subscriptions_next_payment ON subscriptions(next_payment_date);',
 		);
@@ -126,9 +121,7 @@ export const migration005: Migration = {
 		db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);');
 		db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);');
 		db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_amount ON transactions(amount);');
-		db.exec(
-			'CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id);',
-		);
+		db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id);');
 		db.exec(
 			'CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_unique ON transactions(date, description, amount);',
 		);
@@ -136,8 +129,7 @@ export const migration005: Migration = {
 		// Mark migration as applied
 		db.exec('INSERT OR IGNORE INTO schema_metadata (version) VALUES (5);');
 	},
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	down: (db: any) => {
+	down: (db) => {
 		// Drop subscription-related tables
 		db.exec('DROP TABLE IF EXISTS subscription_patterns;');
 		db.exec('DROP TABLE IF EXISTS subscriptions;');
@@ -171,9 +163,7 @@ export const migration005: Migration = {
 		db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);');
 		db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);');
 		db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_amount ON transactions(amount);');
-		db.exec(
-			'CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id);',
-		);
+		db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id);');
 		db.exec(
 			'CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_unique ON transactions(date, description, amount);',
 		);

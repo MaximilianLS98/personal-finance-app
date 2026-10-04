@@ -3,9 +3,9 @@
  * GET /api/budgets/suggestions/[categoryId] - Get smart budget suggestions for a category
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createTransactionRepository } from '@/lib/database/repository';
 import { BudgetService } from '@/lib/budget-service';
+import { createTransactionRepository } from '@/lib/database/repository';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * GET /api/budgets/suggestions/[categoryId]
@@ -16,13 +16,13 @@ import { BudgetService } from '@/lib/budget-service';
  */
 export async function GET(
 	request: NextRequest,
-	{ params }: { params: Promise<{ categoryId: string }> }
+	{ params }: { params: Promise<{ categoryId: string }> },
 ) {
 	try {
 		const { categoryId } = await params;
 		const { searchParams } = new URL(request.url);
-		
-		const period = searchParams.get('period') as 'monthly' | 'yearly' || 'monthly';
+
+		const period = (searchParams.get('period') as 'monthly' | 'yearly') || 'monthly';
 		const startDate = searchParams.get('startDate');
 		const endDate = searchParams.get('endDate');
 
@@ -34,7 +34,7 @@ export async function GET(
 					error: 'Missing required parameters',
 					message: 'startDate and endDate are required',
 				},
-				{ status: 400 }
+				{ status: 400 },
 			);
 		}
 
@@ -61,7 +61,7 @@ export async function GET(
 		});
 	} catch (error) {
 		console.error('Error fetching budget suggestions:', error);
-		
+
 		// Handle specific error cases
 		if (error instanceof Error && error.message.includes('Category not found')) {
 			return NextResponse.json(
@@ -69,7 +69,7 @@ export async function GET(
 					success: false,
 					error: 'Category not found',
 				},
-				{ status: 404 }
+				{ status: 404 },
 			);
 		}
 
@@ -79,7 +79,7 @@ export async function GET(
 				error: 'Failed to fetch budget suggestions',
 				message: error instanceof Error ? error.message : 'Unknown error',
 			},
-			{ status: 500 }
+			{ status: 500 },
 		);
 	}
 }

@@ -3,14 +3,14 @@
  * Handles real-time budget updates when transactions are imported/categorized
  */
 
+import { BudgetService } from './budget-service';
 import type {
-	Transaction,
 	Budget,
-	BudgetProgress,
 	BudgetAlert,
+	BudgetProgress,
+	Transaction,
 	TransactionRepository,
 } from './types';
-import { BudgetService } from './budget-service';
 
 export interface BudgetTransactionIntegration {
 	/**
@@ -108,11 +108,7 @@ export class BudgetTransactionIntegrationService implements BudgetTransactionInt
 
 				// Add impact to new category
 				if (newTransaction.categoryId) {
-					await this.updateBudgetsForCategory(
-						newTransaction.categoryId,
-						[newTransaction],
-						'added',
-					);
+					await this.updateBudgetsForCategory(newTransaction.categoryId, [newTransaction], 'added');
 				}
 			}
 
@@ -140,11 +136,7 @@ export class BudgetTransactionIntegrationService implements BudgetTransactionInt
 	async onTransactionDeleted(transaction: Transaction): Promise<void> {
 		try {
 			if (transaction.categoryId) {
-				await this.updateBudgetsForCategory(
-					transaction.categoryId,
-					[transaction],
-					'removed',
-				);
+				await this.updateBudgetsForCategory(transaction.categoryId, [transaction], 'removed');
 			}
 		} catch (error) {
 			console.error('Error updating budgets after transaction deletion:', error);
@@ -160,8 +152,7 @@ export class BudgetTransactionIntegrationService implements BudgetTransactionInt
 			const categoryChanges = new Map<string, TransactionChange[]>();
 
 			for (const change of changes) {
-				const categoryId =
-					change.newTransaction?.categoryId || change.oldTransaction?.categoryId;
+				const categoryId = change.newTransaction?.categoryId || change.oldTransaction?.categoryId;
 				if (!categoryId) continue;
 
 				if (!categoryChanges.has(categoryId)) {
@@ -266,7 +257,7 @@ export class BudgetTransactionIntegrationService implements BudgetTransactionInt
 	private async updateBudgetsForCategory(
 		categoryId: string,
 		transactions: Transaction[],
-		changeType: 'created' | 'updated' | 'added' | 'removed',
+		_changeType: 'created' | 'updated' | 'added' | 'removed',
 	): Promise<void> {
 		// Find active budgets for this category
 		const budgets = await this.repository.findBudgetsByCategory(categoryId);

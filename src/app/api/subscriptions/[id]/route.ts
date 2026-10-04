@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { createTransactionRepository } from '@/lib/database';
 import { SubscriptionBudgetIntegrationService } from '@/lib/subscription-budget-integration';
 import { ErrorResponse } from '@/lib/types';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * GET /api/subscriptions/[id] - Get subscription details by ID
@@ -162,11 +162,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 		// Update budgets with subscription changes
 		try {
 			const budgetIntegration = new SubscriptionBudgetIntegrationService(repository);
-			await budgetIntegration.onSubscriptionUpdated(
-				id,
-				existingSubscription,
-				updatedSubscription,
-			);
+			await budgetIntegration.onSubscriptionUpdated(id, existingSubscription, updatedSubscription);
 		} catch (budgetError) {
 			console.error('Error updating budgets after subscription update:', budgetError);
 			// Don't fail the subscription update if budget updates fail

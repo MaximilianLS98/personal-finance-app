@@ -1,0 +1,8 @@
+node_modules/
+.next/
+coverage/
+bun.lock
+**/._*
+next-env.d.ts
+.kiro/
+test-data/

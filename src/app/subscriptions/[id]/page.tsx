@@ -1,29 +1,29 @@
 'use client';
+import { invalidateFinanceQueries } from '@/lib/query-keys';
 
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { SubscriptionForm } from '@/app/components/subscriptions';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCurrencySettings } from '@/app/providers';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatCurrency } from '@/lib/financial-calculator';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
 	AlertCircle,
 	ArrowLeft,
-	Edit,
-	Trash2,
-	CheckCircle,
 	Calendar,
+	CheckCircle,
 	CreditCard,
-	Globe,
+	Edit,
 	FileText,
+	Globe,
 	Star,
+	Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { formatCurrency } from '@/lib/financial-calculator';
-import { useCurrencySettings } from '@/app/providers';
+import React, { useState } from 'react';
 
 interface SubscriptionDetailsPageProps {
 	params: Promise<{
@@ -98,8 +98,7 @@ export default function SubscriptionDetailsPage({ params }: SubscriptionDetailsP
 			return response.json();
 		},
 		onSuccess: (response) => {
-			queryClient.invalidateQueries({ queryKey: ['subscription', resolvedParams.id] });
-			queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+			void invalidateFinanceQueries(queryClient);
 			setSuccessMessage(
 				`Subscription "${response.data?.name || 'Subscription'}" updated successfully!`,
 			);
@@ -125,7 +124,7 @@ export default function SubscriptionDetailsPage({ params }: SubscriptionDetailsP
 			return response.json();
 		},
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+			void invalidateFinanceQueries(queryClient);
 			router.push('/subscriptions?deleted=true');
 		},
 	});
@@ -212,8 +211,8 @@ export default function SubscriptionDetailsPage({ params }: SubscriptionDetailsP
 	return (
 		<div className='max-w-4xl mx-auto space-y-6'>
 			{/* Header */}
-			<div className='flex items-center justify-between'>
-				<div className='flex items-center gap-4'>
+			<div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
+				<div className='flex flex-col items-start gap-4 sm:flex-row sm:items-center'>
 					<Button asChild variant='ghost' size='sm'>
 						<Link href='/subscriptions'>
 							<ArrowLeft className='mr-2 h-4 w-4' />
@@ -234,7 +233,8 @@ export default function SubscriptionDetailsPage({ params }: SubscriptionDetailsP
 						<Button
 							onClick={handleDelete}
 							variant='destructive'
-							disabled={deleteSubscriptionMutation.isPending}>
+							disabled={deleteSubscriptionMutation.isPending}
+						>
 							<Trash2 className='mr-2 h-4 w-4' />
 							{deleteSubscriptionMutation.isPending ? 'Deleting...' : 'Delete'}
 						</Button>
@@ -292,8 +292,7 @@ export default function SubscriptionDetailsPage({ params }: SubscriptionDetailsP
 										<CreditCard className='h-5 w-5' />
 										Subscription Details
 									</CardTitle>
-									<Badge
-										variant={subscription?.isActive ? 'default' : 'secondary'}>
+									<Badge variant={subscription?.isActive ? 'default' : 'secondary'}>
 										{subscription?.isActive ? 'Active' : 'Inactive'}
 									</Badge>
 								</div>
@@ -301,15 +300,9 @@ export default function SubscriptionDetailsPage({ params }: SubscriptionDetailsP
 							<CardContent className='space-y-4'>
 								<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
 									<div>
-										<label className='text-sm font-medium text-muted-foreground'>
-											Amount
-										</label>
+										<label className='text-sm font-medium text-muted-foreground'>Amount</label>
 										<p className='text-2xl font-bold'>
-											{formatCurrency(
-												subscription?.amount || 0,
-												currency,
-												locale,
-											)}
+											{formatCurrency(subscription?.amount || 0, currency, locale)}
 										</p>
 										<p className='text-sm text-muted-foreground capitalize'>
 											{subscription?.billingFrequency}
@@ -329,9 +322,7 @@ export default function SubscriptionDetailsPage({ params }: SubscriptionDetailsP
 
 								{subscription?.description && (
 									<div>
-										<label className='text-sm font-medium text-muted-foreground'>
-											Description
-										</label>
+										<label className='text-sm font-medium text-muted-foreground'>Description</label>
 										<p className='text-sm'>{subscription.description}</p>
 									</div>
 								)}
@@ -356,7 +347,8 @@ export default function SubscriptionDetailsPage({ params }: SubscriptionDetailsP
 											href={subscription.website}
 											target='_blank'
 											rel='noopener noreferrer'
-											className='text-sm text-blue-600 hover:underline'>
+											className='text-sm text-blue-600 hover:underline'
+										>
 											{subscription.website}
 										</a>
 									</div>
@@ -398,9 +390,7 @@ export default function SubscriptionDetailsPage({ params }: SubscriptionDetailsP
 							</CardHeader>
 							<CardContent className='space-y-3'>
 								<div className='flex justify-between'>
-									<span className='text-sm text-muted-foreground'>
-										Monthly Cost:
-									</span>
+									<span className='text-sm text-muted-foreground'>Monthly Cost:</span>
 									<span className='font-medium'>
 										{subscription &&
 											formatCurrency(
@@ -408,12 +398,10 @@ export default function SubscriptionDetailsPage({ params }: SubscriptionDetailsP
 													? subscription.amount
 													: subscription.billingFrequency === 'quarterly'
 														? subscription.amount / 3
-														: subscription.billingFrequency ===
-															  'annually'
+														: subscription.billingFrequency === 'annually'
 															? subscription.amount / 12
 															: subscription.customFrequencyDays
-																? (subscription.amount * 30.44) /
-																	subscription.customFrequencyDays
+																? (subscription.amount * 30.44) / subscription.customFrequencyDays
 																: 0,
 												currency,
 												locale,
@@ -421,9 +409,7 @@ export default function SubscriptionDetailsPage({ params }: SubscriptionDetailsP
 									</span>
 								</div>
 								<div className='flex justify-between'>
-									<span className='text-sm text-muted-foreground'>
-										Annual Cost:
-									</span>
+									<span className='text-sm text-muted-foreground'>Annual Cost:</span>
 									<span className='font-medium'>
 										{subscription &&
 											formatCurrency(
@@ -431,12 +417,10 @@ export default function SubscriptionDetailsPage({ params }: SubscriptionDetailsP
 													? subscription.amount * 12
 													: subscription.billingFrequency === 'quarterly'
 														? subscription.amount * 4
-														: subscription.billingFrequency ===
-															  'annually'
+														: subscription.billingFrequency === 'annually'
 															? subscription.amount
 															: subscription.customFrequencyDays
-																? (subscription.amount * 365) /
-																	subscription.customFrequencyDays
+																? (subscription.amount * 365) / subscription.customFrequencyDays
 																: 0,
 												currency,
 												locale,
@@ -444,14 +428,10 @@ export default function SubscriptionDetailsPage({ params }: SubscriptionDetailsP
 									</span>
 								</div>
 								<div className='flex justify-between'>
-									<span className='text-sm text-muted-foreground'>
-										Start Date:
-									</span>
+									<span className='text-sm text-muted-foreground'>Start Date:</span>
 									<span className='font-medium'>
 										{subscription?.startDate &&
-											new Date(subscription.startDate).toLocaleDateString(
-												locale,
-											)}
+											new Date(subscription.startDate).toLocaleDateString(locale)}
 									</span>
 								</div>
 							</CardContent>
@@ -463,26 +443,18 @@ export default function SubscriptionDetailsPage({ params }: SubscriptionDetailsP
 								<CardTitle className='text-lg'>Quick Actions</CardTitle>
 							</CardHeader>
 							<CardContent className='space-y-2'>
-								<Button
-									asChild
-									variant='outline'
-									size='sm'
-									className='w-full justify-start'>
-									<Link
-										href={`/subscriptions/projections?id=${resolvedParams.id}`}>
+								<Button asChild variant='outline' size='sm' className='w-full justify-start'>
+									<Link href={`/subscriptions/projections?id=${resolvedParams.id}`}>
 										View Projections
 									</Link>
 								</Button>
 								{subscription?.cancellationUrl && (
-									<Button
-										asChild
-										variant='outline'
-										size='sm'
-										className='w-full justify-start'>
+									<Button asChild variant='outline' size='sm' className='w-full justify-start'>
 										<a
 											href={subscription.cancellationUrl}
 											target='_blank'
-											rel='noopener noreferrer'>
+											rel='noopener noreferrer'
+										>
 											Cancel Subscription
 										</a>
 									</Button>

@@ -1,6 +1,8 @@
 'use client';
 
+import { AlertTriangle, Calendar, Clock } from 'lucide-react';
 import React from 'react';
+import { Badge } from '../../../components/ui/badge';
 import {
 	Card,
 	CardContent,
@@ -8,11 +10,9 @@ import {
 	CardHeader,
 	CardTitle,
 } from '../../../components/ui/card';
-import { Badge } from '../../../components/ui/badge';
-import { Subscription } from '../../../lib/types';
 import { formatCurrency } from '../../../lib/financial-calculator';
+import { Subscription } from '../../../lib/types';
 import { useCurrencySettings } from '../../providers';
-import { Calendar, Clock, AlertTriangle } from 'lucide-react';
 
 interface UpcomingPaymentsProps {
 	/** Array of subscriptions with upcoming payments */
@@ -49,7 +49,6 @@ export function UpcomingPayments({
 		if (!subscriptions.length) return [];
 
 		const now = new Date();
-		const futureDate = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
 
 		return subscriptions
 			.filter((sub) => sub.isActive)
@@ -106,9 +105,7 @@ export function UpcomingPayments({
 				<CardContent>
 					<div className='space-y-3'>
 						{[...Array(5)].map((_, index) => (
-							<div
-								key={index}
-								className='flex items-center justify-between p-3 border rounded'>
+							<div key={index} className='flex items-center justify-between p-3 border rounded'>
 								<div className='space-y-2'>
 									<div className='h-4 bg-muted rounded w-32'></div>
 									<div className='h-3 bg-muted rounded w-24'></div>
@@ -159,7 +156,8 @@ export function UpcomingPayments({
 						{summary.urgentCount > 0 && (
 							<Badge
 								variant='secondary'
-								className='text-xs bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'>
+								className='text-xs bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+							>
 								{summary.urgentCount} urgent
 							</Badge>
 						)}
@@ -238,7 +236,8 @@ function PaymentItem({ payment, currency, locale }: PaymentItemProps) {
 			return (
 				<Badge
 					variant='secondary'
-					className='text-xs bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'>
+					className='text-xs bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+				>
 					Urgent
 				</Badge>
 			);
@@ -262,7 +261,8 @@ function PaymentItem({ payment, currency, locale }: PaymentItemProps) {
 
 	return (
 		<div
-			className={`flex items-center justify-between p-3 rounded-lg border ${getUrgencyStyles()}`}>
+			className={`flex items-center justify-between p-3 rounded-lg border ${getUrgencyStyles()}`}
+		>
 			<div className='flex-1 min-w-0'>
 				<div className='flex items-center gap-2 mb-1'>
 					<h4 className='font-medium text-sm truncate'>{subscription.name}</h4>

@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { createTransactionRepository } from '@/lib/database';
 import { ErrorResponse } from '@/lib/types';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * GET /api/subscriptions/upcoming - Get upcoming subscription payments
@@ -70,11 +70,7 @@ export async function GET(request: NextRequest) {
 			}
 
 			// Determine notification type
-			let notificationType:
-				| 'payment_due'
-				| 'renewal_reminder'
-				| 'price_increase'
-				| 'usage_review';
+			let notificationType: 'payment_due' | 'renewal_reminder' | 'price_increase' | 'usage_review';
 			if (daysUntilPayment <= 7) {
 				notificationType = 'payment_due';
 			} else if (subscription.billingFrequency === 'annually' && daysUntilPayment <= 30) {
@@ -200,16 +196,10 @@ export async function GET(request: NextRequest) {
 							),
 						review: filteredPayments
 							.filter((p) => p.monthlyEquivalent >= 50)
-							.map(
-								(p) =>
-									`Review ${p.name} (${p.monthlyEquivalent.toFixed(0)}/month equivalent)`,
-							),
+							.map((p) => `Review ${p.name} (${p.monthlyEquivalent.toFixed(0)}/month equivalent)`),
 						optimize: filteredPayments
 							.filter((p) => p.billingFrequency === 'annually' && p.amount >= 200)
-							.map(
-								(p) =>
-									`Consider monthly billing for ${p.name} to improve cash flow`,
-							),
+							.map((p) => `Consider monthly billing for ${p.name} to improve cash flow`),
 					},
 				},
 			},

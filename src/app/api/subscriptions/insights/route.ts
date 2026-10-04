@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { monthlySubscriptionCost } from '@/lib/subscription-costs';
 import { createTransactionRepository } from '@/lib/database';
 import {
-	FinancialProjectionEngine,
-	LongTermCostAnalyzer,
 	DEFAULT_INVESTMENT_CONFIG,
+	FinancialProjectionEngine,
 } from '@/lib/financial-projection-engine';
 import { ErrorResponse } from '@/lib/types';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * GET /api/subscriptions/insights - Get comprehensive subscription insights and recommendations
@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
 							totalSubscriptions: 0,
 							totalMonthlyCost: 0,
 							totalAnnualCost: 0,
+							averageMonthlyCost: 0,
 							message: 'No active subscriptions found',
 						},
 						insights: [],
@@ -68,24 +69,7 @@ export async function GET(request: NextRequest) {
 
 		// Calculate subscription metrics
 		const subscriptionMetrics = activeSubscriptions.map((subscription) => {
-			let monthlyAmount: number;
-			switch (subscription.billingFrequency) {
-				case 'monthly':
-					monthlyAmount = subscription.amount;
-					break;
-				case 'quarterly':
-					monthlyAmount = subscription.amount / 3;
-					break;
-				case 'annually':
-					monthlyAmount = subscription.amount / 12;
-					break;
-				case 'custom':
-					const monthsPerPeriod = (subscription.customFrequencyDays || 30) / 30.44;
-					monthlyAmount = subscription.amount / monthsPerPeriod;
-					break;
-				default:
-					monthlyAmount = subscription.amount;
-			}
+			const monthlyAmount = monthlySubscriptionCost(subscription);
 
 			return {
 				...subscription,
@@ -119,9 +103,7 @@ export async function GET(request: NextRequest) {
 					totalMonthlyCost,
 					totalAnnualCost: totalMonthlyCost * 12,
 					averageCost:
-						categorySubscriptions.length > 0
-							? totalMonthlyCost / categorySubscriptions.length
-							: 0,
+						categorySubscriptions.length > 0 ? totalMonthlyCost / categorySubscriptions.length : 0,
 					subscriptions: categorySubscriptions.map((sub) => ({
 						id: sub.id,
 						name: sub.name,
@@ -148,11 +130,7 @@ export async function GET(request: NextRequest) {
 				description: `${highestCostSubscription.name} costs ${highestCostSubscription.monthlyAmount.toFixed(0)}/month (${((highestCostSubscription.monthlyAmount / totalMonthlyCost) * 100).toFixed(1)}% of total)`,
 				value: highestCostSubscription.monthlyAmount,
 				actionable: true,
-				actions: [
-					'Review usage and value',
-					'Consider alternatives',
-					'Negotiate better pricing',
-				],
+				actions: ['Review usage and value', 'Consider alternatives', 'Negotiate better pricing'],
 			});
 		}
 
@@ -227,11 +205,7 @@ export async function GET(request: NextRequest) {
 				description: `${unusedSubscriptions.length} subscriptions appear unused, costing ${unusedMonthlyCost.toFixed(0)}/month`,
 				value: unusedMonthlyCost,
 				actionable: true,
-				actions: [
-					'Cancel unused subscriptions',
-					'Track usage for 30 days',
-					'Set usage reminders',
-				],
+				actions: ['Cancel unused subscriptions', 'Track usage for 30 days', 'Set usage reminders'],
 			});
 		}
 
@@ -332,9 +306,7 @@ export async function GET(request: NextRequest) {
 		const monthlySubscriptions = subscriptionMetrics.filter(
 			(sub) => sub.billingFrequency === 'monthly',
 		);
-		const potentialAnnualDiscounts = monthlySubscriptions.filter(
-			(sub) => sub.monthlyAmount > 20,
-		);
+		const potentialAnnualDiscounts = monthlySubscriptions.filter((sub) => sub.monthlyAmount > 20);
 
 		if (potentialAnnualDiscounts.length > 0) {
 			const potentialSavings = potentialAnnualDiscounts.reduce(
@@ -394,17 +366,17 @@ export async function GET(request: NextRequest) {
 						);
 					}),
 					recommendations,
+					upcomingPayments,
+					unusedSubscriptions,
 					categoryAnalysis,
 					costBreakdown: {
-						byFrequency: Object.entries(frequencyDistribution).map(
-							([frequency, count]) => ({
-								frequency,
-								count,
-								totalCost: subscriptionMetrics
-									.filter((sub) => sub.billingFrequency === frequency)
-									.reduce((sum, sub) => sum + sub.monthlyAmount, 0),
-							}),
-						),
+						byFrequency: Object.entries(frequencyDistribution).map(([frequency, count]) => ({
+							frequency,
+							count,
+							totalCost: subscriptionMetrics
+								.filter((sub) => sub.billingFrequency === frequency)
+								.reduce((sum, sub) => sum + sub.monthlyAmount, 0),
+						})),
 						topSubscriptions: subscriptionMetrics.slice(0, 5).map((sub) => ({
 							id: sub.id,
 							name: sub.name,

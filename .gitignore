@@ -43,3 +43,8 @@ next-env.d.ts
 # database and information
 *.db
 finance-tracker.db*
+# macOS resource forks
+._*
+# SQLite journals
+*.db-shm
+*.db-wal

@@ -1,20 +1,20 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import { useCurrencySettings } from '@/app/providers';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-	ResponsiveContainer,
-	LineChart,
-	CartesianGrid,
-	XAxis,
-	YAxis,
-	Tooltip,
-	Legend,
-	Line,
-} from 'recharts';
 import { useDashboardQuery } from '@/lib/queries';
 import { useDashboardFilters } from '@/lib/stores/filters';
-import { useCurrencySettings } from '@/app/providers';
+import React, { useMemo } from 'react';
+import {
+	CartesianGrid,
+	Legend,
+	Line,
+	LineChart,
+	ResponsiveContainer,
+	Tooltip,
+	XAxis,
+	YAxis,
+} from 'recharts';
 
 const IncomeExpensesOverTimeChart: React.FC = () => {
 	const { dateRange, interval } = useDashboardFilters();
@@ -31,7 +31,7 @@ const IncomeExpensesOverTimeChart: React.FC = () => {
 		interval,
 	});
 
-	const lineData = useMemo(() => (data as any)?.expenseIncomeOverTime ?? [], [data]);
+	const lineData = useMemo(() => data?.expenseIncomeOverTime ?? [], [data]);
 
 	return (
 		<Card>
@@ -50,12 +50,7 @@ const IncomeExpensesOverTimeChart: React.FC = () => {
 								<CartesianGrid strokeDasharray='3 3' />
 								<XAxis dataKey='date' />
 								<YAxis />
-								<Tooltip
-									formatter={(value: any, name: any) => [
-										formatCurrency(value as number),
-										name,
-									]}
-								/>
+								<Tooltip formatter={(value, name) => [formatCurrency(value as number), name]} />
 								<Legend />
 								<Line
 									type='monotone'

@@ -1,8 +1,16 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import IncomeExpensesOverTimeChart from '@/app/components/IncomeExpensesOverTimeChart';
+import MonthlyIncomeVsExpensesChart from '@/app/components/MonthlyIncomeVsExpensesChart';
+import MonthlySpendingTrendsChart from '@/app/components/MonthlySpendingTrendsChart';
+import SpendingByCategoryPie from '@/app/components/SpendingByCategoryPie';
+import TopCategoryAveragesCard from '@/app/components/TopCategoryAveragesCard';
+import { useCurrencySettings } from '@/app/providers';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
 	Select,
 	SelectContent,
@@ -10,43 +18,34 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@/components/ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ResponsiveContainer } from 'recharts';
-import {
-	format,
-	startOfDay,
-	endOfDay,
-	startOfWeek,
-	endOfWeek,
-	startOfMonth,
-	endOfMonth,
-	startOfYear,
-	endOfYear,
-	subDays,
-	subWeeks,
-	subMonths,
-	addMonths,
-	isAfter,
-	isBefore,
-} from 'date-fns';
-import {
-	Calendar as CalendarIcon,
-	BarChart3,
-	TrendingUp,
-	AlertCircle,
-	ChevronLeft,
-	ChevronRight,
-} from 'lucide-react';
 import { useDashboardQuery } from '@/lib/queries';
 import { useDashboardFilters } from '@/lib/stores/filters';
-import { useCurrencySettings } from '@/app/providers';
-import IncomeExpensesOverTimeChart from '@/app/components/IncomeExpensesOverTimeChart';
-import SpendingByCategoryPie from '@/app/components/SpendingByCategoryPie';
-import MonthlySpendingTrendsChart from '@/app/components/MonthlySpendingTrendsChart';
-import MonthlyIncomeVsExpensesChart from '@/app/components/MonthlyIncomeVsExpensesChart';
-import TopCategoryAveragesCard from '@/app/components/TopCategoryAveragesCard';
+import {
+	addMonths,
+	endOfDay,
+	endOfMonth,
+	endOfWeek,
+	endOfYear,
+	format,
+	isAfter,
+	isBefore,
+	startOfDay,
+	startOfMonth,
+	startOfWeek,
+	startOfYear,
+	subDays,
+	subMonths,
+	subWeeks,
+} from 'date-fns';
+import {
+	AlertCircle,
+	BarChart3,
+	Calendar as CalendarIcon,
+	ChevronLeft,
+	ChevronRight,
+	TrendingUp,
+} from 'lucide-react';
+import { useMemo } from 'react';
 
 interface DateRange {
 	from: Date | undefined;
@@ -136,7 +135,7 @@ const getSmartInterval = (preset: string, fromDate?: Date, toDate?: Date): Inter
 
 export default function DashboardPage() {
 	const { dateRange, preset, interval, setFilters } = useDashboardFilters();
-	const [oldestDataDate, setOldestDataDate] = useState<Date | null>(null);
+
 	const { currency: appCurrency, locale: appLocale } = useCurrencySettings();
 
 	const formatCurrency = (amount: number, currencyOverride?: string) =>
@@ -156,12 +155,7 @@ export default function DashboardPage() {
 		interval: interval,
 	});
 
-	// Set oldest data date memoized when data changes
-	useMemo(() => {
-		if ((data as any)?.oldestDataDate) {
-			setOldestDataDate(new Date((data as any).oldestDataDate));
-		}
-	}, [data]);
+	const oldestDataDate = data?.oldestDataDate ? new Date(data.oldestDataDate) : null;
 
 	const handlePresetChange = (nextPreset: string) => {
 		const presetConfig = DATE_PRESETS[nextPreset as keyof typeof DATE_PRESETS];
@@ -220,58 +214,13 @@ export default function DashboardPage() {
 		return fromMonth === toMonth ? fromMonth : `${fromMonth} - ${toMonth}`;
 	};
 
-	const LineChartTooltip = ({
-		active,
-		payload,
-		label,
-	}: {
-		active?: boolean;
-		payload?: Array<{ dataKey: string; value: number; color: string }>;
-		label?: string;
-	}) => {
-		if (active && payload && payload.length) {
-			return (
-				<div className='bg-background border border-border rounded-lg p-3 shadow-lg'>
-					<p className='text-sm font-medium'>{label}</p>
-					{payload.map((entry, index) => (
-						<p key={index} className='text-sm' style={{ color: entry.color }}>
-							{entry.dataKey}: {formatCurrency(entry.value)}
-						</p>
-					))}
-				</div>
-			);
-		}
-		return null;
-	};
-
-	const BarChartTooltip = ({
-		active,
-		payload,
-		label,
-	}: {
-		active?: boolean;
-		payload?: Array<{ value: number; payload: { count: number } }>;
-		label?: string;
-	}) => {
-		if (active && payload && payload.length) {
-			return (
-				<div className='bg-background border border-border rounded-lg p-3 shadow-lg'>
-					<p className='text-sm font-medium'>{label}</p>
-					<p className='text-sm'>Amount: {formatCurrency(payload[0].value)}</p>
-					<p className='text-sm'>Transactions: {payload[0].payload.count}</p>
-				</div>
-			);
-		}
-		return null;
-	};
-
 	// charts now live in child components
 
 	const summaryStats = useMemo(() => {
 		if (!data) return { totalIncome: 0, totalExpenses: 0, netAmount: 0 };
-		const over = (data as any).expenseIncomeOverTime ?? [];
-		const totalIncome = over.reduce((sum: number, item: any) => sum + item.income, 0);
-		const totalExpenses = over.reduce((sum: number, item: any) => sum + item.expenses, 0);
+		const over = data.expenseIncomeOverTime ?? [];
+		const totalIncome = over.reduce((sum: number, item) => sum + item.income, 0);
+		const totalExpenses = over.reduce((sum: number, item) => sum + item.expenses, 0);
 		return { totalIncome, totalExpenses, netAmount: totalIncome - totalExpenses };
 	}, [data]);
 
@@ -281,9 +230,7 @@ export default function DashboardPage() {
 			<div className='flex items-center justify-between'>
 				<div>
 					<h2 className='text-2xl font-semibold mb-2'>Financial Dashboard</h2>
-					<p className='text-muted-foreground'>
-						Visual insights into your financial data
-					</p>
+					<p className='text-muted-foreground'>Visual insights into your financial data</p>
 				</div>
 			</div>
 
@@ -294,7 +241,8 @@ export default function DashboardPage() {
 					size='sm'
 					onClick={navigateToPreviousPeriod}
 					disabled={!canNavigatePrevious}
-					className='flex items-center gap-1 text-muted-foreground hover:text-foreground disabled:opacity-50'>
+					className='flex items-center gap-1 text-muted-foreground hover:text-foreground disabled:opacity-50'
+				>
 					<ChevronLeft className='h-4 w-4' />
 					Previous
 				</Button>
@@ -302,8 +250,7 @@ export default function DashboardPage() {
 				<div className='text-center'>
 					<h3 className='text-xl font-semibold'>{getDateRangeDisplay()}</h3>
 					<p className='text-xs text-muted-foreground'>
-						Grouped by{' '}
-						{interval === 'day' ? 'Daily' : interval === 'week' ? 'Weekly' : 'Monthly'}
+						Grouped by {interval === 'day' ? 'Daily' : interval === 'week' ? 'Weekly' : 'Monthly'}
 					</p>
 				</div>
 
@@ -312,7 +259,8 @@ export default function DashboardPage() {
 					size='sm'
 					onClick={navigateToNextPeriod}
 					disabled={!canNavigateNext}
-					className='flex items-center gap-1 text-muted-foreground hover:text-foreground disabled:opacity-50'>
+					className='flex items-center gap-1 text-muted-foreground hover:text-foreground disabled:opacity-50'
+				>
 					Next
 					<ChevronRight className='h-4 w-4' />
 				</Button>
@@ -365,13 +313,9 @@ export default function DashboardPage() {
 							<label className='text-sm font-medium'>From:</label>
 							<Popover>
 								<PopoverTrigger asChild>
-									<Button
-										variant='outline'
-										className='w-48 justify-start text-left font-normal'>
+									<Button variant='outline' className='w-48 justify-start text-left font-normal'>
 										<CalendarIcon className='mr-2 h-4 w-4' />
-										{dateRange.from
-											? format(dateRange.from, 'MMM dd, yyyy')
-											: 'Pick a date'}
+										{dateRange.from ? format(dateRange.from, 'MMM dd, yyyy') : 'Pick a date'}
 									</Button>
 								</PopoverTrigger>
 								<PopoverContent className='w-auto p-0'>
@@ -395,13 +339,9 @@ export default function DashboardPage() {
 							<label className='text-sm font-medium'>To:</label>
 							<Popover>
 								<PopoverTrigger asChild>
-									<Button
-										variant='outline'
-										className='w-48 justify-start text-left font-normal'>
+									<Button variant='outline' className='w-48 justify-start text-left font-normal'>
 										<CalendarIcon className='mr-2 h-4 w-4' />
-										{dateRange.to
-											? format(dateRange.to, 'MMM dd, yyyy')
-											: 'Pick a date'}
+										{dateRange.to ? format(dateRange.to, 'MMM dd, yyyy') : 'Pick a date'}
 									</Button>
 								</PopoverTrigger>
 								<PopoverContent className='w-auto p-0'>
@@ -438,11 +378,7 @@ export default function DashboardPage() {
 							)}
 							<span className='text-sm bg-primary/10 text-primary px-2 py-1 rounded'>
 								Grouping:{' '}
-								{interval === 'day'
-									? 'Daily'
-									: interval === 'week'
-										? 'Weekly'
-										: 'Monthly'}
+								{interval === 'day' ? 'Daily' : interval === 'week' ? 'Weekly' : 'Monthly'}
 							</span>
 						</div>
 					)}
@@ -466,9 +402,7 @@ export default function DashboardPage() {
 						<CardContent className='p-6'>
 							<div className='flex items-center justify-between'>
 								<div>
-									<p className='text-sm font-medium text-muted-foreground'>
-										Total Income
-									</p>
+									<p className='text-sm font-medium text-muted-foreground'>Total Income</p>
 									<p className='text-2xl font-bold text-green-600'>
 										{formatCurrency(summaryStats.totalIncome)}
 									</p>
@@ -481,9 +415,7 @@ export default function DashboardPage() {
 						<CardContent className='p-6'>
 							<div className='flex items-center justify-between'>
 								<div>
-									<p className='text-sm font-medium text-muted-foreground'>
-										Total Expenses
-									</p>
+									<p className='text-sm font-medium text-muted-foreground'>Total Expenses</p>
 									<p className='text-2xl font-bold text-red-600'>
 										{formatCurrency(summaryStats.totalExpenses)}
 									</p>
@@ -496,11 +428,10 @@ export default function DashboardPage() {
 						<CardContent className='p-6'>
 							<div className='flex items-center justify-between'>
 								<div>
-									<p className='text-sm font-medium text-muted-foreground'>
-										Net Amount
-									</p>
+									<p className='text-sm font-medium text-muted-foreground'>Net Amount</p>
 									<p
-										className={`text-2xl font-bold ${summaryStats.netAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+										className={`text-2xl font-bold ${summaryStats.netAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}
+									>
 										{formatCurrency(summaryStats.netAmount)}
 									</p>
 								</div>

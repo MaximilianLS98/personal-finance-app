@@ -1,6 +1,9 @@
 'use client';
+import { monthlySubscriptionCost } from '@/lib/subscription-costs';
 
+import { BarChart3, PieChart, TrendingUp } from 'lucide-react';
 import React from 'react';
+import { Badge } from '../../../components/ui/badge';
 import {
 	Card,
 	CardContent,
@@ -8,11 +11,9 @@ import {
 	CardHeader,
 	CardTitle,
 } from '../../../components/ui/card';
-import { Badge } from '../../../components/ui/badge';
-import { Subscription, Category } from '../../../lib/types';
 import { formatCurrency } from '../../../lib/financial-calculator';
+import { Category, Subscription } from '../../../lib/types';
 import { useCurrencySettings } from '../../providers';
-import { PieChart, BarChart3, TrendingUp } from 'lucide-react';
 
 interface CostBreakdownProps {
 	/** Array of subscriptions to analyze */
@@ -53,23 +54,10 @@ export function CostBreakdown({
 		const activeSubscriptions = subscriptions.filter((sub) => sub.isActive);
 
 		// Calculate total monthly cost for percentage calculations
-		const totalMonthly = activeSubscriptions.reduce((total, sub) => {
-			switch (sub.billingFrequency) {
-				case 'monthly':
-					return total + sub.amount;
-				case 'quarterly':
-					return total + sub.amount / 3;
-				case 'annually':
-					return total + sub.amount / 12;
-				case 'custom':
-					if (sub.customFrequencyDays) {
-						return total + (sub.amount * 30.44) / sub.customFrequencyDays;
-					}
-					return total;
-				default:
-					return total;
-			}
-		}, 0);
+		const totalMonthly = activeSubscriptions.reduce(
+			(total, sub) => total + monthlySubscriptionCost(sub),
+			0,
+		);
 
 		// Group subscriptions by category
 		const breakdown: CategoryBreakdown[] = categories
@@ -80,23 +68,10 @@ export function CostBreakdown({
 
 				if (categorySubscriptions.length === 0) return null;
 
-				const monthlyTotal = categorySubscriptions.reduce((total, sub) => {
-					switch (sub.billingFrequency) {
-						case 'monthly':
-							return total + sub.amount;
-						case 'quarterly':
-							return total + sub.amount / 3;
-						case 'annually':
-							return total + sub.amount / 12;
-						case 'custom':
-							if (sub.customFrequencyDays) {
-								return total + (sub.amount * 30.44) / sub.customFrequencyDays;
-							}
-							return total;
-						default:
-							return total;
-					}
-				}, 0);
+				const monthlyTotal = categorySubscriptions.reduce(
+					(total, sub) => total + monthlySubscriptionCost(sub),
+					0,
+				);
 
 				return {
 					category,
@@ -143,9 +118,7 @@ export function CostBreakdown({
 				<CardContent>
 					<div className='space-y-4'>
 						{[...Array(4)].map((_, index) => (
-							<div
-								key={index}
-								className='flex items-center justify-between p-3 border rounded'>
+							<div key={index} className='flex items-center justify-between p-3 border rounded'>
 								<div className='flex items-center gap-3'>
 									<div className='h-8 w-8 bg-muted rounded'></div>
 									<div className='space-y-2'>
@@ -189,8 +162,8 @@ export function CostBreakdown({
 				</CardTitle>
 				<CardDescription>
 					{summary.totalSubscriptions} subscription
-					{summary.totalSubscriptions !== 1 ? 's' : ''} across {summary.categoryCount}{' '}
-					categor{summary.categoryCount !== 1 ? 'ies' : 'y'} •{' '}
+					{summary.totalSubscriptions !== 1 ? 's' : ''} across {summary.categoryCount} categor
+					{summary.categoryCount !== 1 ? 'ies' : 'y'} •{' '}
 					{formatCurrency(summary.totalMonthly, currency, locale)}/month
 				</CardDescription>
 				{summary.topCategory && (
@@ -245,7 +218,8 @@ function CategoryBreakdownItem({ breakdown, currency, locale }: CategoryBreakdow
 				{/* Category icon and color */}
 				<div
 					className='h-8 w-8 rounded-full flex items-center justify-center text-white text-sm font-medium'
-					style={{ backgroundColor: category.color }}>
+					style={{ backgroundColor: category.color }}
+				>
 					{category.icon ? (
 						<span className='text-xs'>{category.icon}</span>
 					) : (

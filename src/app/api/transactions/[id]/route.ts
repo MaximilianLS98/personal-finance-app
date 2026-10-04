@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createTransactionRepository } from '@/lib/database';
-import { getCategoryEngine } from '@/lib/categorization-engine';
 import { BudgetTransactionIntegrationService } from '@/lib/budget-transaction-integration';
+import { getCategoryEngine } from '@/lib/categorization-engine';
+import { createTransactionRepository } from '@/lib/database';
 import { ErrorResponse } from '@/lib/types';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * PUT /api/transactions/[id] - Update a transaction
@@ -48,11 +48,8 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 				// If user assigned a category (not removing it)
 				if (updates.categoryId) {
 					// Check if this was accepting a suggestion or manual assignment
-					const currentSuggestion = await engine.suggestCategory(
-						originalTransaction.description,
-					);
-					const wasCorrectSuggestion =
-						currentSuggestion?.category.id === updates.categoryId;
+					const currentSuggestion = await engine.suggestCategory(originalTransaction.description);
+					const wasCorrectSuggestion = currentSuggestion?.category.id === updates.categoryId;
 
 					// Learn from the user's choice
 					await engine.learnFromUserAction(
@@ -71,11 +68,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 		if (updatedTransaction) {
 			try {
 				const budgetIntegration = new BudgetTransactionIntegrationService(repository);
-				await budgetIntegration.onTransactionUpdated(
-					id,
-					originalTransaction,
-					updatedTransaction,
-				);
+				await budgetIntegration.onTransactionUpdated(id, originalTransaction, updatedTransaction);
 			} catch (budgetError) {
 				console.error('Error updating budgets after transaction update:', budgetError);
 				// Don't fail the transaction update if budget updates fail

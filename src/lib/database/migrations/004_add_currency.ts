@@ -3,8 +3,7 @@ import type { Migration } from '../types';
 export const migration004: Migration = {
 	version: 4,
 	description: "Add optional 'currency' column to transactions",
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	up: (db: any) => {
+	up: (db) => {
 		// Add currency column if it doesn't exist
 		try {
 			const info = db.query("PRAGMA table_info('transactions')").all() as Array<{
@@ -14,7 +13,7 @@ export const migration004: Migration = {
 			if (!hasCurrency) {
 				db.exec('ALTER TABLE transactions ADD COLUMN currency TEXT');
 			}
-		} catch (e) {
+		} catch {
 			// Fallback: recreate table with new column if ALTER failed (older SQLite)
 			db.exec(`
 				CREATE TABLE IF NOT EXISTS transactions_new (
@@ -43,9 +42,7 @@ export const migration004: Migration = {
 			db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);');
 			db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);');
 			db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_amount ON transactions(amount);');
-			db.exec(
-				'CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id);',
-			);
+			db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id);');
 			db.exec(
 				'CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_unique ON transactions(date, description, amount);',
 			);
@@ -53,8 +50,7 @@ export const migration004: Migration = {
 		// Mark migration as applied
 		db.exec('INSERT OR IGNORE INTO schema_metadata (version) VALUES (4);');
 	},
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	down: (db: any) => {
+	down: (db) => {
 		// Rollback: recreate table without currency column
 		db.exec(`
 			CREATE TABLE transactions_backup AS 
@@ -82,9 +78,7 @@ export const migration004: Migration = {
 		db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);');
 		db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);');
 		db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_amount ON transactions(amount);');
-		db.exec(
-			'CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id);',
-		);
+		db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id);');
 		db.exec(
 			'CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_unique ON transactions(date, description, amount);',
 		);

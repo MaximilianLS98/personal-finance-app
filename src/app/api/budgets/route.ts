@@ -4,9 +4,9 @@
  * POST /api/budgets - Create new budget
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createTransactionRepository } from '@/lib/database/repository';
 import { BudgetService } from '@/lib/budget-service';
+import { createTransactionRepository } from '@/lib/database/repository';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * GET /api/budgets
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
 				error: 'Failed to fetch budgets',
 				message: error instanceof Error ? error.message : 'Unknown error',
 			},
-			{ status: 500 }
+			{ status: 500 },
 		);
 	}
 }
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
 	try {
 		const body = await request.json();
-		
+
 		// Validate required fields
 		const requiredFields = ['name', 'categoryId', 'amount', 'period', 'startDate', 'endDate'];
 		for (const field of requiredFields) {
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
 						error: 'Missing required fields',
 						message: `Field '${field}' is required`,
 					},
-					{ status: 400 }
+					{ status: 400 },
 				);
 			}
 		}
@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
 				error: 'Failed to create budget',
 				message: error instanceof Error ? error.message : 'Unknown error',
 			},
-			{ status: 500 }
+			{ status: 500 },
 		);
 	}
 }

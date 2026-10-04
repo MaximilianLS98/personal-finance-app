@@ -1,16 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { createTransactionRepository } from '@/lib/database';
+import type { ComparisonResult } from '@/lib/financial-projection-engine';
 import {
+	DEFAULT_INVESTMENT_CONFIG,
 	FinancialProjectionEngine,
 	LongTermCostAnalyzer,
-	DEFAULT_INVESTMENT_CONFIG,
 } from '@/lib/financial-projection-engine';
 import { ErrorResponse } from '@/lib/types';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * Calculate risk level based on projection results
  */
-function calculateRiskLevel(comparison: any): 'low' | 'medium' | 'high' {
+function calculateRiskLevel(comparison: ComparisonResult): 'low' | 'medium' | 'high' {
 	const fiveYearSavings = comparison.potentialSavings[5];
 	const breakEvenYears = comparison.breakEvenYears;
 
@@ -26,7 +27,7 @@ function calculateRiskLevel(comparison: any): 'low' | 'medium' | 'high' {
 /**
  * Calculate value score (1-10) based on cost and potential savings
  */
-function calculateValueScore(subscription: any, comparison: any): number {
+function calculateValueScore(comparison: ComparisonResult): number {
 	const monthlyAmount = comparison.monthlyInvestmentAmount;
 	const fiveYearSavings = comparison.potentialSavings[5];
 	const breakEvenYears = comparison.breakEvenYears;
@@ -120,35 +121,24 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 		const costAnalyzer = new LongTermCostAnalyzer(projectionEngine);
 
 		// Generate comprehensive analysis
-		const comparison = projectionEngine.compareSubscriptionVsInvestment(
-			subscription,
-			customConfig,
-		);
+		const comparison = projectionEngine.compareSubscriptionVsInvestment(subscription, customConfig);
 		const chartData = costAnalyzer.generateChartData(subscription, customConfig);
 		const tableData = costAnalyzer.generateTableData(subscription, customConfig);
 
 		// Get related subscription transactions for additional context
-		const subscriptionTransactions = await repository.findSubscriptionTransactions(
-			subscription.id,
-		);
+		const subscriptionTransactions = await repository.findSubscriptionTransactions(subscription.id);
 
 		// Calculate actual spending history if available
 		const actualSpendingHistory =
 			subscriptionTransactions.length > 0
 				? {
-						totalSpent: subscriptionTransactions.reduce(
-							(sum, t) => sum + Math.abs(t.amount),
-							0,
-						),
+						totalSpent: subscriptionTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0),
 						transactionCount: subscriptionTransactions.length,
-						firstTransaction:
-							subscriptionTransactions[subscriptionTransactions.length - 1]?.date,
+						firstTransaction: subscriptionTransactions[subscriptionTransactions.length - 1]?.date,
 						lastTransaction: subscriptionTransactions[0]?.date,
 						averageAmount:
-							subscriptionTransactions.reduce(
-								(sum, t) => sum + Math.abs(t.amount),
-								0,
-							) / subscriptionTransactions.length,
+							subscriptionTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0) /
+							subscriptionTransactions.length,
 					}
 				: null;
 
@@ -177,7 +167,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 						recommendation: comparison.recommendation,
 						recommendationReason: comparison.recommendationReason,
 						riskLevel: calculateRiskLevel(comparison),
-						valueScore: calculateValueScore(subscription, comparison),
+						valueScore: calculateValueScore(comparison),
 					},
 					disclaimers: [
 						'Investment projections are estimates based on historical market performance and should not be considered guaranteed returns.',

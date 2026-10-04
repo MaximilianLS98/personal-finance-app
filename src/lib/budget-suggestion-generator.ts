@@ -5,13 +5,11 @@
  */
 
 import type {
-	BudgetSuggestion,
 	BudgetAmount,
+	BudgetPeriod,
+	BudgetSuggestion,
 	SpendingAnalysis,
 	TransactionRepository,
-	Transaction,
-	Subscription,
-	BudgetPeriod,
 } from './types';
 
 export class BudgetSuggestionGenerator {
@@ -21,7 +19,6 @@ export class BudgetSuggestionGenerator {
 	 * Generate comprehensive budget suggestions for a category
 	 */
 	async generateSuggestions(categoryId: string, period: BudgetPeriod): Promise<BudgetSuggestion> {
-		// Test implementation - should be tested for production use
 		try {
 			// Get category details
 			const category = await this.repository.getCategoryById(categoryId);
@@ -76,7 +73,6 @@ export class BudgetSuggestionGenerator {
 	 * Analyze spending patterns using intelligent data processing
 	 */
 	async analyzeSpendingPatterns(categoryId: string): Promise<SpendingAnalysis> {
-		// Test implementation - should be tested for production use
 		try {
 			// Get different time periods for comprehensive analysis
 			const analyses = await Promise.all([
@@ -129,10 +125,8 @@ export class BudgetSuggestionGenerator {
 				) / totalWeight;
 
 			const weightedTrend =
-				validAnalyses.reduce(
-					(sum, analysis, index) => sum + analysis.trend * weights[index],
-					0,
-				) / totalWeight;
+				validAnalyses.reduce((sum, analysis, index) => sum + analysis.trend * weights[index], 0) /
+				totalWeight;
 
 			const weightedSubscriptions =
 				validAnalyses.reduce(
@@ -174,7 +168,6 @@ export class BudgetSuggestionGenerator {
 		count: number;
 		subscriptions: Array<{ name: string; monthlyAmount: number }>;
 	}> {
-		// Test implementation - should be tested for production use
 		try {
 			const subscriptions = await this.repository.findSubscriptionsByCategory(categoryId);
 			const activeSubscriptions = subscriptions.filter((s) => s.isActive);
@@ -215,7 +208,7 @@ export class BudgetSuggestionGenerator {
 				count: activeSubscriptions.length,
 				subscriptions: subscriptionDetails,
 			};
-		} catch (error) {
+		} catch {
 			// Return empty allocation if there's an error
 			return {
 				monthlyTotal: 0,
@@ -243,26 +236,18 @@ export class BudgetSuggestionGenerator {
 				: spendingAnalysis.averageMonthly * 12;
 
 		const subscriptionFloor =
-			periodType === 'monthly'
-				? subscriptionInfo.monthlyTotal
-				: subscriptionInfo.monthlyTotal * 12;
+			periodType === 'monthly' ? subscriptionInfo.monthlyTotal : subscriptionInfo.monthlyTotal * 12;
 
 		// Factor in volatility (higher standard deviation = need more buffer)
 		const volatilityMultiplier =
 			spendingAnalysis.standardDeviation > 0
-				? Math.min(
-						1.5,
-						1 + spendingAnalysis.standardDeviation / spendingAnalysis.averageMonthly,
-					)
+				? Math.min(1.5, 1 + spendingAnalysis.standardDeviation / spendingAnalysis.averageMonthly)
 				: 1.1;
 
 		// Factor in trend (increasing trend = need more budget)
 		const trendAdjustment =
 			spendingAnalysis.trend > 0
-				? Math.min(
-						1.2,
-						1 + Math.abs(spendingAnalysis.trend) / spendingAnalysis.averageMonthly,
-					)
+				? Math.min(1.2, 1 + Math.abs(spendingAnalysis.trend) / spendingAnalysis.averageMonthly)
 				: 1.0;
 
 		// Conservative: Generous buffer for peace of mind
@@ -324,11 +309,10 @@ export class BudgetSuggestionGenerator {
 		tier: 'conservative' | 'moderate' | 'aggressive',
 		spendingAnalysis: SpendingAnalysis,
 		subscriptionInfo: { monthlyTotal: number; count: number },
-		periodType: 'monthly' | 'yearly',
+		_periodType: 'monthly' | 'yearly',
 	): string {
 		const hasSubscriptions = subscriptionInfo.count > 0;
-		const isVolatile =
-			spendingAnalysis.standardDeviation > spendingAnalysis.averageMonthly * 0.3;
+		const isVolatile = spendingAnalysis.standardDeviation > spendingAnalysis.averageMonthly * 0.3;
 		const hasUpwardTrend = spendingAnalysis.trend > 0;
 
 		const baseContext = `Based on ${spendingAnalysis.periodMonths} months of spending history`;
@@ -338,7 +322,7 @@ export class BudgetSuggestionGenerator {
 
 		switch (tier) {
 			case 'conservative':
-				let conservativeFactors = [];
+				const conservativeFactors = [];
 				if (isVolatile) conservativeFactors.push('spending variability');
 				if (hasUpwardTrend) conservativeFactors.push('increasing trend');
 				if (hasSubscriptions) conservativeFactors.push('subscription commitments');
@@ -381,8 +365,7 @@ export class BudgetSuggestionGenerator {
 				? Math.max(
 						-0.2,
 						-0.1 *
-							(spendingAnalysis.standardDeviation /
-								Math.max(1, spendingAnalysis.averageMonthly)),
+							(spendingAnalysis.standardDeviation / Math.max(1, spendingAnalysis.averageMonthly)),
 					)
 				: 0,
 

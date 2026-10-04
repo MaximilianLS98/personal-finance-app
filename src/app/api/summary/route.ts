@@ -1,41 +1,12 @@
 import { createTransactionRepository } from '@/lib/database';
 import { ErrorResponse } from '@/lib/types';
-import { hasStoredTransactions, getStoredTransactions } from '@/lib/storage';
-import { calculateFinancialSummary } from '@/lib/financial-calculator';
+import { NextResponse } from 'next/server';
 
 // Runtime-safe JSON response helper that works in Jest without web Request globals
-function json(data: any, init?: { status?: number }) {
-	try {
-		// eslint-disable-next-line @typescript-eslint/no-var-requires
-		const { NextResponse } = require('next/server');
-		return NextResponse.json(data, init);
-	} catch {
-		return {
-			json: async () => data,
-			status: init?.status ?? 200,
-			ok: (init?.status ?? 200) < 400,
-		};
-	}
-}
-
 /**
  * GET /api/summary - Retrieve financial summary
  */
 export async function GET() {
-	// First: if in-memory storage is populated (used in tests), honor it
-	if (hasStoredTransactions()) {
-		const tx = getStoredTransactions();
-		const summary = calculateFinancialSummary(tx);
-		return json(
-			{
-				success: true,
-				data: summary,
-			},
-			{ status: 200 },
-		);
-	}
-
-	// Otherwise, use the repository (DB)
 	const repository = createTransactionRepository();
 
 	try {
@@ -43,9 +14,9 @@ export async function GET() {
 
 		const summary = await repository.calculateSummary();
 
-		// If DB has no data, return explicit empty message for compatibility with tests
+		// Include an empty-state message for a new database.
 		const hasData = summary.transactionCount > 0;
-		return json(
+		return NextResponse.json(
 			hasData
 				? {
 						success: true,
@@ -62,7 +33,7 @@ export async function GET() {
 		console.error('Summary API error:', error);
 
 		if (error instanceof Error && error.message.includes('Repository not initialized')) {
-			return json(
+			return NextResponse.json(
 				{
 					error: 'DATABASE_CONNECTION_ERROR',
 					message: 'Failed to connect to database',
@@ -72,7 +43,7 @@ export async function GET() {
 			);
 		}
 
-		return json(
+		return NextResponse.json(
 			{
 				error: 'INTERNAL_SERVER_ERROR',
 				message: 'An unexpected error occurred while calculating financial summary',

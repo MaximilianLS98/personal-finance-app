@@ -1,14 +1,15 @@
 'use client';
+import type { Subscription } from '@/lib/types';
 
-import React, { useState, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { Upload, FileText, AlertCircle, CheckCircle2, Loader2, TrendingUp } from 'lucide-react';
-import { Transaction, ErrorResponse, Category } from '@/lib/types';
-import SubscriptionConfirmationDialog from './SubscriptionConfirmationDialog';
-import type { SubscriptionCandidate, SubscriptionMatch } from '@/lib/subscription-pattern-engine';
+import { Input } from '@/components/ui/input';
 import { getJson } from '@/lib/api';
+import type { SubscriptionCandidate, SubscriptionMatch } from '@/lib/subscription-pattern-engine';
+import { Category, ErrorResponse, Transaction } from '@/lib/types';
+import { AlertCircle, CheckCircle2, FileText, Loader2, TrendingUp, Upload } from 'lucide-react';
+import React, { useCallback, useRef, useState } from 'react';
+import SubscriptionConfirmationDialog from './SubscriptionConfirmationDialog';
 
 interface SubscriptionDetectionData {
 	candidates: SubscriptionCandidate[];
@@ -17,10 +18,18 @@ interface SubscriptionDetectionData {
 	alreadyFlagged: number;
 }
 
+interface UploadSummary {
+	totalRows: number;
+	validRows: number;
+	errorCount: number;
+	duplicatesSkipped?: number;
+	totalProcessed?: number;
+}
+
 interface FileUploadProps {
 	onUploadSuccess?: (data: {
 		transactions: Transaction[];
-		summary: any;
+		summary: UploadSummary;
 		subscriptionDetection?: SubscriptionDetectionData;
 	}) => void;
 	onUploadError?: (error: string) => void;
@@ -35,7 +44,7 @@ interface UploadState {
 	fileName: string | null;
 	subscriptionDetection: SubscriptionDetectionData | null;
 	showSubscriptionDialog: boolean;
-	uploadData: { transactions: Transaction[]; summary: any } | null;
+	uploadData: { transactions: Transaction[]; summary: UploadSummary } | null;
 }
 
 export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploadProps) {
@@ -54,6 +63,7 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 	const [categories, setCategories] = useState<Category[]>([]);
 
 	React.useEffect(() => {
+		if (!state.showSubscriptionDialog) return;
 		let cancelled = false;
 		(async () => {
 			try {
@@ -66,7 +76,7 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 		return () => {
 			cancelled = true;
 		};
-	}, []);
+	}, [state.showSubscriptionDialog]);
 
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -122,12 +132,13 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 				uploadProgress: 0,
 			}));
 
+			let progressInterval: ReturnType<typeof setInterval> | undefined;
 			try {
 				const formData = new FormData();
 				formData.append('file', file);
 
 				// Simulate upload progress
-				const progressInterval = setInterval(() => {
+				progressInterval = setInterval(() => {
 					setState((prev) => ({
 						...prev,
 						uploadProgress: Math.min(prev.uploadProgress + 10, 90),
@@ -161,10 +172,8 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 					},
 				}));
 
-				// If no subscription detection, call success immediately
-				if (!result.data.subscriptionDetection) {
-					onUploadSuccess?.(result.data);
-				}
+				// Persisted transactions are ready even while subscription review is open.
+				onUploadSuccess?.(result.data);
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : 'Upload failed';
 				setState((prev) => ({
@@ -174,6 +183,8 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 					uploadProgress: 0,
 				}));
 				onUploadError?.(errorMessage);
+			} finally {
+				clearInterval(progressInterval);
 			}
 		},
 		[validateFile, resetState, onUploadSuccess, onUploadError],
@@ -222,7 +233,7 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 		async (confirmations: {
 			candidates: Array<{
 				candidate: SubscriptionCandidate;
-				overrides?: any;
+				overrides?: Partial<Subscription>;
 			}>;
 			matches: SubscriptionMatch[];
 		}) => {
@@ -348,13 +359,12 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 				onDragOver={handleDragOver}
 				onDragLeave={handleDragLeave}
 				onDrop={handleDrop}
-				onClick={handleButtonClick}>
+				onClick={handleButtonClick}
+			>
 				<CardContent className='flex flex-col items-center justify-center p-8 text-center'>
 					{getStatusIcon()}
 
-					<p className={`mt-4 text-sm font-medium ${getStatusColor()}`}>
-						{getStatusText()}
-					</p>
+					<p className={`mt-4 text-sm font-medium ${getStatusColor()}`}>{getStatusText()}</p>
 
 					{state.isUploading && (
 						<div className='w-full max-w-xs mt-4'>
@@ -374,7 +384,8 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 									e.stopPropagation();
 									setState((prev) => ({ ...prev, showSubscriptionDialog: true }));
 								}}
-								className='bg-blue-600 hover:bg-blue-700'>
+								className='bg-blue-600 hover:bg-blue-700'
+							>
 								<TrendingUp className='h-4 w-4 mr-2' />
 								Review Subscriptions
 							</Button>
@@ -390,13 +401,12 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 									e.stopPropagation();
 									handleButtonClick();
 								}}
-								disabled={state.isUploading}>
+								disabled={state.isUploading}
+							>
 								<FileText className='h-4 w-4 mr-2' />
 								Choose File
 							</Button>
-							<span className='text-xs text-muted-foreground'>
-								CSV files up to 5MB
-							</span>
+							<span className='text-xs text-muted-foreground'>CSV files up to 5MB</span>
 						</div>
 					)}
 
@@ -420,7 +430,7 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 					detectionData={state.subscriptionDetection}
 					onConfirm={handleSubscriptionConfirm}
 					// categories are fetched here to reuse across dialog instances
-					// @ts-expect-error augmenting dialog to read categories from API internally as well
+					// augmenting dialog to read categories from API internally as well
 					categories={categories}
 				/>
 			)}

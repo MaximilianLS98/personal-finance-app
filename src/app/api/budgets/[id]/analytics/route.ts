@@ -3,18 +3,15 @@
  * GET /api/budgets/[id]/analytics - Get detailed budget performance analysis
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createTransactionRepository } from '@/lib/database/repository';
 import { BudgetService } from '@/lib/budget-service';
+import { createTransactionRepository } from '@/lib/database/repository';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * GET /api/budgets/[id]/analytics
  * Get detailed budget performance analysis including variance and projections
  */
-export async function GET(
-	request: NextRequest,
-	{ params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
 	try {
 		const { id } = await params;
 
@@ -34,7 +31,7 @@ export async function GET(
 		});
 	} catch (error) {
 		console.error('Error fetching budget analytics:', error);
-		
+
 		// Handle specific error cases
 		if (error instanceof Error && error.message.includes('Budget not found')) {
 			return NextResponse.json(
@@ -42,7 +39,7 @@ export async function GET(
 					success: false,
 					error: 'Budget not found',
 				},
-				{ status: 404 }
+				{ status: 404 },
 			);
 		}
 
@@ -52,7 +49,7 @@ export async function GET(
 				error: 'Failed to fetch budget analytics',
 				message: error instanceof Error ? error.message : 'Unknown error',
 			},
-			{ status: 500 }
+			{ status: 500 },
 		);
 	}
 }

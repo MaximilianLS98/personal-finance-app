@@ -1,9 +1,9 @@
+import { AppSidebar } from '@/components/app-sidebar';
+import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
-import { AppSidebar } from '@/components/app-sidebar';
-import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 
 const geistSans = Geist({
 	variable: '--font-geist-sans',
@@ -34,9 +34,7 @@ export default function RootLayout({
 						<SidebarInset>
 							<div className='border-b px-4 h-12 flex items-center gap-2'>
 								<SidebarTrigger />
-								<div className='text-sm text-muted-foreground'>
-									Max Personal Finance
-								</div>
+								<div className='text-sm text-muted-foreground'>Max Personal Finance</div>
 							</div>
 							<div className='p-4'>{children}</div>
 						</SidebarInset>

@@ -1,6 +1,21 @@
 'use client';
+import { monthlySubscriptionCost } from '@/lib/subscription-costs';
 
+import { AlertTriangle, Calculator, Info, TrendingUp } from 'lucide-react';
 import React from 'react';
+import {
+	Area,
+	AreaChart,
+	CartesianGrid,
+	Legend,
+	Line,
+	LineChart,
+	ResponsiveContainer,
+	Tooltip,
+	XAxis,
+	YAxis,
+} from 'recharts';
+import { Badge } from '../../../components/ui/badge';
 import {
 	Card,
 	CardContent,
@@ -9,25 +24,9 @@ import {
 	CardTitle,
 } from '../../../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/tabs';
-import { Badge } from '../../../components/ui/badge';
-import { Subscription } from '../../../lib/types';
 import { formatCurrency } from '../../../lib/financial-calculator';
+import { Subscription } from '../../../lib/types';
 import { useCurrencySettings } from '../../providers';
-import {
-	ResponsiveContainer,
-	LineChart,
-	Line,
-	XAxis,
-	YAxis,
-	CartesianGrid,
-	Tooltip,
-	Legend,
-	BarChart,
-	Bar,
-	Area,
-	AreaChart,
-} from 'recharts';
-import { TrendingUp, Calculator, AlertTriangle, Info } from 'lucide-react';
 
 interface ProjectionChartsProps {
 	/** Array of subscriptions to project */
@@ -67,23 +66,10 @@ export function ProjectionCharts({
 		const activeSubscriptions = subscriptions.filter((sub) => sub.isActive);
 
 		// Calculate total monthly cost
-		const monthlyTotal = activeSubscriptions.reduce((total, sub) => {
-			switch (sub.billingFrequency) {
-				case 'monthly':
-					return total + sub.amount;
-				case 'quarterly':
-					return total + sub.amount / 3;
-				case 'annually':
-					return total + sub.amount / 12;
-				case 'custom':
-					if (sub.customFrequencyDays) {
-						return total + (sub.amount * 30.44) / sub.customFrequencyDays;
-					}
-					return total;
-				default:
-					return total;
-			}
-		}, 0);
+		const monthlyTotal = activeSubscriptions.reduce(
+			(total, sub) => total + monthlySubscriptionCost(sub),
+			0,
+		);
 
 		// Generate projection data for 20 years
 		const data: ProjectionData[] = [];
@@ -102,8 +88,7 @@ export function ProjectionCharts({
 
 			// Future value of annuity formula
 			if (monthlyRate > 0) {
-				investmentValue =
-					monthlyContribution * (((1 + monthlyRate) ** months - 1) / monthlyRate);
+				investmentValue = monthlyContribution * (((1 + monthlyRate) ** months - 1) / monthlyRate);
 			} else {
 				investmentValue = monthlyContribution * months;
 			}
@@ -179,9 +164,7 @@ export function ProjectionCharts({
 						<TrendingUp className='h-5 w-5' />
 						Long-term Cost Projections
 					</CardTitle>
-					<CardDescription>
-						Add active subscriptions to see long-term cost analysis
-					</CardDescription>
+					<CardDescription>Add active subscriptions to see long-term cost analysis</CardDescription>
 				</CardHeader>
 				<CardContent>
 					<div className='text-center py-8 text-muted-foreground'>
@@ -234,10 +217,7 @@ export function ProjectionCharts({
 									/>
 									<YAxis
 										tickFormatter={(value) =>
-											formatCurrency(value, currency, locale).replace(
-												/\.\d{2}/,
-												'',
-											)
+											formatCurrency(value, currency, locale).replace(/\.\d{2}/, '')
 										}
 									/>
 									<Tooltip
@@ -290,10 +270,7 @@ export function ProjectionCharts({
 									/>
 									<YAxis
 										tickFormatter={(value) =>
-											formatCurrency(value, currency, locale).replace(
-												/\.\d{2}/,
-												'',
-											)
+											formatCurrency(value, currency, locale).replace(/\.\d{2}/, '')
 										}
 									/>
 									<Tooltip
@@ -387,7 +364,8 @@ function MilestoneCard({
 				isPositiveSavings
 					? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950'
 					: 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950'
-			}>
+			}
+		>
 			<CardHeader className='pb-2'>
 				<CardTitle className='text-lg'>{title}</CardTitle>
 			</CardHeader>
@@ -409,7 +387,8 @@ function MilestoneCard({
 						<div className='flex justify-between items-center'>
 							<span className='font-medium'>Opportunity Cost:</span>
 							<span
-								className={`font-bold ${isPositiveSavings ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+								className={`font-bold ${isPositiveSavings ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+							>
 								{isPositiveSavings ? '+' : ''}
 								{formatCurrency(savings, currency, locale)}
 							</span>

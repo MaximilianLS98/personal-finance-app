@@ -1,6 +1,9 @@
 'use client';
+import { monthlySubscriptionCost } from '@/lib/subscription-costs';
 
+import { AlertTriangle, Calculator, DollarSign, Info, Target } from 'lucide-react';
 import React from 'react';
+import { Badge } from '../../../components/ui/badge';
 import {
 	Card,
 	CardContent,
@@ -8,24 +11,13 @@ import {
 	CardHeader,
 	CardTitle,
 } from '../../../components/ui/card';
-import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
 import { Label } from '../../../components/ui/label';
 import { Slider } from '../../../components/ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/tabs';
-import { Badge } from '../../../components/ui/badge';
-import { Subscription } from '../../../lib/types';
 import { formatCurrency } from '../../../lib/financial-calculator';
+import { Subscription } from '../../../lib/types';
 import { useCurrencySettings } from '../../providers';
-import {
-	Calculator,
-	TrendingUp,
-	DollarSign,
-	AlertTriangle,
-	Info,
-	Target,
-	PiggyBank,
-} from 'lucide-react';
 
 interface ProjectionCalculatorProps {
 	/** Selected subscription for analysis */
@@ -100,28 +92,13 @@ export function ProjectionCalculator({
 
 	// Helper function to get monthly amount
 	function getMonthlyAmount(sub: Subscription): number {
-		switch (sub.billingFrequency) {
-			case 'monthly':
-				return sub.amount;
-			case 'quarterly':
-				return sub.amount / 3;
-			case 'annually':
-				return sub.amount / 12;
-			case 'custom':
-				if (sub.customFrequencyDays) {
-					return (sub.amount * 30.44) / sub.customFrequencyDays;
-				}
-				return sub.amount;
-			default:
-				return sub.amount;
-		}
+		return monthlySubscriptionCost(sub);
 	}
 
 	// Calculate projections based on settings
 	function calculateProjections(settings: ProjectionSettings): ProjectionResults {
 		const { monthlyAmount, annualReturnRate, inflationRate, timeHorizon } = settings;
 		const monthlyRate = annualReturnRate / 100 / 12;
-		const monthlyInflation = inflationRate / 100 / 12;
 
 		const calculateForYears = (years: number) => {
 			const months = years * 12;
@@ -258,21 +235,13 @@ export function ProjectionCalculator({
 											min='0'
 											value={settings.monthlyAmount}
 											onChange={(e) =>
-												updateSetting(
-													'monthlyAmount',
-													parseFloat(e.target.value) || 0,
-												)
+												updateSetting('monthlyAmount', parseFloat(e.target.value) || 0)
 											}
 											className='pl-10'
 										/>
 									</div>
 									<p className='text-xs text-muted-foreground'>
-										{formatCurrency(
-											settings.monthlyAmount * 12,
-											currency,
-											locale,
-										)}{' '}
-										per year
+										{formatCurrency(settings.monthlyAmount * 12, currency, locale)} per year
 									</p>
 								</div>
 
@@ -280,9 +249,7 @@ export function ProjectionCalculator({
 									<Label>Time Horizon: {settings.timeHorizon} years</Label>
 									<Slider
 										value={[settings.timeHorizon]}
-										onValueChange={([value]) =>
-											updateSetting('timeHorizon', value)
-										}
+										onValueChange={([value]) => updateSetting('timeHorizon', value)}
 										max={30}
 										min={1}
 										step={1}
@@ -302,9 +269,7 @@ export function ProjectionCalculator({
 									<Label>Annual Return Rate: {settings.annualReturnRate}%</Label>
 									<Slider
 										value={[settings.annualReturnRate]}
-										onValueChange={([value]) =>
-											updateSetting('annualReturnRate', value)
-										}
+										onValueChange={([value]) => updateSetting('annualReturnRate', value)}
 										max={15}
 										min={0}
 										step={0.1}
@@ -320,9 +285,7 @@ export function ProjectionCalculator({
 									<Label>Inflation Rate: {settings.inflationRate}%</Label>
 									<Slider
 										value={[settings.inflationRate]}
-										onValueChange={([value]) =>
-											updateSetting('inflationRate', value)
-										}
+										onValueChange={([value]) => updateSetting('inflationRate', value)}
 										max={10}
 										min={0}
 										step={0.1}
@@ -338,44 +301,27 @@ export function ProjectionCalculator({
 
 						{/* Quick Results Preview */}
 						<div className='bg-muted/50 rounded-lg p-4'>
-							<h4 className='font-medium mb-3'>
-								Quick Preview ({settings.timeHorizon} years)
-							</h4>
+							<h4 className='font-medium mb-3'>Quick Preview ({settings.timeHorizon} years)</h4>
 							<div className='grid grid-cols-1 md:grid-cols-3 gap-4 text-sm'>
 								<div>
-									<span className='text-muted-foreground'>
-										Total Subscription Cost:
-									</span>
+									<span className='text-muted-foreground'>Total Subscription Cost:</span>
 									<div className='font-medium text-red-600 dark:text-red-400'>
-										{formatCurrency(
-											projections.subscriptionCost.customYears,
-											currency,
-											locale,
-										)}
+										{formatCurrency(projections.subscriptionCost.customYears, currency, locale)}
 									</div>
 								</div>
 								<div>
 									<span className='text-muted-foreground'>Investment Value:</span>
 									<div className='font-medium text-green-600 dark:text-green-400'>
-										{formatCurrency(
-											projections.investmentValue.customYears,
-											currency,
-											locale,
-										)}
+										{formatCurrency(projections.investmentValue.customYears, currency, locale)}
 									</div>
 								</div>
 								<div>
-									<span className='text-muted-foreground'>
-										Potential Savings:
-									</span>
+									<span className='text-muted-foreground'>Potential Savings:</span>
 									<div
-										className={`font-medium ${projections.potentialSavings.customYears > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+										className={`font-medium ${projections.potentialSavings.customYears > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+									>
 										{projections.potentialSavings.customYears > 0 ? '+' : ''}
-										{formatCurrency(
-											projections.potentialSavings.customYears,
-											currency,
-											locale,
-										)}
+										{formatCurrency(projections.potentialSavings.customYears, currency, locale)}
 									</div>
 								</div>
 							</div>
@@ -428,14 +374,10 @@ export function ProjectionCalculator({
 							</h4>
 							<div className='text-sm text-blue-800 dark:text-blue-200 space-y-1'>
 								<p>
-									• Monthly investment of{' '}
-									{formatCurrency(settings.monthlyAmount, currency, locale)} at{' '}
-									{settings.annualReturnRate}% annual return
+									• Monthly investment of {formatCurrency(settings.monthlyAmount, currency, locale)}{' '}
+									at {settings.annualReturnRate}% annual return
 								</p>
-								<p>
-									• Subscription costs include {settings.inflationRate}% annual
-									inflation
-								</p>
+								<p>• Subscription costs include {settings.inflationRate}% annual inflation</p>
 								<p>
 									• Break-even point:{' '}
 									{projections.potentialSavings.oneYear > 0
@@ -456,11 +398,10 @@ export function ProjectionCalculator({
 								Important Disclaimer
 							</h4>
 							<p className='text-sm text-yellow-800 dark:text-yellow-200'>
-								These projections are estimates based on the assumptions you've set.
-								Actual investment returns can vary significantly and may be
-								negative. Past performance does not guarantee future results.
-								Consider consulting with a financial advisor before making
-								investment decisions.
+								These projections are estimates based on the assumptions you&apos;ve set. Actual
+								investment returns can vary significantly and may be negative. Past performance does
+								not guarantee future results. Consider consulting with a financial advisor before
+								making investment decisions.
 							</p>
 						</div>
 					</TabsContent>
@@ -493,7 +434,8 @@ function ResultCard({
 
 	return (
 		<Card
-			className={`${isCustom ? 'border-primary bg-primary/5' : ''} ${isPositiveSavings ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950' : 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950'}`}>
+			className={`${isCustom ? 'border-primary bg-primary/5' : ''} ${isPositiveSavings ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950' : 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950'}`}
+		>
 			<CardHeader className='pb-2'>
 				<CardTitle className='text-base flex items-center gap-2'>
 					{isCustom && <Target className='h-4 w-4' />}
@@ -518,7 +460,8 @@ function ResultCard({
 						<div className='flex justify-between items-center'>
 							<span className='font-medium'>Difference:</span>
 							<span
-								className={`font-bold ${isPositiveSavings ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+								className={`font-bold ${isPositiveSavings ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+							>
 								{isPositiveSavings ? '+' : ''}
 								{formatCurrency(savings, currency, locale)}
 							</span>

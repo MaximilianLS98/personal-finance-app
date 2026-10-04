@@ -1,3 +1,4 @@
+import type { Database } from 'bun:sqlite';
 /**
  * Migration registry and runner
  * Manages database schema migrations with version tracking
@@ -15,6 +16,8 @@ import { migration007 } from './007_add_default_scenario';
 /**
  * Registry of all available migrations in order
  */
+import { migration008 } from './008_expand_budget_alert_types';
+
 export const migrations: Migration[] = [
 	migration001,
 	migration002,
@@ -23,17 +26,15 @@ export const migrations: Migration[] = [
 	migration005,
 	migration006,
 	migration007,
+	migration008,
 ];
 
 /**
  * Migration runner class for managing database schema evolution
  */
 export class MigrationRunner {
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	private db: any;
-
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	constructor(db: any) {
+	private db: Database;
+	constructor(db: Database) {
 		this.db = db;
 	}
 
@@ -44,20 +45,18 @@ export class MigrationRunner {
 		try {
 			// First check if schema_metadata table exists
 			const tableExists = this.db
-				.query(
-					"SELECT name FROM sqlite_master WHERE type='table' AND name='schema_metadata'",
-				)
+				.query("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_metadata'")
 				.get();
 
 			if (!tableExists) {
 				return 0;
 			}
 
-			const result = this.db
-				.query('SELECT MAX(version) as version FROM schema_metadata')
-				.get() as { version: number } | null;
+			const result = this.db.query('SELECT MAX(version) as version FROM schema_metadata').get() as {
+				version: number;
+			} | null;
 			return result?.version || 0;
-		} catch (error) {
+		} catch {
 			// If schema_metadata table doesn't exist, we're at version 0
 			return 0;
 		}
@@ -70,20 +69,16 @@ export class MigrationRunner {
 		try {
 			// First check if schema_metadata table exists
 			const tableExists = this.db
-				.query(
-					"SELECT name FROM sqlite_master WHERE type='table' AND name='schema_metadata'",
-				)
+				.query("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_metadata'")
 				.get();
 
 			if (!tableExists) {
 				return false;
 			}
 
-			const result = this.db
-				.query('SELECT 1 FROM schema_metadata WHERE version = ?')
-				.get(version);
+			const result = this.db.query('SELECT 1 FROM schema_metadata WHERE version = ?').get(version);
 			return result !== null;
-		} catch (error) {
+		} catch {
 			return false;
 		}
 	}
@@ -98,8 +93,6 @@ export class MigrationRunner {
 		if (pendingMigrations.length === 0) {
 			return;
 		}
-
-		const currentVersion = this.getCurrentVersion();
 
 		// Run migrations in a transaction for atomicity
 		const transaction = this.db.transaction(() => {
@@ -143,9 +136,7 @@ export class MigrationRunner {
 					migration.down(this.db);
 
 					// Remove migration record
-					this.db
-						.query('DELETE FROM schema_metadata WHERE version = ?')
-						.run(migration.version);
+					this.db.query('DELETE FROM schema_metadata WHERE version = ?').run(migration.version);
 				} catch (error) {
 					throw new Error(
 						`Rollback of migration ${migration.version} failed: ${
@@ -166,9 +157,7 @@ export class MigrationRunner {
 		try {
 			// First check if schema_metadata table exists
 			const tableExists = this.db
-				.query(
-					"SELECT name FROM sqlite_master WHERE type='table' AND name='schema_metadata'",
-				)
+				.query("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_metadata'")
 				.get();
 
 			if (!tableExists) {
@@ -179,7 +168,7 @@ export class MigrationRunner {
 				.query('SELECT version FROM schema_metadata ORDER BY version')
 				.all() as { version: number }[];
 			return results.map((r) => r.version);
-		} catch (error) {
+		} catch {
 			return [];
 		}
 	}

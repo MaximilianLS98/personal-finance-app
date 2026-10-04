@@ -2,7 +2,7 @@
  * Financial calculation utilities for processing transaction data
  */
 
-import { Transaction, FinancialSummary } from './types';
+import { FinancialSummary, Transaction } from './types';
 
 /**
  * Calculates the total income from an array of transactions

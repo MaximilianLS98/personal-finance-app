@@ -1,8 +1,13 @@
-import { POST } from '../route';
+import { beforeEach, describe, expect, it, jest } from 'bun:test';
 import { NextRequest } from 'next/server';
+import { POST } from '../../src/app/api/upload/route';
+import { getConnectionManager } from '../../src/lib/database/connection';
 
 describe('/api/upload', () => {
-	const createMockRequest = (file: File): NextRequest => {
+	beforeEach(async () => {
+		await getConnectionManager({ filename: ':memory:' }).close();
+	});
+	const createMockRequest = (file: File | null): NextRequest => {
 		// Create a mock FormData that directly returns our file
 		const mockFormData = {
 			get: (key: string) => {
@@ -56,7 +61,7 @@ describe('/api/upload', () => {
 
 	describe('File validation', () => {
 		it('should return error when no file is provided', async () => {
-			const request = createMockRequest(null as any);
+			const request = createMockRequest(null);
 
 			const response = await POST(request);
 			const data = await response.json();
@@ -122,11 +127,7 @@ describe('/api/upload', () => {
 		});
 
 		it('should return error for CSV with only headers', async () => {
-			const csvFile = createMockFile(
-				'Date,Description,Amount',
-				'headers-only.csv',
-				'text/csv',
-			);
+			const csvFile = createMockFile('Date,Description,Amount', 'headers-only.csv', 'text/csv');
 
 			const request = createMockRequest(csvFile);
 			const response = await POST(request);
@@ -178,6 +179,9 @@ describe('/api/upload', () => {
 			expect(groceries.type).toBe('expense');
 
 			expect(data.data.summary).toEqual({
+				created: 2,
+				duplicateCount: 0,
+				totalProcessed: 2,
 				totalRows: 2,
 				validRows: 2,
 				errorCount: 0,

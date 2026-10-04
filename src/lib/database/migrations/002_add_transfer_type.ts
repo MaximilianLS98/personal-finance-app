@@ -8,17 +8,21 @@ import type { Migration } from '../types';
 export const migration002: Migration = {
 	version: 2,
 	description: 'Add transfer transaction type support',
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	up: (db: any) => {
+	up: (db) => {
 		// Check if migration has already been applied by checking the table structure
 		try {
-			const tableInfo = db.query("SELECT sql FROM sqlite_master WHERE type='table' AND name='transactions'").get();
+			const tableInfo = db
+				.query<
+					{ sql: string },
+					[]
+				>("SELECT sql FROM sqlite_master WHERE type='table' AND name='transactions'")
+				.get();
 			if (tableInfo && tableInfo.sql.includes("('income', 'expense', 'transfer')")) {
 				// Migration already applied
 				db.exec('INSERT OR IGNORE INTO schema_metadata (version) VALUES (2);');
 				return;
 			}
-		} catch (error) {
+		} catch {
 			// Table might not exist, continue with migration
 		}
 
@@ -26,7 +30,7 @@ export const migration002: Migration = {
 		const transaction = db.transaction(() => {
 			// Drop the old constraint and add the new one that includes 'transfer'
 			// SQLite doesn't support ALTER TABLE ... DROP CONSTRAINT, so we need to recreate the table
-			
+
 			// First, create a backup table
 			db.exec(`
 				CREATE TABLE transactions_backup (
@@ -46,14 +50,14 @@ export const migration002: Migration = {
 					INSERT INTO transactions_backup (id, date, description, amount, type, created_at, updated_at)
 					SELECT id, date, description, amount, type, created_at, updated_at FROM transactions;
 				`);
-			} catch (error) {
+			} catch {
 				// Table might be empty or not exist, continue
 			}
 
 			// Drop the original table
 			try {
 				db.exec('DROP TABLE IF EXISTS transactions;');
-			} catch (error) {
+			} catch {
 				// Table might not exist, continue
 			}
 
@@ -76,14 +80,14 @@ export const migration002: Migration = {
 					INSERT INTO transactions (id, date, description, amount, type, created_at, updated_at)
 					SELECT id, date, description, amount, type, created_at, updated_at FROM transactions_backup;
 				`);
-			} catch (error) {
+			} catch {
 				// Backup might be empty, continue
 			}
 
 			// Drop the backup table
 			try {
 				db.exec('DROP TABLE IF EXISTS transactions_backup;');
-			} catch (error) {
+			} catch {
 				// Backup table might not exist, continue
 			}
 
@@ -91,16 +95,17 @@ export const migration002: Migration = {
 			db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);');
 			db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);');
 			db.exec('CREATE INDEX IF NOT EXISTS idx_transactions_amount ON transactions(amount);');
-			db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_unique ON transactions(date, description, amount);');
+			db.exec(
+				'CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_unique ON transactions(date, description, amount);',
+			);
 
 			// Update schema metadata
 			db.exec('INSERT OR IGNORE INTO schema_metadata (version) VALUES (2);');
 		});
-		
+
 		transaction();
 	},
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	down: (db: any) => {
+	down: (db) => {
 		// Revert back to the original constraint
 		// First, create a backup table
 		db.exec(`
@@ -153,7 +158,9 @@ export const migration002: Migration = {
 		db.exec('CREATE INDEX idx_transactions_date ON transactions(date);');
 		db.exec('CREATE INDEX idx_transactions_type ON transactions(type);');
 		db.exec('CREATE INDEX idx_transactions_amount ON transactions(amount);');
-		db.exec('CREATE UNIQUE INDEX idx_transactions_unique ON transactions(date, description, amount);');
+		db.exec(
+			'CREATE UNIQUE INDEX idx_transactions_unique ON transactions(date, description, amount);',
+		);
 
 		// Remove migration version
 		db.exec('DELETE FROM schema_metadata WHERE version = 2;');

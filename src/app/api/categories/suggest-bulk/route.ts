@@ -3,9 +3,9 @@
  * Provides intelligent category suggestions for multiple transaction descriptions at once
  */
 
-import { NextRequest, NextResponse } from 'next/server';
 import { getCategoryEngine } from '@/lib/categorization-engine';
 import type { CategorySuggestion, ErrorResponse } from '@/lib/types';
+import { NextRequest, NextResponse } from 'next/server';
 
 interface BulkSuggestionRequest {
 	transactions: Array<{
@@ -22,7 +22,9 @@ interface BulkSuggestionResponse {
  * POST /api/categories/suggest-bulk - Get category suggestions for multiple descriptions
  * Body: { transactions: [{ id: string, description: string }] }
  */
-export async function POST(request: NextRequest): Promise<NextResponse<BulkSuggestionResponse | ErrorResponse>> {
+export async function POST(
+	request: NextRequest,
+): Promise<NextResponse<BulkSuggestionResponse | ErrorResponse>> {
 	try {
 		const body: BulkSuggestionRequest = await request.json();
 		const { transactions } = body;
@@ -33,19 +35,23 @@ export async function POST(request: NextRequest): Promise<NextResponse<BulkSugge
 					error: 'INVALID_INPUT',
 					message: 'Transactions must be an array',
 				} as ErrorResponse,
-				{ status: 400 }
+				{ status: 400 },
 			);
 		}
 
 		// Validate transactions array
 		for (const transaction of transactions) {
-			if (!transaction.id || !transaction.description || typeof transaction.description !== 'string') {
+			if (
+				!transaction.id ||
+				!transaction.description ||
+				typeof transaction.description !== 'string'
+			) {
 				return NextResponse.json(
 					{
 						error: 'INVALID_INPUT',
 						message: 'Each transaction must have an id and description string',
 					} as ErrorResponse,
-					{ status: 400 }
+					{ status: 400 },
 				);
 			}
 		}
@@ -65,7 +71,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<BulkSugge
 		});
 
 		const results = await Promise.all(suggestionPromises);
-		
+
 		// Convert results to record format
 		results.forEach(({ id, suggestion }) => {
 			suggestions[id] = suggestion;
@@ -80,7 +86,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<BulkSugge
 				message: 'Failed to generate category suggestions',
 				details: error instanceof Error ? error.message : 'Unknown error',
 			} as ErrorResponse,
-			{ status: 500 }
+			{ status: 500 },
 		);
 	}
 }

@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { createTransactionRepository } from '@/lib/database';
 import { createSubscriptionPatternEngine } from '@/lib/subscription-pattern-engine';
+import type { Subscription } from '@/lib/types';
 import { ErrorResponse } from '@/lib/types';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * POST /api/subscriptions/bulk-categorize - Bulk categorize detected subscriptions
@@ -36,8 +37,12 @@ export async function POST(request: NextRequest) {
 		}
 
 		const results = {
-			created: [] as any[],
-			errors: [] as any[],
+			created: [] as {
+				subscription: Subscription;
+				flaggedTransactions: number;
+				createdPatterns: number;
+			}[],
+			errors: [] as { index: number; subscription: string; error: string }[],
 			flaggedTransactions: 0,
 			createdPatterns: 0,
 		};
@@ -89,9 +94,7 @@ export async function POST(request: NextRequest) {
 				}
 
 				// Calculate next payment date based on the most recent transaction
-				const sortedTransactions = transactions.sort(
-					(a, b) => b.date.getTime() - a.date.getTime(),
-				);
+				const sortedTransactions = transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
 				const lastTransaction = sortedTransactions[0];
 				const nextPaymentDate = new Date(lastTransaction.date);
 
@@ -126,14 +129,11 @@ export async function POST(request: NextRequest) {
 					customFrequencyDays: subscriptionData.customFrequencyDays,
 					nextPaymentDate,
 					categoryId: subscriptionData.categoryId,
-					isActive:
-						subscriptionData.isActive !== undefined ? subscriptionData.isActive : true,
+					isActive: subscriptionData.isActive !== undefined ? subscriptionData.isActive : true,
 					startDate: subscriptionData.startDate
 						? new Date(subscriptionData.startDate)
 						: sortedTransactions[sortedTransactions.length - 1].date,
-					endDate: subscriptionData.endDate
-						? new Date(subscriptionData.endDate)
-						: undefined,
+					endDate: subscriptionData.endDate ? new Date(subscriptionData.endDate) : undefined,
 					notes: subscriptionData.notes,
 					website: subscriptionData.website,
 					cancellationUrl: subscriptionData.cancellationUrl,
@@ -174,10 +174,7 @@ export async function POST(request: NextRequest) {
 				// Flag all related transactions as subscription transactions
 				let flaggedCount = 0;
 				for (const transaction of transactions) {
-					await repository.flagTransactionAsSubscription(
-						transaction.id,
-						newSubscription.id,
-					);
+					await repository.flagTransactionAsSubscription(transaction.id, newSubscription.id);
 					flaggedCount++;
 				}
 

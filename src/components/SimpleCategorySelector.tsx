@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
 	Select,
 	SelectContent,
@@ -9,14 +10,9 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@/components/ui/select';
-import {
-	Popover,
-	PopoverContent,
-	PopoverTrigger,
-} from '@/components/ui/popover';
-import { Button } from '@/components/ui/button';
-import { Sparkles, Loader2 } from 'lucide-react';
 import type { Category, CategorySuggestion } from '@/lib/types';
+import { Loader2, Sparkles } from 'lucide-react';
+import { useState } from 'react';
 
 interface SimpleCategorySelectorProps {
 	categories: Category[];
@@ -29,24 +25,24 @@ interface SimpleCategorySelectorProps {
 	compact?: boolean;
 }
 
-export default function SimpleCategorySelector({ 
+export default function SimpleCategorySelector({
 	categories,
-	currentCategoryId, 
+	currentCategoryId,
 	onCategoryChange,
 	onSuggestRequest,
 	suggestion,
 	isLoadingSuggestion = false,
 	disabled = false,
-	compact = false
+	compact = false,
 }: SimpleCategorySelectorProps) {
 	const [isOpen, setIsOpen] = useState(false);
 
 	// Don't auto-open popover as it's too intrusive, but we'll show visual indicators
-	
-	const currentCategory = categories.find(cat => cat.id === currentCategoryId);
+
+	const currentCategory = categories.find((cat) => cat.id === currentCategoryId);
 
 	const handleManualSelection = (categoryId: string) => {
-		const actualCategoryId = categoryId === "__none__" ? undefined : categoryId;
+		const actualCategoryId = categoryId === '__none__' ? undefined : categoryId;
 		onCategoryChange(actualCategoryId);
 		setIsOpen(false);
 	};
@@ -61,61 +57,63 @@ export default function SimpleCategorySelector({
 		return (
 			<Popover open={isOpen} onOpenChange={setIsOpen}>
 				<PopoverTrigger asChild>
-					<Button variant="ghost" size="sm" className="h-auto p-1 relative">
+					<Button variant='ghost' size='sm' className='h-auto p-1 relative'>
 						{currentCategory ? (
-							<Badge 
-								variant="secondary" 
-								style={{ 
-									backgroundColor: currentCategory.color + '20', 
+							<Badge
+								variant='secondary'
+								style={{
+									backgroundColor: currentCategory.color + '20',
 									color: currentCategory.color,
 									fontSize: '11px',
-									padding: '2px 6px'
+									padding: '2px 6px',
 								}}
 							>
 								{currentCategory.name}
 							</Badge>
 						) : suggestion ? (
-							<div className="flex items-center gap-1">
-								<Badge 
-									variant="secondary"
-									className="bg-blue-50 text-blue-700 border-blue-200 animate-pulse"
+							<div className='flex items-center gap-1'>
+								<Badge
+									variant='secondary'
+									className='bg-blue-50 text-blue-700 border-blue-200 animate-pulse'
 									style={{ fontSize: '11px', padding: '2px 6px' }}
 								>
-									<Sparkles className="h-2 w-2 mr-1" />
+									<Sparkles className='h-2 w-2 mr-1' />
 									{suggestion.category.name}
 								</Badge>
 							</div>
 						) : (
-							<span className="text-xs text-muted-foreground">No category</span>
+							<span className='text-xs text-muted-foreground'>
+								{suggestion === null ? 'No matching suggestion' : 'No category'}
+							</span>
 						)}
 						{suggestion && !currentCategory && (
-							<div className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+							<div className='absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full animate-pulse' />
 						)}
 					</Button>
 				</PopoverTrigger>
-				<PopoverContent className="w-80">
-					<div className="space-y-3">
+				<PopoverContent className='w-80'>
+					<div className='space-y-3'>
 						{/* AI Suggestion */}
 						{suggestion && (
-							<div className="p-2 border rounded-md bg-blue-50 border-blue-200">
-								<div className="flex items-center justify-between">
-									<div className="flex items-center gap-2">
-										<Sparkles className="h-3 w-3 text-blue-600" />
-										<span className="text-sm font-medium">Suggestion:</span>
-										<Badge 
-											variant="secondary"
-											style={{ 
-												backgroundColor: suggestion.category.color + '20', 
-												color: suggestion.category.color 
+							<div className='p-2 border rounded-md bg-blue-50 border-blue-200'>
+								<div className='flex items-center justify-between'>
+									<div className='flex items-center gap-2'>
+										<Sparkles className='h-3 w-3 text-blue-600' />
+										<span className='text-sm font-medium'>Suggestion:</span>
+										<Badge
+											variant='secondary'
+											style={{
+												backgroundColor: suggestion.category.color + '20',
+												color: suggestion.category.color,
 											}}
 										>
 											{suggestion.category.name}
 										</Badge>
-										<span className="text-xs text-muted-foreground">
+										<span className='text-xs text-muted-foreground'>
 											{Math.round(suggestion.confidence * 100)}%
 										</span>
 									</div>
-									<Button size="sm" onClick={handleSuggestionAccept}>
+									<Button size='sm' onClick={handleSuggestionAccept}>
 										Accept
 									</Button>
 								</div>
@@ -125,42 +123,47 @@ export default function SimpleCategorySelector({
 						{/* Get Suggestion Button */}
 						{!suggestion && !currentCategory && onSuggestRequest && (
 							<Button
-								variant="outline"
-								size="sm"
+								variant='outline'
+								size='sm'
 								onClick={onSuggestRequest}
 								disabled={isLoadingSuggestion}
-								className="w-full"
+								className='w-full'
 							>
 								{isLoadingSuggestion ? (
 									<>
-										<Loader2 className="h-3 w-3 mr-2 animate-spin" />
+										<Loader2 className='h-3 w-3 mr-2 animate-spin' />
 										Getting suggestion...
 									</>
 								) : (
 									<>
-										<Sparkles className="h-3 w-3 mr-2" />
+										<Sparkles className='h-3 w-3 mr-2' />
 										Get AI suggestion
 									</>
 								)}
 							</Button>
 						)}
 
+						{suggestion === null && !isLoadingSuggestion && (
+							<p role='status' className='text-xs text-muted-foreground'>
+								No matching category found. Choose a category below.
+							</p>
+						)}
 						{/* Manual Selection */}
 						<Select
-							value={currentCategoryId || "__none__"}
+							value={currentCategoryId || '__none__'}
 							onValueChange={handleManualSelection}
 							disabled={disabled}
 						>
 							<SelectTrigger>
-								<SelectValue placeholder="Select a category..." />
+								<SelectValue placeholder='Select a category...' />
 							</SelectTrigger>
 							<SelectContent>
-								<SelectItem value="__none__">No Category</SelectItem>
+								<SelectItem value='__none__'>No Category</SelectItem>
 								{categories.map((category) => (
 									<SelectItem key={category.id} value={category.id}>
-										<div className="flex items-center gap-2">
+										<div className='flex items-center gap-2'>
 											<div
-												className="w-3 h-3 rounded-full"
+												className='w-3 h-3 rounded-full'
 												style={{ backgroundColor: category.color }}
 											/>
 											{category.name}
@@ -177,10 +180,10 @@ export default function SimpleCategorySelector({
 
 	// Full version (for edit dialogs)
 	return (
-		<div className="space-y-2">
+		<div className='space-y-2'>
 			{currentCategory && (
-				<Badge 
-					variant="secondary" 
+				<Badge
+					variant='secondary'
 					style={{ backgroundColor: currentCategory.color + '20', color: currentCategory.color }}
 				>
 					{currentCategory.name}
@@ -188,22 +191,19 @@ export default function SimpleCategorySelector({
 			)}
 
 			<Select
-				value={currentCategoryId || "__none__"}
+				value={currentCategoryId || '__none__'}
 				onValueChange={handleManualSelection}
 				disabled={disabled}
 			>
-				<SelectTrigger className="w-full">
-					<SelectValue placeholder="Select a category..." />
+				<SelectTrigger className='w-full'>
+					<SelectValue placeholder='Select a category...' />
 				</SelectTrigger>
 				<SelectContent>
-					<SelectItem value="__none__">No Category</SelectItem>
+					<SelectItem value='__none__'>No Category</SelectItem>
 					{categories.map((category) => (
 						<SelectItem key={category.id} value={category.id}>
-							<div className="flex items-center gap-2">
-								<div
-									className="w-3 h-3 rounded-full"
-									style={{ backgroundColor: category.color }}
-								/>
+							<div className='flex items-center gap-2'>
+								<div className='w-3 h-3 rounded-full' style={{ backgroundColor: category.color }} />
 								{category.name}
 							</div>
 						</SelectItem>

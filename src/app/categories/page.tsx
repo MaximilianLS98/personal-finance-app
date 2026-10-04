@@ -1,18 +1,26 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
 import {
 	Dialog,
 	DialogContent,
 	DialogDescription,
 	DialogHeader,
 	DialogTitle,
-	DialogTrigger,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import {
 	Table,
 	TableBody,
@@ -23,32 +31,22 @@ import {
 	TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import type { Category, CategoryRule } from '@/lib/types';
 import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '@/components/ui/select';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import {
-	Plus,
-	Pencil,
-	Trash2,
-	Palette,
-	Brain,
-	Target,
-	TrendingUp,
-	Settings,
-	Sparkles,
 	AlertTriangle,
+	Brain,
 	Eye,
 	EyeOff,
+	Pencil,
+	Plus,
+	Settings,
+	Sparkles,
+	Target,
+	Trash2,
+	TrendingUp,
 } from 'lucide-react';
-import type { Category, CategoryRule } from '@/lib/types';
+import { useEffect, useState } from 'react';
 
 // Common colors for categories
 const PRESET_COLORS = [
@@ -194,9 +192,7 @@ export default function CategoriesPage() {
 	};
 
 	const handleDeleteCategory = async (categoryId: string) => {
-		if (
-			!confirm('Are you sure you want to delete this category? This action cannot be undone.')
-		) {
+		if (!confirm('Are you sure you want to delete this category? This action cannot be undone.')) {
 			return;
 		}
 
@@ -298,8 +294,7 @@ export default function CategoriesPage() {
 		avgConfidence:
 			categoryRules.length > 0
 				? Math.round(
-						(categoryRules.reduce((sum, r) => sum + r.confidenceScore, 0) /
-							categoryRules.length) *
+						(categoryRules.reduce((sum, r) => sum + r.confidenceScore, 0) / categoryRules.length) *
 							100,
 					)
 				: 0,
@@ -369,12 +364,8 @@ export default function CategoriesPage() {
 								<TableBody>
 									{categories.map((category) => (
 										<TableRow key={category.id}>
-											<TableCell className='font-medium'>
-												{category.name}
-											</TableCell>
-											<TableCell>
-												{category.description || 'No description'}
-											</TableCell>
+											<TableCell className='font-medium'>{category.name}</TableCell>
+											<TableCell>{category.description || 'No description'}</TableCell>
 											<TableCell>
 												<div className='flex items-center gap-2'>
 													<div
@@ -383,9 +374,7 @@ export default function CategoriesPage() {
 															backgroundColor: category.color,
 														}}
 													/>
-													<code className='text-xs'>
-														{category.color}
-													</code>
+													<code className='text-xs'>{category.color}</code>
 												</div>
 											</TableCell>
 											<TableCell>
@@ -396,15 +385,15 @@ export default function CategoriesPage() {
 													<Button
 														size='sm'
 														variant='outline'
-														onClick={() => openEditDialog(category)}>
+														onClick={() => openEditDialog(category)}
+													>
 														<Pencil className='w-4 h-4' />
 													</Button>
 													<Button
 														size='sm'
 														variant='outline'
-														onClick={() =>
-															handleDeleteCategory(category.id)
-														}>
+														onClick={() => handleDeleteCategory(category.id)}
+													>
 														<Trash2 className='w-4 h-4' />
 													</Button>
 												</div>
@@ -425,12 +414,8 @@ export default function CategoriesPage() {
 								<CardContent className='p-6'>
 									<div className='flex items-center justify-between'>
 										<div>
-											<p className='text-sm font-medium text-muted-foreground'>
-												Total Rules
-											</p>
-											<p className='text-2xl font-bold'>
-												{aiStats.totalRules}
-											</p>
+											<p className='text-sm font-medium text-muted-foreground'>Total Rules</p>
+											<p className='text-2xl font-bold'>{aiStats.totalRules}</p>
 										</div>
 										<Brain className='w-8 h-8 text-blue-500' />
 									</div>
@@ -440,12 +425,8 @@ export default function CategoriesPage() {
 								<CardContent className='p-6'>
 									<div className='flex items-center justify-between'>
 										<div>
-											<p className='text-sm font-medium text-muted-foreground'>
-												User Rules
-											</p>
-											<p className='text-2xl font-bold'>
-												{aiStats.userRules}
-											</p>
+											<p className='text-sm font-medium text-muted-foreground'>User Rules</p>
+											<p className='text-2xl font-bold'>{aiStats.userRules}</p>
 										</div>
 										<Target className='w-8 h-8 text-green-500' />
 									</div>
@@ -455,12 +436,8 @@ export default function CategoriesPage() {
 								<CardContent className='p-6'>
 									<div className='flex items-center justify-between'>
 										<div>
-											<p className='text-sm font-medium text-muted-foreground'>
-												System Rules
-											</p>
-											<p className='text-2xl font-bold'>
-												{aiStats.systemRules}
-											</p>
+											<p className='text-sm font-medium text-muted-foreground'>System Rules</p>
+											<p className='text-2xl font-bold'>{aiStats.systemRules}</p>
 										</div>
 										<Settings className='w-8 h-8 text-muted-foreground' />
 									</div>
@@ -470,12 +447,8 @@ export default function CategoriesPage() {
 								<CardContent className='p-6'>
 									<div className='flex items-center justify-between'>
 										<div>
-											<p className='text-sm font-medium text-muted-foreground'>
-												Avg Confidence
-											</p>
-											<p className='text-2xl font-bold'>
-												{aiStats.avgConfidence}%
-											</p>
+											<p className='text-sm font-medium text-muted-foreground'>Avg Confidence</p>
+											<p className='text-2xl font-bold'>{aiStats.avgConfidence}%</p>
 										</div>
 										<TrendingUp className='w-8 h-8 text-purple-500' />
 									</div>
@@ -500,7 +473,8 @@ export default function CategoriesPage() {
 												...prev,
 												categoryId: value,
 											}))
-										}>
+										}
+									>
 										<SelectTrigger>
 											<SelectValue placeholder='Select category' />
 										</SelectTrigger>
@@ -537,7 +511,8 @@ export default function CategoriesPage() {
 												...prev,
 												patternType: value,
 											}))
-										}>
+										}
+									>
 										<SelectTrigger>
 											<SelectValue />
 										</SelectTrigger>
@@ -558,16 +533,14 @@ export default function CategoriesPage() {
 										onChange={(e) =>
 											setNewRuleData((prev) => ({
 												...prev,
-												confidenceScore: Math.max(
-													0,
-													Math.min(1, parseFloat(e.target.value) || 0),
-												),
+												confidenceScore: Math.max(0, Math.min(1, parseFloat(e.target.value) || 0)),
 											}))
 										}
 									/>
 									<Button
 										onClick={handleCreateRule}
-										disabled={!newRuleData.categoryId || !newRuleData.pattern}>
+										disabled={!newRuleData.categoryId || !newRuleData.pattern}
+									>
 										<Plus className='w-4 h-4 mr-2' />
 										Add Rule
 									</Button>
@@ -592,11 +565,7 @@ export default function CategoriesPage() {
 											checked={showSystemRules}
 											onCheckedChange={setShowSystemRules}
 										/>
-										{showSystemRules ? (
-											<Eye className='w-4 h-4' />
-										) : (
-											<EyeOff className='w-4 h-4' />
-										)}
+										{showSystemRules ? <Eye className='w-4 h-4' /> : <EyeOff className='w-4 h-4' />}
 									</div>
 								</div>
 							</CardHeader>
@@ -628,45 +597,26 @@ export default function CategoriesPage() {
 														variant='secondary'
 														style={{
 															backgroundColor:
-																categories.find(
-																	(c) => c.id === rule.categoryId,
-																)?.color + '20',
-															color: categories.find(
-																(c) => c.id === rule.categoryId,
-															)?.color,
-														}}>
+																categories.find((c) => c.id === rule.categoryId)?.color + '20',
+															color: categories.find((c) => c.id === rule.categoryId)?.color,
+														}}
+													>
 														{getCategoryName(rule.categoryId)}
 													</Badge>
 												</TableCell>
-												<TableCell className='font-mono text-sm'>
-													{rule.pattern}
+												<TableCell className='font-mono text-sm'>{rule.pattern}</TableCell>
+												<TableCell>
+													<Badge variant='outline'>{rule.patternType}</Badge>
 												</TableCell>
 												<TableCell>
-													<Badge variant='outline'>
-														{rule.patternType}
-													</Badge>
-												</TableCell>
-												<TableCell>
-													<Badge
-														variant={
-															rule.confidenceScore >= 0.8
-																? 'default'
-																: 'secondary'
-														}>
+													<Badge variant={rule.confidenceScore >= 0.8 ? 'default' : 'secondary'}>
 														{Math.round(rule.confidenceScore * 100)}%
 													</Badge>
 												</TableCell>
 												<TableCell>{rule.usageCount} uses</TableCell>
 												<TableCell>
-													<Badge
-														variant={
-															rule.createdBy === 'user'
-																? 'default'
-																: 'secondary'
-														}>
-														{rule.createdBy === 'user'
-															? 'User'
-															: 'System'}
+													<Badge variant={rule.createdBy === 'user' ? 'default' : 'secondary'}>
+														{rule.createdBy === 'user' ? 'User' : 'System'}
 													</Badge>
 												</TableCell>
 												<TableCell className='text-right'>
@@ -674,9 +624,8 @@ export default function CategoriesPage() {
 														<Button
 															size='sm'
 															variant='outline'
-															onClick={() =>
-																handleDeleteRule(rule.id)
-															}>
+															onClick={() => handleDeleteRule(rule.id)}
+														>
 															<Trash2 className='w-4 h-4' />
 														</Button>
 													)}
@@ -703,8 +652,8 @@ export default function CategoriesPage() {
 								<TrendingUp className='w-16 h-16 mx-auto mb-4 opacity-50' />
 								<p>Category analytics and spending insights coming soon!</p>
 								<p className='text-sm mt-2'>
-									This will show category spending trends, budget tracking, and AI
-									performance metrics.
+									This will show category spending trends, budget tracking, and AI performance
+									metrics.
 								</p>
 							</div>
 						</CardContent>
@@ -721,12 +670,11 @@ export default function CategoriesPage() {
 						setEditingCategory(null);
 						resetForm();
 					}
-				}}>
+				}}
+			>
 				<DialogContent>
 					<DialogHeader>
-						<DialogTitle>
-							{editingCategory ? 'Edit Category' : 'Create New Category'}
-						</DialogTitle>
+						<DialogTitle>{editingCategory ? 'Edit Category' : 'Create New Category'}</DialogTitle>
 						<DialogDescription>
 							{editingCategory
 								? 'Update the category details below.'
@@ -741,9 +689,7 @@ export default function CategoriesPage() {
 							<Input
 								id='category-name'
 								value={formData.name}
-								onChange={(e) =>
-									setFormData((prev) => ({ ...prev, name: e.target.value }))
-								}
+								onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
 								className='col-span-3'
 								placeholder='e.g., Groceries'
 							/>
@@ -774,14 +720,10 @@ export default function CategoriesPage() {
 										<button
 											key={color}
 											className={`w-8 h-8 rounded-full border-2 ${
-												formData.color === color
-													? 'border-gray-900'
-													: 'border-gray-300'
+												formData.color === color ? 'border-gray-900' : 'border-gray-300'
 											}`}
 											style={{ backgroundColor: color }}
-											onClick={() =>
-												setFormData((prev) => ({ ...prev, color }))
-											}
+											onClick={() => setFormData((prev) => ({ ...prev, color }))}
 										/>
 									))}
 								</div>
@@ -804,9 +746,8 @@ export default function CategoriesPage() {
 							</Label>
 							<Select
 								value={formData.icon}
-								onValueChange={(value) =>
-									setFormData((prev) => ({ ...prev, icon: value }))
-								}>
+								onValueChange={(value) => setFormData((prev) => ({ ...prev, icon: value }))}
+							>
 								<SelectTrigger className='col-span-3'>
 									<SelectValue />
 								</SelectTrigger>
@@ -829,14 +770,14 @@ export default function CategoriesPage() {
 									setIsCreateDialogOpen(false);
 									setEditingCategory(null);
 									resetForm();
-								}}>
+								}}
+							>
 								Cancel
 							</Button>
 							<Button
-								onClick={
-									editingCategory ? handleEditCategory : handleCreateCategory
-								}
-								disabled={!formData.name || !formData.color || !formData.icon}>
+								onClick={editingCategory ? handleEditCategory : handleCreateCategory}
+								disabled={!formData.name || !formData.color || !formData.icon}
+							>
 								{editingCategory ? 'Update Category' : 'Create Category'}
 							</Button>
 						</div>

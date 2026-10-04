@@ -1,10 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useTheme } from 'next-themes';
 import { useCurrencySettings } from '@/app/providers';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
 	Select,
 	SelectContent,
@@ -12,14 +10,16 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
+import { useTheme } from 'next-themes';
+import Link from 'next/link';
+import { useMemo, useState } from 'react';
 
 // Extensible registry for base color themes. Keys should map to CSS var sets in globals.css
 const BASE_COLOR_THEMES = [
 	{ key: 'neutral', label: 'Neutral' },
 	{ key: 'tangerine', label: 'Tangerine' },
-    { key: 'candy', label: 'Candy' },
-    { key: 'soft-pop', label: 'Soft Pop' },
+	{ key: 'candy', label: 'Candy' },
+	{ key: 'soft-pop', label: 'Soft Pop' },
 ] as const;
 
 const CURRENCIES = [
@@ -66,20 +66,23 @@ export default function SettingsPage() {
 								Choose light, dark, or follow system.
 							</div>
 						</div>
-						<div className='flex items-center gap-3'>
+						<div className='flex flex-wrap items-center gap-3'>
 							<Button
 								variant={resolvedTheme === 'light' ? 'default' : 'outline'}
-								onClick={() => setTheme('light')}>
+								onClick={() => setTheme('light')}
+							>
 								Light
 							</Button>
 							<Button
 								variant={resolvedTheme === 'dark' ? 'default' : 'outline'}
-								onClick={() => setTheme('dark')}>
+								onClick={() => setTheme('dark')}
+							>
 								Dark
 							</Button>
 							<Button
 								variant={theme === 'system' ? 'default' : 'outline'}
-								onClick={() => setTheme('system')}>
+								onClick={() => setTheme('system')}
+							>
 								System
 							</Button>
 						</div>

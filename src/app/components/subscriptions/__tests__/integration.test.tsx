@@ -4,10 +4,10 @@
  * without mocking dependencies due to Bun/Jest compatibility issues
  */
 
-import React from 'react';
 import { render } from '@testing-library/react';
-import { SubscriptionOverview } from '../SubscriptionOverview';
+import React from 'react';
 import { Subscription } from '../../../../lib/types';
+import { SubscriptionOverview } from '../SubscriptionOverview';
 
 // Mock providers context
 const MockProviders = ({ children }: { children: React.ReactNode }) => {
@@ -24,7 +24,7 @@ jest.mock('../../../providers', () => ({
 
 // Mock financial calculator
 jest.mock('../../../../lib/financial-calculator', () => ({
-	formatCurrency: (amount: number, currency: string, locale: string) =>
+	formatCurrency: (amount: number, currency: string, _locale: string) =>
 		`${currency} ${amount.toFixed(2)}`,
 }));
 

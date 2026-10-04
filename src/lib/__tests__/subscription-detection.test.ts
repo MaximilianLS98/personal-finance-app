@@ -1,14 +1,16 @@
+import { createRepositoryMock } from './repository-mock';
 /**
  * Tests for subscription detection and suggestion system
  * Verifies the core detection algorithm and suggestion workflow
  */
 
-import type { Transaction } from '../types';
 import { SubscriptionPatternEngine } from '../subscription-pattern-engine';
 import { SubscriptionService } from '../subscription-service';
+import type { Transaction } from '../types';
 
 // Mock repository for testing
 const mockRepository = {
+	...createRepositoryMock(),
 	findActiveSubscriptions: jest.fn().mockResolvedValue([]),
 	findPatternsBySubscription: jest.fn().mockResolvedValue([]),
 	createSubscriptionPattern: jest.fn(),
@@ -40,13 +42,14 @@ const mockRepository = {
 			currency: 'NOK',
 		});
 	}),
-} as any;
+};
 
 describe('Subscription Detection System', () => {
 	let patternEngine: SubscriptionPatternEngine;
 	let subscriptionService: SubscriptionService;
 
 	beforeEach(() => {
+		jest.useFakeTimers({ now: new Date('2024-04-20T12:00:00Z') });
 		jest.clearAllMocks();
 		// Reset to default mock values
 		mockRepository.findActiveSubscriptions.mockResolvedValue([]);
@@ -239,7 +242,6 @@ describe('Subscription Detection System', () => {
 			const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, 15);
 			const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 15);
 			const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 15);
-			const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 15);
 			const sevenMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 7, 15);
 			const eightMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 8, 15);
 
@@ -387,20 +389,11 @@ describe('Subscription Detection System', () => {
 			const transactionIds = ['tx1', 'tx2'];
 			const subscriptionId = 'sub1';
 
-			await subscriptionService.flagTransactionsAsSubscription(
-				subscriptionId,
-				transactionIds,
-			);
+			await subscriptionService.flagTransactionsAsSubscription(subscriptionId, transactionIds);
 
 			expect(mockRepository.flagTransactionAsSubscription).toHaveBeenCalledTimes(2);
-			expect(mockRepository.flagTransactionAsSubscription).toHaveBeenCalledWith(
-				'tx1',
-				'sub1',
-			);
-			expect(mockRepository.flagTransactionAsSubscription).toHaveBeenCalledWith(
-				'tx2',
-				'sub1',
-			);
+			expect(mockRepository.flagTransactionAsSubscription).toHaveBeenCalledWith('tx1', 'sub1');
+			expect(mockRepository.flagTransactionAsSubscription).toHaveBeenCalledWith('tx2', 'sub1');
 		});
 
 		it('should implement retroactive transaction flagging', async () => {
@@ -447,14 +440,8 @@ describe('Subscription Detection System', () => {
 			await subscriptionService.confirmSubscription({ candidate: mockCandidate });
 
 			// Verify that all matching transactions were flagged
-			expect(mockRepository.flagTransactionAsSubscription).toHaveBeenCalledWith(
-				'tx1',
-				'sub1',
-			);
-			expect(mockRepository.flagTransactionAsSubscription).toHaveBeenCalledWith(
-				'tx2',
-				'sub1',
-			);
+			expect(mockRepository.flagTransactionAsSubscription).toHaveBeenCalledWith('tx1', 'sub1');
+			expect(mockRepository.flagTransactionAsSubscription).toHaveBeenCalledWith('tx2', 'sub1');
 		});
 
 		it('should implement learning mechanism to improve detection accuracy', async () => {
@@ -524,4 +511,8 @@ describe('Subscription Detection System', () => {
 			expect(mockRepository.flagTransactionAsSubscription).toHaveBeenCalledTimes(3);
 		});
 	});
+});
+
+afterEach(() => {
+	jest.useRealTimers();
 });

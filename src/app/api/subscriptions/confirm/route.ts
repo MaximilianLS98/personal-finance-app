@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { createTransactionRepository } from '@/lib/database';
-import { createSubscriptionService } from '@/lib/subscription-service';
-import { ErrorResponse } from '@/lib/types';
 import type { SubscriptionCandidate, SubscriptionMatch } from '@/lib/subscription-pattern-engine';
+import { createSubscriptionService } from '@/lib/subscription-service';
+import type { Subscription } from '@/lib/types';
+import { ErrorResponse } from '@/lib/types';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * Request body for confirming subscription candidates and matches
@@ -44,8 +45,13 @@ export async function POST(request: NextRequest) {
 
 		const subscriptionService = createSubscriptionService(repository);
 		const results = {
-			createdSubscriptions: [] as any[],
-			flaggedTransactions: [] as any[],
+			createdSubscriptions: [] as Subscription[],
+			flaggedTransactions: [] as {
+				transactionId: string;
+				subscriptionId: string;
+				subscriptionName: string;
+				confidence: number;
+			}[],
 			errors: [] as string[],
 		};
 
@@ -59,10 +65,8 @@ export async function POST(request: NextRequest) {
 							nextPaymentDate: overrides.nextPaymentDate
 								? new Date(overrides.nextPaymentDate)
 								: undefined,
-							startDate: overrides.startDate
-								? new Date(overrides.startDate)
-								: undefined,
-					  }
+							startDate: overrides.startDate ? new Date(overrides.startDate) : undefined,
+						}
 					: undefined;
 
 				// Hydrate candidate transaction dates (serialized from the client) back to Date objects
@@ -71,8 +75,7 @@ export async function POST(request: NextRequest) {
 					matchingTransactions: candidate.matchingTransactions.map((t) => ({
 						...t,
 						// Support both Date and string inputs safely
-						date:
-							t.date instanceof Date ? t.date : new Date(t.date as unknown as string),
+						date: t.date instanceof Date ? t.date : new Date(t.date as unknown as string),
 					})),
 				};
 
