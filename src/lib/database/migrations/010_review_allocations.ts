@@ -22,19 +22,45 @@ export const migration010: Migration = {
     id TEXT PRIMARY KEY, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     category_id TEXT NOT NULL, rule_id TEXT, changes_json TEXT NOT NULL, undone_at TEXT
    );
+   -- Round cumulative refunds by largest remainder, then post each receipt's difference.
+   -- This preserves every receipt cent and returns every category to zero at a full refund.
    CREATE VIEW effective_transactions AS
+    WITH receipts AS (
+      SELECT t.id,t.date,t.description,t.currency,t.account_id,r.purchase_id,
+       CAST(ROUND(t.amount*100) AS INTEGER) receipt_cents,
+       CAST(ROUND(ABS(p.amount)*100) AS INTEGER) purchase_cents,p.category_id purchase_category
+      FROM refund_links r JOIN transactions t ON t.id=r.refund_id
+      JOIN transactions p ON p.id=r.purchase_id
+    ), cumulative AS (
+      SELECT *,SUM(receipt_cents) OVER(PARTITION BY purchase_id ORDER BY date,id ROWS UNBOUNDED PRECEDING) cumulative_cents
+      FROM receipts
+    ), receipt_shares AS (
+      SELECT r.*,COALESCE(a.category_id,r.purchase_category) category_id,
+       COALESCE(CAST(ROUND(a.amount*100) AS INTEGER),purchase_cents) allocation_cents
+      FROM cumulative r LEFT JOIN transaction_allocations a ON a.transaction_id=r.purchase_id
+    ), apportioned AS (
+      SELECT *,
+       CAST(cumulative_cents*allocation_cents/purchase_cents AS INTEGER) floor_cents,
+       (cumulative_cents*allocation_cents)%purchase_cents remainder,
+       CAST((cumulative_cents-receipt_cents)*allocation_cents/purchase_cents AS INTEGER) previous_floor,
+       ((cumulative_cents-receipt_cents)*allocation_cents)%purchase_cents previous_remainder
+      FROM receipt_shares
+    ), rounded_receipts AS (
+      SELECT id,date,description,currency,account_id,category_id,
+       (floor_cents+CASE WHEN ROW_NUMBER() OVER(PARTITION BY id ORDER BY remainder DESC,category_id)
+        <= cumulative_cents-SUM(floor_cents) OVER(PARTITION BY id) THEN 1 ELSE 0 END
+        -previous_floor-CASE WHEN ROW_NUMBER() OVER(PARTITION BY id ORDER BY previous_remainder DESC,category_id)
+        <= cumulative_cents-receipt_cents-SUM(previous_floor) OVER(PARTITION BY id) THEN 1 ELSE 0 END)/100.0 amount
+      FROM apportioned
+    )
     SELECT t.id, t.date, t.description, t.currency, t.account_id, t.type,
       COALESCE(a.category_id,t.category_id) category_id,
       CASE WHEN a.amount IS NOT NULL THEN -a.amount ELSE t.amount END amount
     FROM transactions t LEFT JOIN transaction_allocations a ON a.transaction_id=t.id
     WHERE NOT EXISTS(SELECT 1 FROM refund_links r WHERE r.refund_id=t.id)
     UNION ALL
-    SELECT t.id,t.date,t.description,t.currency,t.account_id,'expense',
-      COALESCE(a.category_id,p.category_id),
-      CASE WHEN a.amount IS NULL THEN t.amount ELSE t.amount*a.amount/ABS(p.amount) END
-    FROM refund_links r JOIN transactions t ON t.id=r.refund_id
-    JOIN transactions p ON p.id=r.purchase_id
-    LEFT JOIN transaction_allocations a ON a.transaction_id=p.id;
+    SELECT id,date,description,currency,account_id,'expense',category_id,amount
+    FROM rounded_receipts;
    CREATE TRIGGER protect_allocated_transaction BEFORE UPDATE OF amount,type,currency ON transactions
     WHEN (NEW.amount != OLD.amount OR NEW.type != OLD.type OR COALESCE(NEW.currency,'') != COALESCE(OLD.currency,''))
      AND (EXISTS(SELECT 1 FROM transaction_allocations WHERE transaction_id=OLD.id)

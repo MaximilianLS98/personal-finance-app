@@ -46,6 +46,42 @@ describe('split purchases and refund ledger', () => {
 		expect(report.totals[0]).toMatchObject({ income: 0, expenses: 60, net: -60, count: 2 });
 		expect(report.categories.find((c) => c.categoryId === 'cat_shopping')?.amount).toBe(15);
 	});
+
+	it('apportions refund cents so rounded categories always reconcile with the receipt', async () => {
+		transaction('purchase', -0.03, 'cat_shopping');
+		transaction('receipt', 0.01, null, 'NOK', '2026-10-03');
+		setAllocations(db, 'purchase', [
+			{ categoryId: 'cat_groceries', amount: 0.01 },
+			{ categoryId: 'cat_shopping', amount: 0.01 },
+			{ categoryId: 'cat_entertainment', amount: 0.01 },
+		]);
+		linkRefund(db, 'receipt', 'purchase', 'refund');
+		const report = monthlyOverview(db, '2026-10');
+		expect(report.totals[0].expenses).toBe(0.02);
+		expect(Math.round(report.categories.reduce((sum, row) => sum + row.amount, 0) * 100)).toBe(2);
+		const receipt = (await getEffectiveTransactions(db)).filter((t) => t.id === 'receipt');
+		expect(receipt.map((t) => t.amount).sort()).toEqual([0, 0, 0.01]);
+		transaction('remainder', 0.02, null, 'NOK', '2026-10-04');
+		linkRefund(db, 'remainder', 'purchase', 'refund');
+		const fullyRefunded = monthlyOverview(db, '2026-10');
+		expect(fullyRefunded.totals[0].expenses).toBe(0);
+		expect(fullyRefunded.categories.every((category) => category.amount === 0)).toBe(true);
+		expect(
+			Math.round(fullyRefunded.categories.reduce((sum, row) => sum + row.amount, 0) * 100),
+		).toBe(0);
+	});
+	it('allocates indivisible refunds by largest remainder and deterministic category order', async () => {
+		transaction('purchase', -10, 'cat_shopping');
+		transaction('receipt', 1, null, 'NOK', '2026-10-03');
+		setAllocations(db, 'purchase', [
+			{ categoryId: 'cat_groceries', amount: 3.33 },
+			{ categoryId: 'cat_shopping', amount: 6.67 },
+		]);
+		linkRefund(db, 'receipt', 'purchase', 'refund');
+		const receipt = (await getEffectiveTransactions(db)).filter((t) => t.id === 'receipt');
+		expect(receipt.find((t) => t.categoryId === 'cat_groceries')?.amount).toBe(0.33);
+		expect(receipt.find((t) => t.categoryId === 'cat_shopping')?.amount).toBe(0.67);
+	});
 	it('deducts refunds in the receipt month and keeps currencies separate', () => {
 		transaction('purchase', -100, 'cat_shopping', 'NOK', '2026-09-30');
 		transaction('refund', 40, null, 'NOK');
