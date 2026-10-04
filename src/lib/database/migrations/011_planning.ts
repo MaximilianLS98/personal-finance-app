@@ -1,7 +1,7 @@
 import type { Migration } from '../types';
 
-export const migration010: Migration = {
-	version: 10,
+export const migration011: Migration = {
+	version: 11,
 	description: 'Budget cycles, rollover and savings goals',
 	up(db) {
 		db.exec(`
@@ -24,12 +24,12 @@ export const migration010: Migration = {
     subscription_id TEXT PRIMARY KEY REFERENCES subscriptions(id) ON DELETE CASCADE,
     goal_id TEXT NOT NULL REFERENCES savings_goals(id) ON DELETE CASCADE
    );
-   INSERT INTO schema_metadata(version) VALUES(10);
+   INSERT INTO schema_metadata(version) VALUES(11);
   `);
 	},
 	down(db) {
 		db.exec(
-			`DROP TABLE goal_subscription_plans; DROP TABLE goal_contributions; DROP TABLE savings_goals; DROP TABLE budget_cycle_settings; DELETE FROM schema_metadata WHERE version=10;`,
+			`DROP TABLE goal_subscription_plans; DROP TABLE goal_contributions; DROP TABLE savings_goals; DROP TABLE budget_cycle_settings; DELETE FROM schema_metadata WHERE version=11;`,
 		);
 	},
 };

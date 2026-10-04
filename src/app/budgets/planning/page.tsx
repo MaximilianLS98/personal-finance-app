@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { invalidateFinanceQueries } from '@/lib/query-keys';
 import { displayMoney } from '@/lib/money';
 import type { Budget, BudgetProgress } from '@/lib/types';
 import type { CycleSettings, PeriodRecord } from '@/lib/planning';
@@ -54,8 +55,7 @@ function BudgetCycle({ budget }: { budget: Budget }) {
 						setError('');
 						try {
 							await request(`/api/budgets/${budget.id}/planning`, current);
-							await client.invalidateQueries({ queryKey: ['budget-planning', budget.id] });
-							await client.invalidateQueries({ queryKey: ['budget-dashboard'] });
+							await invalidateFinanceQueries(client);
 							setSettings(null);
 						} catch (e) {
 							setError(e instanceof Error ? e.message : 'Save failed');

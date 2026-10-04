@@ -1,3 +1,4 @@
+import { linkRefund } from '../../src/lib/transaction-ledger';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { migrations } from '../../src/lib/database/migrations';
@@ -115,16 +116,11 @@ describe('budget cycles and truthful forecasts', () => {
 	});
 
 	it('subtracts linked subscription refunds from paid bills, not from variable spending', () => {
-		// Match the companion ledger contract without requiring its migration in this worktree.
-		db.exec(`CREATE TABLE refund_links(refund_id TEXT PRIMARY KEY,purchase_id TEXT);
-   CREATE VIEW effective_transactions AS
-   SELECT id,date,description,amount,type,currency,category_id FROM transactions WHERE id NOT IN(SELECT refund_id FROM refund_links)
-   UNION ALL SELECT t.id,t.date,t.description,t.amount,'expense',t.currency,p.category_id FROM refund_links r JOIN transactions t ON t.id=r.refund_id JOIN transactions p ON p.id=r.purchase_id;`);
 		subscription('service', 100, '2026-02-05');
 		transaction('bill', '2026-02-05', -100, 'NOK', 'service');
 		transaction('food', '2026-02-06', -50);
 		transaction('receipt', '2026-02-08', 100, 'NOK', null, 'income');
-		db.exec("INSERT INTO refund_links VALUES('receipt','bill')");
+		linkRefund(db, 'receipt', 'bill', 'refund');
 		const result = budgetForecast(db, budget, new Date('2026-02-10'));
 		expect(result.currentSpent).toBe(50);
 		expect(result.subscriptionPaid).toBe(0);
