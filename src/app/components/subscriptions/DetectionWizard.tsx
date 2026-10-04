@@ -1,54 +1,23 @@
 'use client';
-import type { SubscriptionCandidate as ApiCandidate } from '@/lib/subscription-pattern-engine';
-
-import {
-	AlertTriangle,
-	Calendar,
-	CheckCircle,
-	DollarSign,
-	Loader2,
-	Search,
-	TrendingUp,
-	Wand2,
-} from 'lucide-react';
 import React from 'react';
-import { Badge } from '../../../components/ui/badge';
-import { Button } from '../../../components/ui/button';
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardHeader,
-	CardTitle,
-} from '../../../components/ui/card';
-import { Checkbox } from '../../../components/ui/checkbox';
-import { Progress } from '../../../components/ui/progress';
-import { formatCurrency } from '../../../lib/financial-calculator';
-import { Category, Transaction } from '../../../lib/types';
-import { useCurrencySettings } from '../../providers';
+import type { SubscriptionCandidate as ApiCandidate } from '@/lib/subscription-pattern-engine';
+import type { Category, Transaction } from '@/lib/types';
+import { currencyCode, displayMoney } from '@/lib/money';
+import { nextDetectedPayment } from '@/lib/detected-subscription';
+import { useCurrencySettings } from '@/app/providers';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 
-interface DetectionWizardProps {
-	/** Detection results from API */
-	detectionResults?: { data: { candidates: ApiCandidate[] } };
-	/** Array of transactions to analyze */
-	transactions?: Transaction[];
-	/** Array of categories for assignment */
-	categories?: Category[];
-	/** Loading state indicator */
-	isLoading?: boolean;
-	/** Error message to display */
-	error?: string;
-	/** Callback when subscriptions are confirmed */
-	onComplete?: (candidates: SubscriptionCandidate[]) => void;
-	/** Callback when wizard is cancelled */
-	onCancel?: () => void;
-}
-
+// Optional metadata keeps older import responses compatible while the engine rolls forward.
+type CandidateMetadata = { lastPaymentDate?: string; activity?: 'recent' | 'no_recent_payment' };
 export interface SubscriptionCandidate {
 	id: string;
 	name: string;
 	description: string;
 	amount: number;
+	currency: string;
 	frequency: 'monthly' | 'quarterly' | 'annually';
 	confidence: number;
 	transactionCount: number;
@@ -58,14 +27,52 @@ export interface SubscriptionCandidate {
 	suggestedCategoryId?: string;
 	transactions: Transaction[];
 	selected: boolean;
+	isActive: boolean;
+	activity?: CandidateMetadata['activity'];
+	reason: string;
+	patterns: ApiCandidate['detectedPatterns'];
 }
-
-type WizardStep = 'start' | 'detecting' | 'review' | 'complete';
-
-/**
- * DetectionWizard component guides users through subscription detection process
- * Provides step-by-step workflow for detecting and confirming subscriptions
- */
+interface DetectionWizardProps {
+	detectionResults?: { data: { candidates: (ApiCandidate & CandidateMetadata)[] } };
+	transactions?: Transaction[];
+	categories?: Category[];
+	isLoading?: boolean;
+	error?: string;
+	onComplete?: (candidates: SubscriptionCandidate[]) => void | Promise<void>;
+	onCancel?: () => void;
+}
+function convert(
+	candidate: ApiCandidate & CandidateMetadata,
+	index: number,
+): SubscriptionCandidate {
+	const dates = candidate.matchingTransactions
+		.map((t) => new Date(t.date))
+		.sort((a, b) => a.getTime() - b.getTime());
+	const last = candidate.lastPaymentDate
+		? new Date(candidate.lastPaymentDate)
+		: (dates.at(-1) ?? new Date());
+	const historical = candidate.activity === 'no_recent_payment';
+	return {
+		id: `candidate-${index}`,
+		name: candidate.name,
+		description: candidate.name,
+		amount: candidate.amount,
+		currency: currencyCode(candidate.currency),
+		frequency: candidate.billingFrequency,
+		confidence: candidate.confidence,
+		transactionCount: dates.length,
+		firstTransaction: dates[0] ?? last,
+		lastTransaction: last,
+		nextPaymentDate: nextDetectedPayment(last, candidate.billingFrequency),
+		suggestedCategoryId: candidate.categoryId,
+		transactions: candidate.matchingTransactions,
+		selected: !historical && candidate.confidence >= 0.8,
+		isActive: !historical,
+		activity: candidate.activity,
+		reason: candidate.reason,
+		patterns: candidate.detectedPatterns,
+	};
+}
 export function DetectionWizard({
 	detectionResults,
 	transactions = [],
@@ -75,423 +82,201 @@ export function DetectionWizard({
 	onComplete,
 	onCancel,
 }: DetectionWizardProps) {
-	const { currency, locale } = useCurrencySettings();
-
-	// Wizard state
-	const [currentStep, setCurrentStep] = React.useState<WizardStep>(
-		detectionResults ? 'review' : 'start',
-	);
-	const [detectionProgress, setDetectionProgress] = React.useState(0);
+	const { locale } = useCurrencySettings();
 	const [candidates, setCandidates] = React.useState<SubscriptionCandidate[]>([]);
-
-	// Simple local retry handler to reset the wizard state
-	const handleStartDetection = () => {
-		setCurrentStep('start');
-		setDetectionProgress(0);
-	};
-
-	// Convert detection results to candidates when available
+	const [saving, setSaving] = React.useState(false);
+	const [saveError, setSaveError] = React.useState('');
+	const [complete, setComplete] = React.useState(false);
+	const pending = React.useRef(false);
 	React.useEffect(() => {
-		if (detectionResults?.data?.candidates) {
-			const convertedCandidates: SubscriptionCandidate[] = detectionResults.data.candidates.map(
-				(candidate, index) => ({
-					id: `candidate-${index}`,
-					name: candidate.name || 'Unknown Subscription',
-					description: candidate.name,
-					amount: candidate.amount || 0,
-					frequency: candidate.billingFrequency,
-					confidence: candidate.confidence || 0.5,
-					transactionCount: candidate.matchingTransactions.length,
-					firstTransaction:
-						candidate.matchingTransactions?.length > 0
-							? new Date(
-									Math.min(
-										...candidate.matchingTransactions.map((t) => new Date(t.date).getTime()),
-									),
-								)
-							: new Date(Date.now()),
-					lastTransaction:
-						candidate.matchingTransactions?.length > 0
-							? new Date(
-									Math.max(
-										...candidate.matchingTransactions.map((t) => new Date(t.date).getTime()),
-									),
-								)
-							: new Date(Date.now()),
-					nextPaymentDate: new Date(Date.now()),
-					suggestedCategoryId: candidate.categoryId,
-					transactions: candidate.matchingTransactions,
-					selected: candidate.confidence >= 0.8, // Auto-select high confidence candidates
-				}),
-			);
-			setCandidates(convertedCandidates);
+		if (detectionResults?.data.candidates) {
+			setCandidates(detectionResults.data.candidates.map(convert));
+			setComplete(false);
+			setSaveError('');
 		}
 	}, [detectionResults]);
-
-	// Handle candidate selection toggle
-	const toggleCandidate = (candidateId: string) => {
-		setCandidates((prev) =>
-			prev.map((candidate) =>
-				candidate.id === candidateId ? { ...candidate, selected: !candidate.selected } : candidate,
-			),
+	const change = (id: string, values: Partial<SubscriptionCandidate>) =>
+		setCandidates((current) =>
+			current.map((candidate) => (candidate.id === id ? { ...candidate, ...values } : candidate)),
 		);
-	};
-
-	// Handle confirmation
-	const handleConfirm = () => {
-		const selectedCandidates = candidates.filter((c) => c.selected);
-		if (onComplete) {
-			onComplete(selectedCandidates);
+	const selected = candidates.filter((candidate) => candidate.selected);
+	async function confirm() {
+		if (pending.current || isLoading || !selected.length || !onComplete) return;
+		pending.current = true;
+		setSaving(true);
+		setSaveError('');
+		try {
+			await onComplete(selected);
+			setComplete(true);
+		} catch (failure) {
+			setSaveError(failure instanceof Error ? failure.message : 'Unable to save subscriptions');
+		} finally {
+			pending.current = false;
+			setSaving(false);
 		}
-		setCurrentStep('complete');
-	};
-
-	// Get step progress
-	const getStepProgress = () => {
-		switch (currentStep) {
-			case 'start':
-				return 0;
-			case 'detecting':
-				return detectionProgress / 4; // 25% of total
-			case 'review':
-				return 50;
-			case 'complete':
-				return 100;
-			default:
-				return 0;
-		}
-	};
-
-	// Handle error state
-	if (error) {
-		return (
-			<Card className='border-destructive'>
-				<CardHeader>
-					<CardTitle className='text-destructive flex items-center gap-2'>
-						<AlertTriangle className='h-5 w-5' />
-						Detection Error
-					</CardTitle>
-					<CardDescription>{error}</CardDescription>
-				</CardHeader>
-				<CardContent>
-					<div className='flex gap-2'>
-						<Button onClick={handleStartDetection}>Try Again</Button>
-						{onCancel && (
-							<Button variant='outline' onClick={onCancel}>
-								Cancel
-							</Button>
-						)}
-					</div>
-				</CardContent>
-			</Card>
-		);
 	}
-
+	const busy = saving || isLoading;
 	return (
 		<Card>
 			<CardHeader>
-				<CardTitle className='flex items-center gap-2'>
-					<Wand2 className='h-5 w-5' />
-					Subscription Detection Wizard
-				</CardTitle>
+				<CardTitle>Subscription Detection Wizard</CardTitle>
 				<CardDescription>
-					Automatically detect recurring subscriptions from your transaction data
+					Review recurring payment history before choosing what to track.
 				</CardDescription>
-				<div className='mt-4'>
-					<div className='flex items-center justify-between text-sm text-muted-foreground mb-2'>
-						<span>Progress</span>
-						<span>{Math.round(getStepProgress())}%</span>
-					</div>
-					<Progress value={getStepProgress()} className='h-2' />
-				</div>
 			</CardHeader>
-			<CardContent>
-				{currentStep === 'start' && (
-					<StartStep
-						transactionCount={transactions.length}
-						onCancel={onCancel}
-						isLoading={isLoading}
-					/>
+			<CardContent className='space-y-6'>
+				{error && (
+					<p role='alert' className='text-destructive'>
+						{error}
+					</p>
 				)}
-
-				{currentStep === 'detecting' && <DetectingStep progress={detectionProgress} />}
-
-				{currentStep === 'review' && (
-					<ReviewStep
-						candidates={candidates}
-						categories={categories}
-						currency={currency}
-						locale={locale}
-						onToggleCandidate={toggleCandidate}
-						onConfirm={handleConfirm}
-						onCancel={onCancel}
-					/>
-				)}
-
-				{currentStep === 'complete' && (
-					<CompleteStep
-						confirmedCount={candidates.filter((c) => c.selected).length}
-						onClose={onCancel}
-					/>
+				{!detectionResults ? (
+					<div>
+						<h3 className='font-medium'>Ready to Detect Subscriptions</h3>
+						<p>
+							We&apos;ll analyze {transactions.length} transactions. Start detection from the main
+							page.
+						</p>
+					</div>
+				) : complete ? (
+					<div className='space-y-3'>
+						<h3 className='text-lg font-semibold'>Detection Complete!</h3>
+						<p>
+							Successfully saved {selected.length} subscription{selected.length !== 1 ? 's' : ''}.
+						</p>
+						<p className='text-sm text-muted-foreground'>
+							Active subscriptions appear in forecasts and upcoming payments. Inactive history
+							preserves linked payments without adding future costs.
+						</p>
+						{onCancel && <Button onClick={onCancel}>Done</Button>}
+					</div>
+				) : (
+					<>
+						<div>
+							<h3 className='text-lg font-medium'>Review Detected Subscriptions</h3>
+							<p className='text-muted-foreground'>
+								Found {candidates.length} potential subscriptions. Historical patterns remain
+								visible even when payments stopped. No recent payment does not confirm cancellation.
+							</p>
+						</div>
+						{!candidates.length && (
+							<p>No unlinked recurring payment patterns found in the imported history.</p>
+						)}
+						<div className='space-y-4'>
+							{candidates.map((candidate) => (
+								<section
+									key={candidate.id}
+									aria-label={candidate.name}
+									className={`rounded-lg border p-4 space-y-3 ${candidate.selected ? 'border-primary bg-primary/5' : ''}`}
+								>
+									<div className='flex flex-wrap items-center gap-3'>
+										<Checkbox
+											aria-label={`Select ${candidate.name}`}
+											checked={candidate.selected}
+											disabled={busy}
+											onCheckedChange={(checked) =>
+												change(candidate.id, { selected: checked === true })
+											}
+										/>
+										<h4 className='font-medium'>{candidate.name}</h4>
+										<Badge variant='outline'>
+											{Math.round(candidate.confidence * 100)}% confidence
+										</Badge>
+										<Badge
+											variant={candidate.activity === 'no_recent_payment' ? 'secondary' : 'outline'}
+										>
+											{candidate.activity === 'no_recent_payment'
+												? 'No recent payment'
+												: candidate.activity === 'recent'
+													? 'Recent payment'
+													: 'Payment history'}
+										</Badge>
+									</div>
+									<p>
+										{displayMoney(candidate.amount, candidate.currency, locale)}{' '}
+										{candidate.frequency} · {candidate.currency}
+									</p>
+									<p className='text-sm'>
+										Last payment:{' '}
+										<time dateTime={candidate.lastTransaction.toISOString().slice(0, 10)}>
+											{candidate.lastTransaction.toISOString().slice(0, 10)}
+										</time>{' '}
+										· {candidate.transactionCount} matching transactions
+									</p>
+									<p className='text-sm text-muted-foreground'>{candidate.reason}</p>
+									<div className='grid gap-3 sm:grid-cols-2'>
+										<label className='text-sm space-y-1'>
+											Save {candidate.name} as
+											<select
+												aria-label={`Save ${candidate.name} as`}
+												className='block w-full rounded border bg-background p-2'
+												disabled={busy}
+												value={candidate.isActive ? 'active' : 'inactive'}
+												onChange={(e) =>
+													change(candidate.id, { isActive: e.target.value === 'active' })
+												}
+											>
+												<option value='active'>Active subscription</option>
+												<option value='inactive'>Inactive history</option>
+											</select>
+										</label>
+										<label className='text-sm space-y-1'>
+											Category
+											<select
+												aria-label={`Category for ${candidate.name}`}
+												className='block w-full rounded border bg-background p-2'
+												disabled={busy}
+												value={candidate.suggestedCategoryId ?? ''}
+												onChange={(e) =>
+													change(candidate.id, { suggestedCategoryId: e.target.value || undefined })
+												}
+											>
+												<option value=''>Uncategorized</option>
+												{categories.map((category) => (
+													<option key={category.id} value={category.id}>
+														{category.name}
+													</option>
+												))}
+											</select>
+										</label>
+									</div>
+									<p className='text-xs text-muted-foreground'>
+										{candidate.isActive
+											? 'Future payments will use this billing cadence. Check the saved next-payment date if your billing schedule changed.'
+											: 'History only: excluded from active totals, forecasts, and payment reminders.'}
+									</p>
+								</section>
+							))}
+						</div>
+						{saveError && (
+							<p role='alert' className='text-destructive'>
+								{saveError}
+							</p>
+						)}
+						<div className='flex flex-wrap items-center justify-between gap-3 border-t pt-4'>
+							<p className='text-sm'>
+								{selected.length} of {candidates.length} selected
+							</p>
+							<div className='flex gap-2'>
+								{onCancel && (
+									<Button variant='outline' disabled={busy} onClick={onCancel}>
+										Cancel
+									</Button>
+								)}
+								<Button
+									disabled={busy || !selected.length || !onComplete}
+									onClick={() => void confirm()}
+								>
+									{busy
+										? 'Saving subscriptions…'
+										: `Confirm ${selected.length} Subscription${selected.length !== 1 ? 's' : ''}`}
+								</Button>
+							</div>
+						</div>
+					</>
 				)}
 			</CardContent>
 		</Card>
 	);
 }
-
-interface StartStepProps {
-	transactionCount: number;
-	onCancel?: () => void;
-	isLoading: boolean;
-}
-
-function StartStep({ transactionCount, onCancel }: StartStepProps) {
-	return (
-		<div className='space-y-6'>
-			<div className='text-center'>
-				<Search className='h-16 w-16 mx-auto mb-4 text-muted-foreground' />
-				<h3 className='text-lg font-medium mb-2'>Ready to Detect Subscriptions</h3>
-				<p className='text-muted-foreground'>
-					We&apos;ll analyze {transactionCount} transactions to find recurring payment patterns
-				</p>
-			</div>
-
-			<div className='bg-muted/50 rounded-lg p-4'>
-				<h4 className='font-medium mb-2'>What we&apos;ll look for:</h4>
-				<ul className='text-sm text-muted-foreground space-y-1'>
-					<li>• Recurring payments with similar amounts</li>
-					<li>• Regular payment intervals (monthly, quarterly, annually)</li>
-					<li>• Consistent merchant names and descriptions</li>
-					<li>• Automatic category suggestions based on patterns</li>
-				</ul>
-			</div>
-
-			<div className='flex items-center justify-center gap-4'>
-				<div className='text-center'>
-					<p className='text-sm text-muted-foreground mb-4'>
-						Detection will be started from the main page.
-					</p>
-					{onCancel && (
-						<Button variant='outline' onClick={onCancel}>
-							Back to Dashboard
-						</Button>
-					)}
-				</div>
-			</div>
-		</div>
-	);
-}
-
-interface DetectingStepProps {
-	progress: number;
-}
-
-function DetectingStep({ progress }: DetectingStepProps) {
-	const getMessage = () => {
-		if (progress < 20) return 'Analyzing transaction patterns...';
-		if (progress < 40) return 'Identifying recurring payments...';
-		if (progress < 60) return 'Calculating frequencies...';
-		if (progress < 80) return 'Matching with categories...';
-		return 'Detection complete!';
-	};
-
-	return (
-		<div className='space-y-6 text-center'>
-			<div>
-				<Loader2 className='h-16 w-16 mx-auto mb-4 animate-spin text-primary' />
-				<h3 className='text-lg font-medium mb-2'>Detecting Subscriptions</h3>
-				<p className='text-muted-foreground'>{getMessage()}</p>
-			</div>
-
-			<div className='space-y-2'>
-				<div className='flex items-center justify-between text-sm'>
-					<span>Progress</span>
-					<span>{progress}%</span>
-				</div>
-				<Progress value={progress} className='h-3' />
-			</div>
-		</div>
-	);
-}
-
-interface ReviewStepProps {
-	candidates: SubscriptionCandidate[];
-	categories: Category[];
-	currency: string;
-	locale: string;
-	onToggleCandidate: (id: string) => void;
-	onConfirm: () => void;
-	onCancel?: () => void;
-}
-
-function ReviewStep({
-	candidates,
-	categories,
-	currency,
-	locale,
-	onToggleCandidate,
-	onConfirm,
-	onCancel,
-}: ReviewStepProps) {
-	const selectedCount = candidates.filter((c) => c.selected).length;
-
-	return (
-		<div className='space-y-6'>
-			<div className='text-center'>
-				<CheckCircle className='h-16 w-16 mx-auto mb-4 text-green-500' />
-				<h3 className='text-lg font-medium mb-2'>Review Detected Subscriptions</h3>
-				<p className='text-muted-foreground'>
-					Found {candidates.length} potential subscription
-					{candidates.length !== 1 ? 's' : ''}. Select which ones to add.
-				</p>
-			</div>
-
-			<div className='space-y-3 max-h-96 overflow-y-auto'>
-				{candidates.map((candidate) => (
-					<CandidateItem
-						key={candidate.id}
-						candidate={candidate}
-						categories={categories}
-						currency={currency}
-						locale={locale}
-						onToggle={() => onToggleCandidate(candidate.id)}
-					/>
-				))}
-			</div>
-
-			<div className='flex items-center justify-between pt-4 border-t'>
-				<div className='text-sm text-muted-foreground'>
-					{selectedCount} of {candidates.length} selected
-				</div>
-				<div className='flex gap-2'>
-					{onCancel && (
-						<Button variant='outline' onClick={onCancel}>
-							Cancel
-						</Button>
-					)}
-					<Button onClick={onConfirm} disabled={selectedCount === 0}>
-						<CheckCircle className='h-4 w-4 mr-2' />
-						Confirm {selectedCount} Subscription{selectedCount !== 1 ? 's' : ''}
-					</Button>
-				</div>
-			</div>
-		</div>
-	);
-}
-
-interface CandidateItemProps {
-	candidate: SubscriptionCandidate;
-	categories: Category[];
-	currency: string;
-	locale: string;
-	onToggle: () => void;
-}
-
-function CandidateItem({ candidate, categories, currency, locale, onToggle }: CandidateItemProps) {
-	const category = categories.find((cat) => cat.id === candidate.suggestedCategoryId);
-
-	const getConfidenceBadge = () => {
-		if (candidate.confidence >= 0.9) {
-			return (
-				<Badge
-					variant='default'
-					className='text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-				>
-					High Confidence
-				</Badge>
-			);
-		}
-		if (candidate.confidence >= 0.8) {
-			return (
-				<Badge variant='secondary' className='text-xs'>
-					Medium Confidence
-				</Badge>
-			);
-		}
-		return (
-			<Badge variant='outline' className='text-xs'>
-				Low Confidence
-			</Badge>
-		);
-	};
-
-	return (
-		<div
-			className={`flex items-center gap-4 p-4 rounded-lg border ${candidate.selected ? 'border-primary bg-primary/5' : 'border-border'} hover:bg-muted/50 transition-colors`}
-		>
-			<Checkbox checked={candidate.selected} onCheckedChange={onToggle} />
-
-			<div className='flex-1 min-w-0'>
-				<div className='flex items-center gap-2 mb-1'>
-					<h4 className='font-medium text-sm'>{candidate.name}</h4>
-					{getConfidenceBadge()}
-				</div>
-
-				<div className='flex items-center gap-4 text-xs text-muted-foreground mb-2'>
-					<span className='flex items-center gap-1'>
-						<DollarSign className='h-3 w-3' />
-						{formatCurrency(candidate.amount, currency, locale)} {candidate.frequency}
-					</span>
-					<span className='flex items-center gap-1'>
-						<Calendar className='h-3 w-3' />
-						{candidate.transactionCount} transactions
-					</span>
-					<span className='flex items-center gap-1'>
-						<TrendingUp className='h-3 w-3' />
-						{Math.round(candidate.confidence * 100)}% confidence
-					</span>
-				</div>
-
-				<div className='flex items-center gap-2 text-xs'>
-					<span className='text-muted-foreground'>Description:</span>
-					<span>{candidate.description}</span>
-					{category && (
-						<>
-							<span className='text-muted-foreground'>•</span>
-							<div className='flex items-center gap-1'>
-								<div className='h-2 w-2 rounded-full' style={{ backgroundColor: category.color }} />
-								<span>{category.name}</span>
-							</div>
-						</>
-					)}
-				</div>
-			</div>
-		</div>
-	);
-}
-
-interface CompleteStepProps {
-	confirmedCount: number;
-	onClose?: () => void;
-}
-
-function CompleteStep({ confirmedCount, onClose }: CompleteStepProps) {
-	return (
-		<div className='space-y-6 text-center'>
-			<div>
-				<CheckCircle className='h-16 w-16 mx-auto mb-4 text-green-500' />
-				<h3 className='text-lg font-medium mb-2'>Detection Complete!</h3>
-				<p className='text-muted-foreground'>
-					Successfully added {confirmedCount} subscription
-					{confirmedCount !== 1 ? 's' : ''} to your account
-				</p>
-			</div>
-
-			<div className='bg-green-50 dark:bg-green-950 rounded-lg p-4'>
-				<p className='text-sm text-green-800 dark:text-green-200'>
-					Your subscriptions are now being tracked. You can view them in the subscription dashboard
-					and receive notifications for upcoming payments.
-				</p>
-			</div>
-
-			{onClose && (
-				<Button onClick={onClose}>
-					<CheckCircle className='h-4 w-4 mr-2' />
-					Done
-				</Button>
-			)}
-		</div>
-	);
-}
-
 export default DetectionWizard;
