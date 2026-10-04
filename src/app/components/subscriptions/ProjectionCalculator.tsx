@@ -15,7 +15,7 @@ import { Input } from '../../../components/ui/input';
 import { Label } from '../../../components/ui/label';
 import { Slider } from '../../../components/ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/tabs';
-import { formatCurrency } from '../../../lib/financial-calculator';
+import { currencyCode, displayMoney as formatCurrency } from '@/lib/money';
 import { Subscription } from '../../../lib/types';
 import { useCurrencySettings } from '../../providers';
 
@@ -66,7 +66,7 @@ export function ProjectionCalculator({
 	error,
 }: ProjectionCalculatorProps) {
 	const { currency: defaultCurrency, locale } = useCurrencySettings();
-	const currency = subscription?.currency || defaultCurrency;
+	const currency = subscription ? currencyCode(subscription.currency) : defaultCurrency;
 
 	// Calculator settings
 	const [settings, setSettings] = React.useState<ProjectionSettings>({

@@ -14,16 +14,16 @@ export const migration010: Migration = {
    );
    CREATE INDEX idx_subscription_price_history ON subscription_price_history(subscription_id, id);
    INSERT INTO subscription_price_history(subscription_id,amount,currency,billing_frequency,custom_frequency_days,recorded_at,source)
-   SELECT id,amount,currency,billing_frequency,custom_frequency_days,strftime('%Y-%m-%dT%H:%M:%fZ','now'),'baseline' FROM subscriptions;
+   SELECT id,amount,UPPER(COALESCE(NULLIF(TRIM(currency),''),'UNKNOWN')),billing_frequency,custom_frequency_days,strftime('%Y-%m-%dT%H:%M:%fZ','now'),'baseline' FROM subscriptions;
    CREATE TRIGGER subscription_price_created AFTER INSERT ON subscriptions BEGIN
     INSERT INTO subscription_price_history(subscription_id,amount,currency,billing_frequency,custom_frequency_days,recorded_at,source)
-    VALUES(new.id,new.amount,new.currency,new.billing_frequency,new.custom_frequency_days,new.created_at,'created');
+    VALUES(new.id,new.amount,UPPER(COALESCE(NULLIF(TRIM(new.currency),''),'UNKNOWN')),new.billing_frequency,new.custom_frequency_days,COALESCE(new.created_at,strftime('%Y-%m-%dT%H:%M:%fZ','now')),'created');
    END;
    CREATE TRIGGER subscription_price_edited AFTER UPDATE ON subscriptions
    WHEN old.amount IS NOT new.amount OR old.currency IS NOT new.currency OR old.billing_frequency IS NOT new.billing_frequency OR old.custom_frequency_days IS NOT new.custom_frequency_days
    BEGIN
     INSERT INTO subscription_price_history(subscription_id,amount,currency,billing_frequency,custom_frequency_days,recorded_at,source)
-    VALUES(new.id,new.amount,new.currency,new.billing_frequency,new.custom_frequency_days,new.updated_at,'edited');
+    VALUES(new.id,new.amount,UPPER(COALESCE(NULLIF(TRIM(new.currency),''),'UNKNOWN')),new.billing_frequency,new.custom_frequency_days,COALESCE(new.updated_at,strftime('%Y-%m-%dT%H:%M:%fZ','now')),'edited');
    END;
    CREATE TABLE subscription_reminders (
     subscription_id TEXT PRIMARY KEY REFERENCES subscriptions(id) ON DELETE CASCADE,
