@@ -1,7 +1,7 @@
 import type { Migration } from '../types';
 
-export const migration010: Migration = {
-	version: 10,
+export const migration012: Migration = {
+	version: 12,
 	description: 'Subscription price history and renewal reminder preferences',
 	up(db) {
 		db.exec(`
@@ -31,7 +31,7 @@ export const migration010: Migration = {
     cancellation_notice_days INTEGER NOT NULL DEFAULT 0 CHECK(cancellation_notice_days BETWEEN 0 AND 365),
     enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1))
    );
-   INSERT INTO schema_metadata(version) VALUES(10);
+   INSERT INTO schema_metadata(version) VALUES(12);
   `);
 	},
 	down(db) {

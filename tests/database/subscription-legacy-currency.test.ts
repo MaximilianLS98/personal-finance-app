@@ -1,11 +1,11 @@
 import { Database } from 'bun:sqlite';
 import { expect, it } from 'bun:test';
 import { migrations } from '../../src/lib/database/migrations';
-import { migration010 } from '../../src/lib/database/migrations/010_subscription_history';
+import { migration012 } from '../../src/lib/database/migrations/012_subscription_history';
 it('migrates legacy unknown currencies and preserves future history without relabeling money', () => {
 	const db = new Database(':memory:');
 	try {
-		for (const migration of migrations.filter((m) => m.version < migration010.version))
+		for (const migration of migrations.filter((m) => m.version < migration012.version))
 			migration.up(db);
 		db.query('INSERT INTO categories(id,name,color,icon) VALUES(?,?,?,?)').run(
 			'legacy-category',
@@ -52,7 +52,7 @@ it('migrates legacy unknown currencies and preserves future history without rela
 			null,
 			null,
 		);
-		db.transaction(() => migration010.up(db))();
+		db.transaction(() => migration012.up(db))();
 		const rows = () =>
 			db
 				.query('SELECT subscription_id,currency,source FROM subscription_price_history ORDER BY id')
