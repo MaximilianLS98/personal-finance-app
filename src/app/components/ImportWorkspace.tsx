@@ -11,6 +11,7 @@ import type { Account, ImportOptions } from '@/lib/ledger-service';
 import Link from 'next/link';
 type Preview = {
 	headers: string[];
+	columns?: NonNullable<ImportOptions['columns']>;
 	errors: string[];
 	totalRows: number;
 	validRows: number;
@@ -120,205 +121,215 @@ export default function ImportWorkspace() {
 					<CardTitle>Import bank statement</CardTitle>
 				</CardHeader>
 				<CardContent className='space-y-4'>
-					<p className='text-sm text-muted-foreground'>
-						Preview your statement before saving. Imports retain their account and currency.{' '}
-						<Link className='underline' href='/accounts'>
-							Manage accounts
-						</Link>
-					</p>
-					<label className='block'>
-						Account
-						<select
-							className='block border rounded p-2 w-full'
-							value={accountId}
-							onChange={(e) => {
-								setAccount(e.target.value);
-								setPreview(null);
-							}}
-						>
-							<option value=''>Choose an account</option>
-							{accounts.map((a) => (
-								<option key={a.id} value={a.id}>
-									{a.name} ({a.currency})
-								</option>
-							))}
-						</select>
-					</label>
-					<label className='block'>
-						CSV statement
-						<Input
-							type='file'
-							accept='.csv'
-							onChange={(e) => {
-								setFile(e.target.files?.[0] || null);
-								setPreview(null);
-								setMapping(undefined);
-								setMessage('');
-							}}
-						/>
-					</label>
-					<Button disabled={!file || !accountId || busy} onClick={() => process()}>
-						{busy ? 'Processing…' : 'Preview statement'}
-					</Button>
-					{error && (
-						<p role='alert' className='text-destructive'>
-							{error}
-						</p>
-					)}
-					{message && (
-						<p role='status'>
-							{message}{' '}
-							<Link href='/review' className='underline'>
-								Review transactions
-							</Link>{' '}
-							·{' '}
-							<Link href='/subscriptions/detect' className='underline'>
-								Detect subscriptions
+					<fieldset disabled={busy} className='space-y-4'>
+						<p className='text-sm text-muted-foreground'>
+							Preview your statement before saving. Imports retain their account and currency.{' '}
+							<Link className='underline' href='/accounts'>
+								Manage accounts
 							</Link>
 						</p>
-					)}
-					{preview && (
-						<div className='space-y-4'>
-							<details>
-								<summary className='cursor-pointer'>Column mapping and saved profile</summary>
-								<div className='grid gap-3 sm:grid-cols-4 mt-3'>
-									{(['date', 'description', 'amount', 'currency'] as const).map((key) => (
-										<label key={key}>
-											{key}
-											<select
-												aria-label={`${key} column`}
-												className='border rounded p-2 w-full'
-												value={mapping?.[key] ?? ''}
-												onChange={(e) => (
-													setMappingDirty(true),
-													setMapping((old) => ({
-														...{ date: 0, description: 1, amount: 2 },
-														...old,
-														[key]: e.target.value === '' ? undefined : Number(e.target.value),
-													}))
-												)}
-											>
-												<option value=''>Automatic</option>
-												{preview.headers.map((h, i) => (
-													<option value={i} key={i}>
-														{h}
-													</option>
-												))}
-											</select>
-										</label>
-									))}
-								</div>
-								<div className='flex flex-wrap gap-2 mt-3'>
-									<Button
-										variant='outline'
-										onClick={() => {
-											localStorage.setItem(
-												'finance-import-mapping',
-												JSON.stringify(mapping || null),
-											);
-											setMessage('Mapping saved on this device.');
-										}}
-									>
-										Save mapping
-									</Button>
-									<Button
-										variant='outline'
-										onClick={() => {
-											try {
-												setMapping(
-													JSON.parse(localStorage.getItem('finance-import-mapping') || 'null') ||
-														undefined,
-												);
-												setPreview(null);
-												setMessage('Mapping loaded. Preview again to apply.');
-											} catch {
-												setError('Saved mapping is invalid');
-											}
-										}}
-									>
-										Load mapping
-									</Button>
-									<Button variant='outline' disabled={busy} onClick={() => process()}>
-										Apply mapping and preview again
-									</Button>
-								</div>
-							</details>
-							<p>
-								{preview.validRows} valid of {preview.totalRows} rows.{' '}
-								{preview.rows.filter((r) => r.duplicate).length} suspected duplicates are skipped
-								unless selected. Identical repeated purchases within this statement are preserved.
-							</p>
-							{preview.errors.length > 0 && (
-								<div role='alert' className='border rounded p-3'>
-									<p>{preview.errors.length} rejected rows</p>
-									<ul className='max-h-40 overflow-auto'>
-										{preview.errors.map((e, i) => (
-											<li key={i}>{e}</li>
-										))}
-									</ul>
-									<label>
-										<input
-											type='checkbox'
-											checked={confirmedErrors}
-											onChange={(e) => setConfirmedErrors(e.target.checked)}
-										/>{' '}
-										Import valid rows and skip these errors
-									</label>
-								</div>
-							)}
-							<div className='max-h-96 overflow-auto border rounded'>
-								<table className='w-full text-sm'>
-									<thead>
-										<tr>
-											<th>Import</th>
-											<th>Date</th>
-											<th>Description</th>
-											<th>Amount</th>
-											<th>Status</th>
-										</tr>
-									</thead>
-									<tbody>
-										{preview.rows.map((r) => (
-											<tr key={r.rowNumber} className='border-t'>
-												<td className='p-2'>
-													<input
-														aria-label={`Import row ${r.rowNumber}`}
-														type='checkbox'
-														checked={
-															!exclude.includes(r.rowNumber) &&
-															(!r.duplicate || keep.includes(r.rowNumber))
-														}
-														onChange={() =>
-															r.duplicate
-																? setKeep(toggle(keep, r.rowNumber))
-																: setExclude(toggle(exclude, r.rowNumber))
-														}
-													/>
-												</td>
-												<td className='p-2 whitespace-nowrap'>{r.transaction.date.slice(0, 10)}</td>
-												<td className='p-2'>{r.transaction.description}</td>
-												<td className='p-2 whitespace-nowrap'>
-													{displayMoney(r.transaction.amount, r.transaction.currency)}
-												</td>
-												<td className='p-2'>{r.duplicate ? 'Possible duplicate' : 'New'}</td>
-											</tr>
-										))}
-									</tbody>
-								</table>
-							</div>
-							<Button
-								disabled={
-									busy ||
-									mappingDirty ||
-									!preview.rows.length ||
-									(preview.errors.length > 0 && !confirmedErrors)
-								}
-								onClick={() => process(true)}
+						<label className='block'>
+							Account
+							<select
+								className='block border rounded p-2 w-full'
+								value={accountId}
+								onChange={(e) => {
+									setAccount(e.target.value);
+									setPreview(null);
+								}}
 							>
-								Confirm import
-							</Button>
-						</div>
-					)}
+								<option value=''>Choose an account</option>
+								{accounts.map((a) => (
+									<option key={a.id} value={a.id}>
+										{a.name} ({a.currency})
+									</option>
+								))}
+							</select>
+						</label>
+						<label className='block'>
+							CSV statement
+							<Input
+								type='file'
+								accept='.csv'
+								onChange={(e) => {
+									setFile(e.target.files?.[0] || null);
+									setPreview(null);
+									setMapping(undefined);
+									setMessage('');
+								}}
+							/>
+						</label>
+						<Button disabled={!file || !accountId || busy} onClick={() => process()}>
+							{busy ? 'Processing…' : 'Preview statement'}
+						</Button>
+						{error && (
+							<p role='alert' className='text-destructive'>
+								{error}
+							</p>
+						)}
+						{message && (
+							<p role='status'>
+								{message}{' '}
+								<Link href='/review' className='underline'>
+									Review transactions
+								</Link>{' '}
+								·{' '}
+								<Link href='/subscriptions/detect' className='underline'>
+									Detect subscriptions
+								</Link>
+							</p>
+						)}
+						{preview && (
+							<div className='space-y-4'>
+								<details>
+									<summary className='cursor-pointer'>Column mapping and saved profile</summary>
+									<div className='grid gap-3 sm:grid-cols-4 mt-3'>
+										{(['date', 'description', 'amount', 'currency'] as const).map((key) => (
+											<label key={key}>
+												{key}
+												<select
+													aria-label={`${key} column`}
+													className='border rounded p-2 w-full'
+													value={mapping?.[key] ?? ''}
+													onChange={(e) => (
+														setMappingDirty(true),
+														setMapping((old) => ({
+															...preview.columns,
+															...old,
+															[key]: e.target.value === '' ? undefined : Number(e.target.value),
+														}))
+													)}
+												>
+													<option value=''>
+														Automatic
+														{preview.columns?.[key] !== undefined
+															? ` (${preview.headers[preview.columns[key]!]})`
+															: ''}
+													</option>
+													{preview.headers.map((h, i) => (
+														<option value={i} key={i}>
+															{h}
+														</option>
+													))}
+												</select>
+											</label>
+										))}
+									</div>
+									<div className='flex flex-wrap gap-2 mt-3'>
+										<Button
+											variant='outline'
+											onClick={() => {
+												localStorage.setItem(
+													'finance-import-mapping',
+													JSON.stringify(mapping || null),
+												);
+												setMessage('Mapping saved on this device.');
+											}}
+										>
+											Save mapping
+										</Button>
+										<Button
+											variant='outline'
+											onClick={() => {
+												try {
+													setMapping(
+														JSON.parse(localStorage.getItem('finance-import-mapping') || 'null') ||
+															undefined,
+													);
+													setPreview(null);
+													setMessage('Mapping loaded. Preview again to apply.');
+												} catch {
+													setError('Saved mapping is invalid');
+												}
+											}}
+										>
+											Load mapping
+										</Button>
+										<Button variant='outline' disabled={busy} onClick={() => process()}>
+											Apply mapping and preview again
+										</Button>
+									</div>
+								</details>
+								<p>
+									{preview.validRows} valid of {preview.totalRows} rows.{' '}
+									{preview.rows.filter((r) => r.duplicate).length} suspected duplicates are skipped
+									unless selected. Identical repeated purchases within this statement are preserved.
+								</p>
+								{preview.errors.length > 0 && (
+									<div role='alert' className='border rounded p-3'>
+										<p>{preview.errors.length} rejected rows</p>
+										<ul className='max-h-40 overflow-auto'>
+											{preview.errors.map((e, i) => (
+												<li key={i}>{e}</li>
+											))}
+										</ul>
+										<label>
+											<input
+												type='checkbox'
+												checked={confirmedErrors}
+												onChange={(e) => setConfirmedErrors(e.target.checked)}
+											/>{' '}
+											Import valid rows and skip these errors
+										</label>
+									</div>
+								)}
+								<div className='max-h-96 overflow-auto border rounded'>
+									<table className='w-full text-sm'>
+										<thead>
+											<tr>
+												<th>Import (CSV row)</th>
+												<th>Date</th>
+												<th>Description</th>
+												<th>Amount</th>
+												<th>Status</th>
+											</tr>
+										</thead>
+										<tbody>
+											{preview.rows.map((r) => (
+												<tr key={r.rowNumber} className='border-t'>
+													<td className='p-2'>
+														<input
+															aria-label={`Import row ${r.rowNumber}`}
+															type='checkbox'
+															checked={
+																!exclude.includes(r.rowNumber) &&
+																(!r.duplicate || keep.includes(r.rowNumber))
+															}
+															onChange={() =>
+																r.duplicate
+																	? setKeep(toggle(keep, r.rowNumber))
+																	: setExclude(toggle(exclude, r.rowNumber))
+															}
+														/>{' '}
+														{r.rowNumber}
+													</td>
+													<td className='p-2 whitespace-nowrap'>
+														{r.transaction.date.slice(0, 10)}
+													</td>
+													<td className='p-2'>{r.transaction.description}</td>
+													<td className='p-2 whitespace-nowrap'>
+														{displayMoney(r.transaction.amount, r.transaction.currency)}
+													</td>
+													<td className='p-2'>{r.duplicate ? 'Possible duplicate' : 'New'}</td>
+												</tr>
+											))}
+										</tbody>
+									</table>
+								</div>
+								<Button
+									disabled={
+										busy ||
+										mappingDirty ||
+										!preview.rows.length ||
+										(preview.errors.length > 0 && !confirmedErrors)
+									}
+									onClick={() => process(true)}
+								>
+									Confirm import
+								</Button>
+							</div>
+						)}
+					</fieldset>
 				</CardContent>
 			</Card>
 			<Card>

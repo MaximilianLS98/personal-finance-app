@@ -28,6 +28,46 @@ export function listAccounts(db: Database): Account[] {
 		)
 		.all() as Account[];
 }
+function validDate(value: unknown): value is string {
+	return (
+		typeof value === 'string' &&
+		/^\d{4}-\d{2}-\d{2}$/.test(value) &&
+		Number.isFinite(Date.parse(value)) &&
+		new Date(value).toISOString().slice(0, 10) === value
+	);
+}
+function validateImportOptions(value: unknown): asserts value is ImportOptions {
+	if (!value || typeof value !== 'object' || Array.isArray(value))
+		throw new Error('Provide import options');
+	const options = value as Record<string, unknown>;
+	if (typeof options.accountId !== 'string' || !options.accountId)
+		throw new Error('Select an existing account');
+	if (options.acceptErrors !== undefined && typeof options.acceptErrors !== 'boolean')
+		throw new Error('Error confirmation must be a boolean');
+	if (options.currency !== undefined && !validCurrency(options.currency))
+		throw new Error('Invalid import currency');
+	for (const name of ['keepDuplicates', 'excludeRows']) {
+		const rows = options[name];
+		if (
+			rows !== undefined &&
+			(!Array.isArray(rows) ||
+				rows.some((row) => !Number.isSafeInteger(row) || row < 2) ||
+				new Set(rows).size !== rows.length)
+		)
+			throw new Error('Row selections must contain distinct CSV source row numbers');
+	}
+	if (options.columns !== undefined) {
+		if (!options.columns || typeof options.columns !== 'object' || Array.isArray(options.columns))
+			throw new Error('Invalid column mapping');
+		for (const [key, index] of Object.entries(options.columns))
+			if (
+				!['date', 'description', 'amount', 'currency'].includes(key) ||
+				!Number.isSafeInteger(index) ||
+				Number(index) < 0
+			)
+				throw new Error('Invalid column mapping');
+	}
+}
 export function createAccount(
 	db: Database,
 	input: {
@@ -39,13 +79,13 @@ export function createAccount(
 	},
 ) {
 	if (
-		!input.name?.trim() ||
+		typeof input.name !== 'string' ||
+		!input.name.trim() ||
 		input.name.length > 100 ||
 		!validCurrency(input.currency) ||
 		!['bank', 'cash', 'credit'].includes(input.kind || 'bank') ||
 		!Number.isFinite(input.openingBalance ?? 0) ||
-		!/^\d{4}-\d{2}-\d{2}$/.test(input.openingDate) ||
-		!Number.isFinite(Date.parse(input.openingDate))
+		!validDate(input.openingDate)
 	)
 		throw new Error('Provide a name, currency, valid opening date and balance');
 	const id = randomUUID();
@@ -62,17 +102,9 @@ export function createAccount(
 	return listAccounts(db).find((a) => a.id === id)!;
 }
 function importRows(db: Database, content: string, options: ImportOptions) {
+	validateImportOptions(options);
 	const account = listAccounts(db).find((a) => a.id === options.accountId);
 	if (!account) throw new Error('Select an existing account before importing');
-	if (options.currency && !validCurrency(options.currency))
-		throw new Error('Invalid import currency');
-	if (
-		options.columns &&
-		!['date', 'description', 'amount'].every(
-			(k) => Number.isInteger(options.columns![k as 'date']) && options.columns![k as 'date'] >= 0,
-		)
-	)
-		throw new Error('Invalid column mapping');
 	const parsed = parseCSV(content, { columns: options.columns });
 	const occurrences = new Map<string, number>();
 	const headers =
@@ -101,7 +133,7 @@ function importRows(db: Database, content: string, options: ImportOptions) {
 			.get(account.id, currency, t.date.toISOString(), t.description, t.amount) as { n: number };
 		// Description-only transfer guesses are presented as ordinary cash flows until both sides are matched.
 		return {
-			rowNumber: index + 1,
+			rowNumber: parsed.sourceRowNumbers[index],
 			key,
 			duplicate: !!exact || occurrence <= legacy.n,
 			transaction: {
@@ -114,6 +146,7 @@ function importRows(db: Database, content: string, options: ImportOptions) {
 	return {
 		rows,
 		headers,
+		columns: parsed.columns,
 		errors: parsed.errors,
 		totalRows: parsed.totalRows,
 		validRows: parsed.validRows,
@@ -138,6 +171,9 @@ export function commitImport(
 			now = new Date().toISOString();
 		const keep = new Set(options.keepDuplicates || []),
 			exclude = new Set(options.excludeRows || []);
+		const sourceRows = new Set(preview.rows.map((row) => row.rowNumber));
+		if ([...keep, ...exclude].some((row) => !sourceRows.has(row)))
+			throw new Error('A selected CSV row is unavailable; preview the statement again');
 		const selected = preview.rows.filter(
 			(r) => !exclude.has(r.rowNumber) && (!r.duplicate || keep.has(r.rowNumber)),
 		);
@@ -298,8 +334,7 @@ export function reconcileAccount(db: Database, id: string, asOf: string, stateme
 	const account = listAccounts(db).find((a) => a.id === id);
 	if (
 		!account ||
-		!/^\d{4}-\d{2}-\d{2}$/.test(asOf) ||
-		!Number.isFinite(Date.parse(asOf)) ||
+		!validDate(asOf) ||
 		asOf < account.opening_date ||
 		!Number.isFinite(statementBalance)
 	)

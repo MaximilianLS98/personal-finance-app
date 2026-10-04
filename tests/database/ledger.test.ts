@@ -40,7 +40,7 @@ describe('account-aware reversible imports', () => {
 		expect(listAccounts(db)[0].balance).toBe(950);
 		expect(commitImport(db, csv, 'overlap.csv', { accountId: a.id }).created).toBe(0);
 		expect(
-			commitImport(db, csv, 'override.csv', { accountId: a.id, keepDuplicates: [1] }).created,
+			commitImport(db, csv, 'override.csv', { accountId: a.id, keepDuplicates: [2] }).created,
 		).toBe(1);
 	});
 	it('keeps identical payments in different accounts and supports atomic undo', () => {
@@ -72,7 +72,7 @@ describe('account-aware reversible imports', () => {
 		const options = {
 			accountId: a.id,
 			columns: { date: 0, description: 1, amount: 2 },
-			excludeRows: [2],
+			excludeRows: [4],
 			acceptErrors: true,
 		};
 		const preview = previewImport(db, text, options);
@@ -133,5 +133,90 @@ describe('account-aware reversible imports', () => {
 		const rows = await repo.findByDateRange(new Date('2026-01-01'), new Date('2027-01-01'));
 		expect(currencySummaries(rows).map((g) => g.currency)).toEqual(['NOK', 'UNKNOWN', 'USD']);
 		expect(currencySummaries(rows).every((g) => g.totalExpenses === 10)).toBe(true);
+	});
+});
+
+describe('audited import validation', () => {
+	it('preserves automatic bank columns when just one column is overridden', () => {
+		const db = manager.getConnection(),
+			a = account();
+		const bank =
+			'Bokføringsdato;Beløp;Avsender;Mottaker;Navn;Tittel;Valuta;Betalingstype\n2026-10-02;-20;12345;;Synthetic;Store;NOK;Card';
+		const preview = previewImport(db, bank, { accountId: a.id, columns: { currency: 6 } });
+		expect(preview.columns).toEqual({ date: 0, amount: 1, description: 5, currency: 6 });
+		expect(preview.rows[0].transaction).toMatchObject({ amount: -20, description: 'Store' });
+		const partial = previewImport(db, bank.replace('Beløp', 'Custom sum'), {
+			accountId: a.id,
+			columns: { amount: 1 },
+		});
+		expect(partial.rows[0].transaction.amount).toBe(-20);
+	});
+	it('tracks physical CSV lines through blanks, errors, and quoted multiline fields', () => {
+		const db = manager.getConnection(),
+			a = account();
+		const text =
+			'Date,Description,Amount\n\nbad,Rejected,-10\n2026-10-01,"Line one\nLine two",-20\n2026-10-02,Last,-30';
+		const preview = previewImport(db, text, { accountId: a.id });
+		expect(preview.errors[0]).toContain('Row 3');
+		expect(preview.rows.map((row) => row.rowNumber)).toEqual([4, 6]);
+		const result = commitImport(db, text, 'rows.csv', {
+			accountId: a.id,
+			acceptErrors: true,
+			excludeRows: [6],
+		});
+		expect(result.created).toBe(1);
+		expect(listAccounts(db)[0].balance).toBe(980);
+	});
+	it('rejects impossible opening and reconciliation dates', () => {
+		const db = manager.getConnection(),
+			a = account();
+		expect(() =>
+			createAccount(db, { name: 'Invalid', currency: 'NOK', openingDate: '2026-02-31' }),
+		).toThrow('valid opening date');
+		expect(() => reconcileAccount(db, a.id, '2026-02-31', 1000)).toThrow('statement date');
+		expect(() =>
+			createAccount(db, { name: 'Leap', currency: 'NOK', openingDate: '2024-02-29' }),
+		).not.toThrow();
+	});
+	it('rejects malformed runtime options and stale selections atomically', () => {
+		const db = manager.getConnection(),
+			a = account();
+		for (const options of [
+			null,
+			[],
+			{ accountId: a.id, acceptErrors: 'false' },
+			{ accountId: a.id, keepDuplicates: '2' },
+			{ accountId: a.id, excludeRows: [2, 2] },
+			{ accountId: a.id, excludeRows: [NaN] },
+			{ accountId: a.id, columns: { currency: -1 } },
+			{ accountId: a.id, columns: { amount: '1' } },
+		]) {
+			expect(() =>
+				commitImport(db, csv, 'bad.csv', options as Parameters<typeof commitImport>[3]),
+			).toThrow();
+		}
+		expect(() =>
+			commitImport(db, csv, 'stale.csv', { accountId: a.id, excludeRows: [99] }),
+		).toThrow('unavailable');
+		expect(db.query('SELECT * FROM import_batches').all()).toHaveLength(0);
+		expect(db.query('SELECT * FROM transactions').all()).toHaveLength(0);
+	});
+	it('rejects arbitrary letters, broken CSV quoting, and delimiter mistakes instead of creating money', () => {
+		const malformed = ['abc100xyz', '1e3', '100O', '12.3.4', '1 2 3', '--20'];
+		for (const amount of malformed)
+			expect(parseCSV(`Date,Description,Amount\n2026-10-01,Synthetic,${amount}`).validRows).toBe(0);
+		const broken = parseCSV('Date,Description,Amount\n2026-10-01,"Unterminated,-20');
+		expect(broken.validRows).toBe(0);
+		expect(broken.errors[0]).toContain('Row 2');
+		expect(parseCSV('Date,Description,Amount\n2026-10-01,Unquoted,description,-20').validRows).toBe(
+			0,
+		);
+	});
+	it('retains supported currency adornments and correctly grouped international values', () => {
+		for (const amount of ['NOK 1 234,56', '1 234,56 kr', '$1,234.56', '€1.234,56', '+1234.56']) {
+			expect(
+				parseCSV(`Date;Description;Amount\n2026-10-01;Synthetic;${amount}`).transactions[0].amount,
+			).toBe(1234.56);
+		}
 	});
 });
