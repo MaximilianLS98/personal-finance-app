@@ -1,9 +1,9 @@
 'use client';
 
-import { ReactNode, useMemo, useState, createContext, useContext, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { ThemeProvider as NextThemesProvider } from 'next-themes';
+import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 
 interface ProvidersProps {
 	children: ReactNode;
@@ -54,26 +54,30 @@ export function Providers({ children }: ProvidersProps) {
 	);
 
 	// Currency settings with persistence
-	const [currency, setCurrency] = useState<string>(() => {
-		if (typeof window === 'undefined') return 'NOK';
-		return localStorage.getItem(CURRENCY_STORAGE_KEY) ?? 'NOK';
-	});
-	const [locale, setLocale] = useState<string>(() => {
-		if (typeof window === 'undefined') return 'nb-NO';
-		return localStorage.getItem(LOCALE_STORAGE_KEY) ?? 'nb-NO';
-	});
-
+	const [currency, setCurrency] = useState('NOK');
+	const [locale, setLocale] = useState('nb-NO');
+	const [settingsLoaded, setSettingsLoaded] = useState(false);
 	useEffect(() => {
-		if (typeof window !== 'undefined') {
+		try {
+			const savedCurrency = localStorage.getItem(CURRENCY_STORAGE_KEY) || 'NOK';
+			const savedLocale = localStorage.getItem(LOCALE_STORAGE_KEY) || 'nb-NO';
+			new Intl.NumberFormat(savedLocale, { style: 'currency', currency: savedCurrency });
+			setCurrency(savedCurrency);
+			setLocale(savedLocale);
+		} catch {
+			/* Keep defaults if preferences are unavailable or invalid. */
+		}
+		setSettingsLoaded(true);
+	}, []);
+	useEffect(() => {
+		if (!settingsLoaded) return;
+		try {
 			localStorage.setItem(CURRENCY_STORAGE_KEY, currency);
-		}
-	}, [currency]);
-
-	useEffect(() => {
-		if (typeof window !== 'undefined') {
 			localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+		} catch {
+			/* Settings still work for this session when storage is unavailable. */
 		}
-	}, [locale]);
+	}, [currency, locale, settingsLoaded]);
 
 	const currencyValue = useMemo(
 		() => ({ currency, locale, setCurrency, setLocale }),
@@ -87,10 +91,9 @@ export function Providers({ children }: ProvidersProps) {
 				defaultTheme='system'
 				enableSystem
 				disableTransitionOnChange
-				storageKey='pf-theme'>
-				<CurrencyContext.Provider value={currencyValue}>
-					{children}
-				</CurrencyContext.Provider>
+				storageKey='pf-theme'
+			>
+				<CurrencyContext.Provider value={currencyValue}>{children}</CurrencyContext.Provider>
 				<ReactQueryDevtools initialIsOpen={false} />
 			</NextThemesProvider>
 		</QueryClientProvider>
