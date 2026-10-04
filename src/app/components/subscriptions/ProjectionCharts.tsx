@@ -24,7 +24,7 @@ import {
 	CardTitle,
 } from '../../../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../components/ui/tabs';
-import { formatCurrency } from '../../../lib/financial-calculator';
+import { currencyCode, displayMoney as formatCurrency } from '@/lib/money';
 import { Subscription } from '../../../lib/types';
 import { useCurrencySettings } from '../../providers';
 
@@ -51,13 +51,35 @@ interface ProjectionData {
  * ProjectionCharts component for long-term cost visualization
  * Shows subscription costs vs investment opportunities over time
  */
-export function ProjectionCharts({
+export function ProjectionCharts(props: ProjectionChartsProps) {
+	const groups = [...new Set((props.subscriptions ?? []).map((s) => currencyCode(s.currency)))];
+	if (groups.length <= 1 || props.isLoading || props.error)
+		return <ProjectionChartsCurrency {...props} />;
+	return (
+		<div className='space-y-6'>
+			{groups.map((currency) => (
+				<section key={currency} aria-label={`${currency} subscriptions`}>
+					<h3 className='font-semibold mb-3'>{currency}</h3>
+					<ProjectionChartsCurrency
+						{...props}
+						subscriptions={props.subscriptions?.filter(
+							(s) => currencyCode(s.currency) === currency,
+						)}
+					/>
+				</section>
+			))}
+		</div>
+	);
+}
+
+function ProjectionChartsCurrency({
 	subscriptions = [],
 	investmentReturnRate = 0.07,
 	isLoading = false,
 	error,
 }: ProjectionChartsProps) {
-	const { currency, locale } = useCurrencySettings();
+	const { currency: defaultCurrency, locale } = useCurrencySettings();
+	const currency = subscriptions.length ? currencyCode(subscriptions[0].currency) : defaultCurrency;
 
 	// Calculate projection data
 	const projectionData = React.useMemo(() => {

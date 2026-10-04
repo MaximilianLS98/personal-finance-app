@@ -1,3 +1,4 @@
+import { currencyCode } from '@/lib/money';
 import { createTransactionRepository } from '@/lib/database';
 import { ErrorResponse } from '@/lib/types';
 import { NextRequest, NextResponse } from 'next/server';
@@ -31,7 +32,15 @@ export async function GET(request: NextRequest) {
 		}
 
 		// Get upcoming payments
-		const upcomingSubscriptions = await repository.findUpcomingPayments(days);
+		const allSubscriptions = await repository.findUpcomingPayments(days);
+		const availableCurrencies = [
+			...new Set(allSubscriptions.map((s) => currencyCode(s.currency))),
+		].sort();
+		const currency =
+			new URL(request.url).searchParams.get('currency') || availableCurrencies[0] || 'NOK';
+		const upcomingSubscriptions = allSubscriptions.filter(
+			(s) => currencyCode(s.currency) === currency,
+		);
 
 		// Enhance with additional information and calculate priority
 		const enhancedPayments = upcomingSubscriptions.map((subscription) => {
@@ -162,6 +171,8 @@ export async function GET(request: NextRequest) {
 				success: true,
 				data: {
 					summary: {
+						currency,
+						availableCurrencies,
 						totalUpcoming: filteredPayments.length,
 						totalAmount,
 						totalMonthlyEquivalent,

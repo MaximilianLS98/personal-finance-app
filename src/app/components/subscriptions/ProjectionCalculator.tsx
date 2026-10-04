@@ -65,7 +65,8 @@ export function ProjectionCalculator({
 	isLoading = false,
 	error,
 }: ProjectionCalculatorProps) {
-	const { currency, locale } = useCurrencySettings();
+	const { currency: defaultCurrency, locale } = useCurrencySettings();
+	const currency = subscription?.currency || defaultCurrency;
 
 	// Calculator settings
 	const [settings, setSettings] = React.useState<ProjectionSettings>({

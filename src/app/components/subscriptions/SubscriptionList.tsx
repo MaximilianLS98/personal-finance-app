@@ -31,7 +31,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '../../../components/ui/select';
-import { formatCurrency } from '../../../lib/financial-calculator';
+import { currencyCode, displayMoney as formatCurrency } from '@/lib/money';
 import { Category, Subscription } from '../../../lib/types';
 import { useCurrencySettings } from '../../providers';
 
@@ -67,7 +67,7 @@ export function SubscriptionList({
 	onDelete,
 	onAdd,
 }: SubscriptionListProps) {
-	const { currency, locale } = useCurrencySettings();
+	const { locale } = useCurrencySettings();
 
 	// Filter and sort state
 	const [searchTerm, setSearchTerm] = React.useState('');
@@ -290,7 +290,7 @@ export function SubscriptionList({
 								key={subscription.id}
 								subscription={subscription}
 								categories={categories}
-								currency={currency}
+								currency={currencyCode(subscription.currency)}
 								locale={locale}
 								onEdit={onEdit}
 								onDelete={onDelete}

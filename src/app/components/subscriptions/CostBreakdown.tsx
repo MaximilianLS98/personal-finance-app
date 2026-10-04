@@ -11,7 +11,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from '../../../components/ui/card';
-import { formatCurrency } from '../../../lib/financial-calculator';
+import { currencyCode, displayMoney as formatCurrency } from '@/lib/money';
 import { Category, Subscription } from '../../../lib/types';
 import { useCurrencySettings } from '../../providers';
 
@@ -39,13 +39,35 @@ interface CategoryBreakdown {
  * CostBreakdown component integrates with existing categories
  * to show subscription spending breakdown by category
  */
-export function CostBreakdown({
+export function CostBreakdown(props: CostBreakdownProps) {
+	const groups = [...new Set((props.subscriptions ?? []).map((s) => currencyCode(s.currency)))];
+	if (groups.length <= 1 || props.isLoading || props.error)
+		return <CostBreakdownCurrency {...props} />;
+	return (
+		<div className='space-y-6'>
+			{groups.map((currency) => (
+				<section key={currency} aria-label={`${currency} subscriptions`}>
+					<h3 className='font-semibold mb-3'>{currency}</h3>
+					<CostBreakdownCurrency
+						{...props}
+						subscriptions={props.subscriptions?.filter(
+							(s) => currencyCode(s.currency) === currency,
+						)}
+					/>
+				</section>
+			))}
+		</div>
+	);
+}
+
+function CostBreakdownCurrency({
 	subscriptions = [],
 	categories = [],
 	isLoading = false,
 	error,
 }: CostBreakdownProps) {
-	const { currency, locale } = useCurrencySettings();
+	const { currency: defaultCurrency, locale } = useCurrencySettings();
+	const currency = subscriptions.length ? currencyCode(subscriptions[0].currency) : defaultCurrency;
 
 	// Calculate category breakdown
 	const categoryBreakdown = React.useMemo(() => {

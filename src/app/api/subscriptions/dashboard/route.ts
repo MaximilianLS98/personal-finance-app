@@ -1,3 +1,5 @@
+import { monthlySubscriptionCost } from '@/lib/subscription-costs';
+import { currencyCode } from '@/lib/money';
 import { createTransactionRepository } from '@/lib/database';
 import { ErrorResponse } from '@/lib/types';
 import { NextRequest, NextResponse } from 'next/server';
@@ -5,30 +7,47 @@ import { NextRequest, NextResponse } from 'next/server';
 /**
  * GET /api/subscriptions/dashboard - Get subscription dashboard summary data
  */
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
 	const repository = createTransactionRepository();
 
 	try {
 		await repository.initialize();
 
 		// Get all active subscriptions
-		const activeSubscriptions = await repository.findActiveSubscriptions();
+		const allSubscriptions = await repository.findActiveSubscriptions();
+		const availableCurrencies = [
+			...new Set(allSubscriptions.map((s) => currencyCode(s.currency))),
+		].sort();
+		const currency =
+			new URL(request.url).searchParams.get('currency') || availableCurrencies[0] || 'NOK';
+		const activeSubscriptions = allSubscriptions.filter(
+			(s) => currencyCode(s.currency) === currency,
+		);
 
 		// Calculate total monthly and annual costs
-		const totalMonthlyCost = await repository.calculateTotalMonthlyCost();
+		const totalMonthlyCost = activeSubscriptions.reduce(
+			(sum, sub) => sum + monthlySubscriptionCost(sub),
+			0,
+		);
 		const totalAnnualCost = totalMonthlyCost * 12;
 
 		// Get upcoming payments (next 30 days)
-		const upcomingPayments = await repository.findUpcomingPayments(30);
+		const upcomingPayments = (await repository.findUpcomingPayments(30)).filter(
+			(s) => currencyCode(s.currency) === currency,
+		);
 
 		// Get potentially unused subscriptions (no usage in last 90 days)
-		const unusedSubscriptions = await repository.findUnusedSubscriptions(90);
+		const unusedSubscriptions = (await repository.findUnusedSubscriptions(90)).filter(
+			(s) => currencyCode(s.currency) === currency,
+		);
 
 		// Calculate subscription count by category
 		const categories = await repository.getCategories();
 		const categoryBreakdown = await Promise.all(
 			categories.map(async (category) => {
-				const categorySubscriptions = await repository.findSubscriptionsByCategory(category.id);
+				const categorySubscriptions = (
+					await repository.findSubscriptionsByCategory(category.id)
+				).filter((s) => currencyCode(s.currency) === currency);
 				const activeCount = categorySubscriptions.filter((sub) => sub.isActive).length;
 
 				// Calculate monthly cost for this category
@@ -118,6 +137,8 @@ export async function GET(_request: NextRequest) {
 				success: true,
 				data: {
 					summary: {
+						currency,
+						availableCurrencies,
 						totalActiveSubscriptions: activeSubscriptions.length,
 						totalMonthlyCost,
 						totalAnnualCost,

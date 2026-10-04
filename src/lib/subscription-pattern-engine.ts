@@ -1,3 +1,4 @@
+import { currencyCode } from './money';
 /**
  * Subscription pattern detection and management engine
  * Integrates with existing categorization system for subscription detection
@@ -217,6 +218,8 @@ export class SubscriptionPatternEngine {
 			const patterns = await this.repository.findPatternsBySubscription(subscription.id);
 
 			for (const transaction of transactions) {
+				if (currencyCode(transaction.currency) !== currencyCode(subscription.currency)) continue;
+
 				// Skip transactions already flagged as subscriptions
 				if ((transaction as TransactionWithSubscription).isSubscription) {
 					continue;
@@ -303,7 +306,7 @@ export class SubscriptionPatternEngine {
 
 			// Create a key for grouping (description + amount with tolerance)
 			const amountKey = Math.round(normalizedAmount * 100); // Round to cents
-			const key = `${normalizedDesc}:${amountKey}`;
+			const key = `${normalizedDesc}:${amountKey}:${currencyCode(transaction.currency)}`;
 
 			if (!groups.has(key)) {
 				groups.set(key, []);
@@ -387,7 +390,7 @@ export class SubscriptionPatternEngine {
 		return {
 			description: group.originalDescription,
 			amount: Math.abs(group.baseAmount),
-			currency: transactions[0].currency || 'NOK',
+			currency: currencyCode(transactions[0].currency),
 			frequencyDays: Math.round(avgInterval),
 			billingFrequency,
 			transactions,

@@ -10,7 +10,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from '../../../components/ui/card';
-import { formatCurrency } from '../../../lib/financial-calculator';
+import { currencyCode, displayMoney as formatCurrency } from '@/lib/money';
 import { Subscription } from '../../../lib/types';
 import { useCurrencySettings } from '../../providers';
 
@@ -36,13 +36,35 @@ interface UpcomingPayment {
  * UpcomingPayments component displays a 30-day payment calendar
  * showing upcoming subscription payments with urgency indicators
  */
-export function UpcomingPayments({
+export function UpcomingPayments(props: UpcomingPaymentsProps) {
+	const groups = [...new Set((props.subscriptions ?? []).map((s) => currencyCode(s.currency)))];
+	if (groups.length <= 1 || props.isLoading || props.error)
+		return <UpcomingPaymentsCurrency {...props} />;
+	return (
+		<div className='space-y-6'>
+			{groups.map((currency) => (
+				<section key={currency} aria-label={`${currency} subscriptions`}>
+					<h3 className='font-semibold mb-3'>{currency}</h3>
+					<UpcomingPaymentsCurrency
+						{...props}
+						subscriptions={props.subscriptions?.filter(
+							(s) => currencyCode(s.currency) === currency,
+						)}
+					/>
+				</section>
+			))}
+		</div>
+	);
+}
+
+function UpcomingPaymentsCurrency({
 	subscriptions = [],
 	daysAhead = 30,
 	isLoading = false,
 	error,
 }: UpcomingPaymentsProps) {
-	const { currency, locale } = useCurrencySettings();
+	const { currency: defaultCurrency, locale } = useCurrencySettings();
+	const currency = subscriptions.length ? currencyCode(subscriptions[0].currency) : defaultCurrency;
 
 	// Calculate upcoming payments
 	const upcomingPayments = React.useMemo(() => {

@@ -10,7 +10,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from '../../../components/ui/card';
-import { formatCurrency } from '../../../lib/financial-calculator';
+import { currencyCode, displayMoney as formatCurrency } from '@/lib/money';
 import { Subscription } from '../../../lib/types';
 import { useCurrencySettings } from '../../providers';
 
@@ -27,12 +27,34 @@ interface SubscriptionOverviewProps {
  * SubscriptionOverview component displays aggregated subscription data
  * including total monthly/annual costs and subscription count
  */
-export function SubscriptionOverview({
+export function SubscriptionOverview(props: SubscriptionOverviewProps) {
+	const groups = [...new Set((props.subscriptions ?? []).map((s) => currencyCode(s.currency)))];
+	if (groups.length <= 1 || props.isLoading || props.error)
+		return <SubscriptionOverviewCurrency {...props} />;
+	return (
+		<div className='space-y-6'>
+			{groups.map((currency) => (
+				<section key={currency} aria-label={`${currency} subscriptions`}>
+					<h3 className='font-semibold mb-3'>{currency}</h3>
+					<SubscriptionOverviewCurrency
+						{...props}
+						subscriptions={props.subscriptions?.filter(
+							(s) => currencyCode(s.currency) === currency,
+						)}
+					/>
+				</section>
+			))}
+		</div>
+	);
+}
+
+function SubscriptionOverviewCurrency({
 	subscriptions = [],
 	isLoading = false,
 	error,
 }: SubscriptionOverviewProps) {
-	const { currency, locale } = useCurrencySettings();
+	const { currency: defaultCurrency, locale } = useCurrencySettings();
+	const currency = subscriptions.length ? currencyCode(subscriptions[0].currency) : defaultCurrency;
 
 	// Calculate totals from subscriptions
 	const totals = React.useMemo(() => {
