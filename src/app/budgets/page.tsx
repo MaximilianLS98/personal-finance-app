@@ -15,12 +15,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
+import { displayMoney } from '@/lib/money';
 import type { Budget, BudgetProgress, Category } from '@/lib/types';
 
 interface BudgetDashboardData {
 	activeBudgets: Budget[];
 	budgetProgress: BudgetProgress[];
 	totalBudgeted: number;
+	totalsByCurrency: Record<string, { budgeted: number; spent: number }>;
 	totalSpent: number;
 	overallStatus: 'on-track' | 'at-risk' | 'over-budget';
 	alerts: Array<{
@@ -118,7 +120,8 @@ export default function BudgetsPage() {
 		return <div className='container mx-auto px-4 py-8'>No data available</div>;
 	}
 
-	const { budgetProgress, totalBudgeted, totalSpent, overallStatus, alerts } = dashboardData;
+	const { budgetProgress, totalsByCurrency, overallStatus, alerts } = dashboardData;
+	const totalRows = Object.entries(totalsByCurrency ?? {});
 
 	return (
 		<div className='container mx-auto px-4 py-8'>
@@ -151,10 +154,9 @@ export default function BudgetsPage() {
 					</CardHeader>
 					<CardContent>
 						<div className='text-2xl font-bold'>
-							{totalBudgeted.toLocaleString('nb-NO', {
-								style: 'currency',
-								currency: 'NOK',
-							})}
+							{totalRows.map(([currency, value]) => (
+								<div key={currency}>{displayMoney(value.budgeted, currency)}</div>
+							))}
 						</div>
 					</CardContent>
 				</Card>
@@ -166,14 +168,11 @@ export default function BudgetsPage() {
 					</CardHeader>
 					<CardContent>
 						<div className='text-2xl font-bold'>
-							{totalSpent.toLocaleString('nb-NO', {
-								style: 'currency',
-								currency: 'NOK',
-							})}
+							{totalRows.map(([currency, value]) => (
+								<div key={currency}>{displayMoney(value.spent, currency)}</div>
+							))}
 						</div>
-						<p className='text-xs text-muted-foreground'>
-							{((totalSpent / Math.max(totalBudgeted, 1)) * 100).toFixed(1)}% of budget
-						</p>
+						<p className='text-xs text-muted-foreground'>Totals are grouped by currency</p>
 					</CardContent>
 				</Card>
 
@@ -184,10 +183,9 @@ export default function BudgetsPage() {
 					</CardHeader>
 					<CardContent>
 						<div className='text-2xl font-bold'>
-							{(totalBudgeted - totalSpent).toLocaleString('nb-NO', {
-								style: 'currency',
-								currency: 'NOK',
-							})}
+							{totalRows.map(([currency, value]) => (
+								<div key={currency}>{displayMoney(value.budgeted - value.spent, currency)}</div>
+							))}
 						</div>
 					</CardContent>
 				</Card>
@@ -324,14 +322,14 @@ export default function BudgetsPage() {
 															Spent:{' '}
 															{progress.currentSpent.toLocaleString('nb-NO', {
 																style: 'currency',
-																currency: 'NOK',
+																currency: progress.budget.currency,
 															})}
 														</span>
 														<span>
 															Budget:{' '}
 															{progress.budget.amount.toLocaleString('nb-NO', {
 																style: 'currency',
-																currency: 'NOK',
+																currency: progress.budget.currency,
 															})}
 														</span>
 													</div>
@@ -355,6 +353,29 @@ export default function BudgetsPage() {
 													</div>
 												</div>
 
+												<p className='text-xs text-muted-foreground'>
+													{progress.periodStart} – {progress.periodEnd}
+												</p>
+												<div className='text-sm space-y-1'>
+													<p>
+														Linked bills paid:{' '}
+														{displayMoney(progress.subscriptionPaid ?? 0, progress.budget.currency)}
+													</p>
+													<p>
+														Bills still due:{' '}
+														{displayMoney(
+															progress.upcomingCommitted ?? 0,
+															progress.budget.currency,
+														)}
+													</p>
+													<p>
+														Discretionary remaining:{' '}
+														{displayMoney(
+															progress.discretionaryRemaining ?? progress.remainingAmount,
+															progress.budget.currency,
+														)}
+													</p>
+												</div>
 												{/* Stats */}
 												<div className='grid grid-cols-2 gap-4 text-sm'>
 													<div>
@@ -362,7 +383,7 @@ export default function BudgetsPage() {
 														<p className='font-medium'>
 															{progress.remainingAmount.toLocaleString('nb-NO', {
 																style: 'currency',
-																currency: 'NOK',
+																currency: progress.budget.currency,
 															})}
 														</p>
 													</div>
@@ -371,25 +392,26 @@ export default function BudgetsPage() {
 														<p className='font-medium'>
 															{progress.averageDailySpend.toLocaleString('nb-NO', {
 																style: 'currency',
-																currency: 'NOK',
+																currency: progress.budget.currency,
 															})}
 														</p>
 													</div>
 												</div>
 
 												{/* Projected spending warning */}
-												{progress.projectedSpent > progress.budget.amount && (
+												{progress.projectedSpent >
+													(progress.availableAmount ?? progress.budget.amount) && (
 													<div className='flex items-center p-2 bg-red-50 rounded border border-red-200'>
 														<AlertTriangle className='w-4 h-4 text-red-600 mr-2' />
 														<span className='text-xs text-red-800'>
 															Projected to exceed budget by{' '}
-															{(progress.projectedSpent - progress.budget.amount).toLocaleString(
-																'nb-NO',
-																{
-																	style: 'currency',
-																	currency: 'NOK',
-																},
-															)}
+															{(
+																progress.projectedSpent -
+																(progress.availableAmount ?? progress.budget.amount)
+															).toLocaleString('nb-NO', {
+																style: 'currency',
+																currency: progress.budget.currency,
+															})}
 														</span>
 													</div>
 												)}
