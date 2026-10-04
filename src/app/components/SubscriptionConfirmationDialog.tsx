@@ -23,14 +23,16 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { currencyCode, displayMoney } from '@/lib/money';
 import { getJson } from '@/lib/api';
 import type { SubscriptionCandidate, SubscriptionMatch } from '@/lib/subscription-pattern-engine';
 import type { Category } from '@/lib/types';
 import { Calendar, CheckCircle2, CreditCard, TrendingUp } from 'lucide-react';
 import React, { useState } from 'react';
 
+type CandidateMetadata = { lastPaymentDate?: string; activity?: 'recent' | 'no_recent_payment' };
 interface SubscriptionDetectionData {
-	candidates: SubscriptionCandidate[];
+	candidates: (SubscriptionCandidate & CandidateMetadata)[];
 	matches: SubscriptionMatch[];
 	totalAnalyzed: number;
 	alreadyFlagged: number;
@@ -43,7 +45,7 @@ interface SubscriptionConfirmationDialogProps {
 	onConfirm: (confirmations: {
 		candidates: Array<{
 			candidate: SubscriptionCandidate;
-			overrides?: { name?: string; categoryId?: string; notes?: string };
+			overrides?: { name?: string; categoryId?: string; notes?: string; isActive?: boolean };
 		}>;
 		matches: SubscriptionMatch[];
 	}) => Promise<void>;
@@ -54,6 +56,7 @@ interface SubscriptionConfirmationDialogProps {
 interface CandidateSelection {
 	selected: boolean;
 	overrides: {
+		isActive?: boolean;
 		name?: string;
 		categoryId?: string;
 		notes?: string;
@@ -72,6 +75,8 @@ export default function SubscriptionConfirmationDialog({
 	>({});
 	const [matchSelections, setMatchSelections] = useState<Record<number, boolean>>({});
 	const [isConfirming, setIsConfirming] = useState(false);
+	const confirming = React.useRef(false);
+	const [confirmationError, setConfirmationError] = useState('');
 	const [categoryOptions, setCategoryOptions] = useState<Category[]>([]);
 	const [isLoadingCategories, setIsLoadingCategories] = useState(false);
 
@@ -80,20 +85,21 @@ export default function SubscriptionConfirmationDialog({
 	// Initialize selections when dialog opens
 	React.useEffect(() => {
 		if (isOpen) {
+			setConfirmationError('');
 			// Pre-select high-confidence candidates
 			const initialCandidateSelections: Record<number, CandidateSelection> = {};
 			candidates.forEach((candidate, index) => {
 				initialCandidateSelections[index] = {
-					selected: candidate.confidence >= 0.8, // Auto-select high confidence
-					overrides: {},
+					selected: candidate.confidence >= 0.8 && candidate.activity !== 'no_recent_payment',
+					overrides: { isActive: candidate.activity !== 'no_recent_payment' },
 				};
 			});
 			setCandidateSelections(initialCandidateSelections);
 
-			// Pre-select all matches (they're already high confidence)
+			// Existing payment links require an explicit selection.
 			const initialMatchSelections: Record<number, boolean> = {};
 			matches.forEach((_, index) => {
-				initialMatchSelections[index] = true;
+				initialMatchSelections[index] = false;
 			});
 			setMatchSelections(initialMatchSelections);
 		}
@@ -101,7 +107,7 @@ export default function SubscriptionConfirmationDialog({
 
 	// Prefer provided categories; otherwise fetch when dialog opens
 	React.useEffect(() => {
-		if (providedCategories && providedCategories.length > 0) {
+		if (providedCategories) {
 			setCategoryOptions(providedCategories);
 			return;
 		}
@@ -133,7 +139,7 @@ export default function SubscriptionConfirmationDialog({
 		}));
 	};
 
-	const handleCandidateOverride = (index: number, field: string, value: string) => {
+	const handleCandidateOverride = (index: number, field: string, value: string | boolean) => {
 		setCandidateSelections((prev) => ({
 			...prev,
 			[index]: {
@@ -154,7 +160,10 @@ export default function SubscriptionConfirmationDialog({
 	};
 
 	const handleConfirm = async () => {
+		if (confirming.current) return;
+		confirming.current = true;
 		setIsConfirming(true);
+		setConfirmationError('');
 		try {
 			// Prepare selected candidates
 			const selectedCandidates = candidates
@@ -178,18 +187,17 @@ export default function SubscriptionConfirmationDialog({
 
 			onClose();
 		} catch (error) {
-			console.error('Error confirming subscriptions:', error);
+			setConfirmationError(
+				error instanceof Error ? error.message : 'Unable to confirm subscriptions',
+			);
 		} finally {
+			confirming.current = false;
 			setIsConfirming(false);
 		}
 	};
 
-	const formatCurrency = (amount: number, currency: string = 'NOK') => {
-		return new Intl.NumberFormat('nb-NO', {
-			style: 'currency',
-			currency,
-		}).format(amount);
-	};
+	const formatCurrency = (amount: number, currency?: string) =>
+		displayMoney(amount, currencyCode(currency));
 
 	const formatFrequency = (frequency: string) => {
 		const frequencyMap = {
@@ -214,7 +222,12 @@ export default function SubscriptionConfirmationDialog({
 	const selectedMatchesCount = Object.values(matchSelections).filter(Boolean).length;
 
 	return (
-		<Dialog open={isOpen} onOpenChange={onClose}>
+		<Dialog
+			open={isOpen}
+			onOpenChange={() => {
+				if (!isConfirming) onClose();
+			}}
+		>
 			<DialogContent className='max-w-4xl max-h-[80vh] overflow-y-auto'>
 				<DialogHeader>
 					<DialogTitle className='flex items-center gap-2'>
@@ -227,7 +240,7 @@ export default function SubscriptionConfirmationDialog({
 					</DialogDescription>
 				</DialogHeader>
 
-				<Tabs defaultValue='candidates' className='w-full'>
+				<Tabs defaultValue={candidates.length ? 'candidates' : 'matches'} className='w-full'>
 					<TabsList className='grid w-full grid-cols-2'>
 						<TabsTrigger value='candidates' className='flex items-center gap-2'>
 							<CreditCard className='h-4 w-4' />
@@ -258,6 +271,8 @@ export default function SubscriptionConfirmationDialog({
 											<div className='flex items-start justify-between'>
 												<div className='flex items-center gap-3'>
 													<Checkbox
+														aria-label={`Select ${candidate.name}`}
+														disabled={isConfirming}
 														checked={selection?.selected || false}
 														onCheckedChange={(checked) =>
 															handleCandidateToggle(index, checked as boolean)
@@ -288,6 +303,20 @@ export default function SubscriptionConfirmationDialog({
 										<CardContent className='space-y-4'>
 											<div className='text-sm text-muted-foreground'>
 												<p>
+													<strong>Last payment:</strong>{' '}
+													{candidate.lastPaymentDate ??
+														candidate.matchingTransactions
+															.map((t) => new Date(t.date).toISOString().slice(0, 10))
+															.sort()
+															.at(-1) ??
+														'Unknown'}
+												</p>
+												<p>
+													{candidate.activity === 'no_recent_payment'
+														? 'No recent payment. History is saved inactive by default; this does not confirm cancellation.'
+														: 'Recent payment history'}
+												</p>
+												<p>
 													<strong>Detection reason:</strong> {candidate.reason}
 												</p>
 												<p>
@@ -299,6 +328,27 @@ export default function SubscriptionConfirmationDialog({
 											{selection?.selected && (
 												<div className='grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg'>
 													<div>
+														<label className='block mb-3 text-sm'>
+															Save {candidate.name} as
+															<select
+																aria-label={`Save ${candidate.name} as`}
+																className='block border rounded p-2 w-full'
+																disabled={isConfirming}
+																value={
+																	selection.overrides.isActive === false ? 'inactive' : 'active'
+																}
+																onChange={(e) =>
+																	handleCandidateOverride(
+																		index,
+																		'isActive',
+																		e.target.value === 'active',
+																	)
+																}
+															>
+																<option value='active'>Active subscription</option>
+																<option value='inactive'>Inactive history</option>
+															</select>
+														</label>
 														<Label htmlFor={`name-${index}`}>Subscription Name</Label>
 														<Input
 															id={`name-${index}`}
@@ -382,6 +432,8 @@ export default function SubscriptionConfirmationDialog({
 										<div className='flex items-start justify-between'>
 											<div className='flex items-center gap-3'>
 												<Checkbox
+													aria-label={`Link ${match.transaction.id} to ${match.subscription.name}`}
+													disabled={isConfirming}
 													checked={matchSelections[index] || false}
 													onCheckedChange={(checked) =>
 														handleMatchToggle(index, checked as boolean)
@@ -420,7 +472,8 @@ export default function SubscriptionConfirmationDialog({
 												)}
 											</p>
 											<p>
-												<strong>Date:</strong> {match.transaction.date.toLocaleDateString()}
+												<strong>Date:</strong>{' '}
+												{new Date(match.transaction.date).toLocaleDateString()}
 											</p>
 										</div>
 									</CardContent>
@@ -430,6 +483,11 @@ export default function SubscriptionConfirmationDialog({
 					</TabsContent>
 				</Tabs>
 
+				{confirmationError && (
+					<p role='alert' className='text-destructive'>
+						{confirmationError}
+					</p>
+				)}
 				<DialogFooter className='flex items-center justify-between'>
 					<div className='text-sm text-muted-foreground'>
 						{selectedCandidatesCount} new subscriptions and {selectedMatchesCount} matches selected

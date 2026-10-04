@@ -246,12 +246,11 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 					body: JSON.stringify(confirmations),
 				});
 
-				if (!response.ok) {
-					throw new Error('Failed to confirm subscriptions');
-				}
-
 				const result = await response.json();
-				console.log('Subscriptions confirmed:', result);
+				if (!response.ok || result.success === false || result.data?.errors?.length)
+					throw new Error(
+						result.message || result.data?.errors?.join('; ') || 'Failed to confirm subscriptions',
+					);
 
 				// Close dialog and call success callback
 				setState((prev) => ({
@@ -270,8 +269,9 @@ export default function FileUpload({ onUploadSuccess, onUploadError }: FileUploa
 				console.error('Error confirming subscriptions:', error);
 				setState((prev) => ({
 					...prev,
-					error: 'Failed to confirm subscriptions',
+					error: error instanceof Error ? error.message : 'Failed to confirm subscriptions',
 				}));
+				throw error;
 			}
 		},
 		[state.subscriptionDetection, state.uploadData, onUploadSuccess],

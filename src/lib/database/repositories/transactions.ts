@@ -190,7 +190,7 @@ export class TransactionsRepository {
 		try {
 			const db = this.context.connection();
 			const stmt = db.prepare(`
-				SELECT t.id, t.date, t.description, t.amount, t.type, t.currency, t.category_id
+				SELECT t.id, t.date, t.description, t.amount, t.type, t.currency, t.category_id, t.is_subscription, t.subscription_id
 				FROM transactions t
 				ORDER BY t.date DESC, t.created_at DESC
 			`);
@@ -203,6 +203,8 @@ export class TransactionsRepository {
 				currency: string | null;
 				type: 'income' | 'expense' | 'transfer';
 				category_id: string | null;
+				is_subscription: number | null;
+				subscription_id: string | null;
 			}>;
 
 			return rows.map((row) => ({
@@ -213,6 +215,8 @@ export class TransactionsRepository {
 				currency: row.currency || undefined,
 				type: row.type,
 				categoryId: row.category_id || undefined,
+				isSubscription: row.is_subscription ? true : undefined,
+				subscriptionId: row.subscription_id || undefined,
 			}));
 		} catch (error) {
 			throw new DatabaseConnectionError(
@@ -319,7 +323,7 @@ export class TransactionsRepository {
 
 			// Get paginated results
 			const dataStmt = db.prepare(`
-				SELECT t.id, t.date, t.description, t.amount, t.type, t.currency, t.category_id
+				SELECT t.id, t.date, t.description, t.amount, t.type, t.currency, t.category_id, t.is_subscription, t.subscription_id
 				FROM transactions t
 				${whereClause}
 				${orderByClause}
@@ -334,6 +338,8 @@ export class TransactionsRepository {
 				currency: string | null;
 				type: 'income' | 'expense' | 'transfer';
 				category_id: string | null;
+				is_subscription: number | null;
+				subscription_id: string | null;
 			}>;
 
 			const transactions = rows.map((row) => ({
@@ -344,6 +350,8 @@ export class TransactionsRepository {
 				currency: row.currency || undefined,
 				type: row.type,
 				categoryId: row.category_id || undefined,
+				isSubscription: row.is_subscription ? true : undefined,
+				subscriptionId: row.subscription_id || undefined,
 			}));
 
 			// Calculate pagination metadata
@@ -380,7 +388,7 @@ export class TransactionsRepository {
 		try {
 			const db = this.context.connection();
 			const stmt = db.prepare(`
-				SELECT t.id, t.date, t.description, t.amount, t.type, t.currency, t.category_id
+				SELECT t.id, t.date, t.description, t.amount, t.type, t.currency, t.category_id, t.is_subscription, t.subscription_id
 				FROM transactions t
 				WHERE t.id = ?
 			`);
@@ -393,6 +401,8 @@ export class TransactionsRepository {
 				currency: string | null;
 				type: 'income' | 'expense' | 'transfer';
 				category_id: string | null;
+				is_subscription: number | null;
+				subscription_id: string | null;
 			} | null;
 
 			if (!row) {
@@ -407,6 +417,8 @@ export class TransactionsRepository {
 				currency: row.currency || undefined,
 				type: row.type,
 				categoryId: row.category_id || undefined,
+				isSubscription: row.is_subscription ? true : undefined,
+				subscriptionId: row.subscription_id || undefined,
 			};
 		} catch (error) {
 			throw new DatabaseConnectionError(
@@ -427,7 +439,7 @@ export class TransactionsRepository {
 		try {
 			const db = this.context.connection();
 			const stmt = db.prepare(`
-				SELECT t.id, t.date, t.description, t.amount, t.type, t.currency, t.category_id
+				SELECT t.id, t.date, t.description, t.amount, t.type, t.currency, t.category_id, t.is_subscription, t.subscription_id
 				FROM transactions t
 				WHERE t.date >= ? AND t.date <= ?
 				ORDER BY t.date DESC, t.created_at DESC
@@ -441,6 +453,8 @@ export class TransactionsRepository {
 				currency: string | null;
 				type: 'income' | 'expense' | 'transfer';
 				category_id: string | null;
+				is_subscription: number | null;
+				subscription_id: string | null;
 			}>;
 
 			return rows.map((row) => ({
@@ -451,6 +465,8 @@ export class TransactionsRepository {
 				currency: row.currency || undefined,
 				type: row.type,
 				categoryId: row.category_id || undefined,
+				isSubscription: row.is_subscription ? true : undefined,
+				subscriptionId: row.subscription_id || undefined,
 			}));
 		} catch (error) {
 			throw new DatabaseConnectionError(

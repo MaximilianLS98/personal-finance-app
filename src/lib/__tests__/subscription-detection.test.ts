@@ -236,7 +236,7 @@ describe('Subscription Detection System', () => {
 			expect(candidates).toHaveLength(0);
 		});
 
-		it('should filter out monthly subscriptions that appear to have been canceled', async () => {
+		it('should retain historical monthly subscriptions for review', async () => {
 			// Create dates relative to now to avoid date issues
 			const now = new Date();
 			const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, 15);
@@ -246,7 +246,7 @@ describe('Subscription Detection System', () => {
 			const eightMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 8, 15);
 
 			const transactions: Transaction[] = [
-				// Canceled subscription: last payment more than 6 months ago (should be filtered out)
+				// Historical subscription: last payment more than 6 months ago
 				{
 					id: '1',
 					date: eightMonthsAgo,
@@ -263,14 +263,7 @@ describe('Subscription Detection System', () => {
 					type: 'expense',
 					currency: 'NOK',
 				},
-				{
-					id: '3',
-					date: sevenMonthsAgo, // Last payment more than 4 months ago
-					description: 'CANCELED STREAMING SERVICE',
-					amount: -99.0,
-					type: 'expense',
-					currency: 'NOK',
-				},
+
 				// Active subscription: recent payments (should be kept)
 				{
 					id: '4',
@@ -300,10 +293,14 @@ describe('Subscription Detection System', () => {
 
 			const candidates = await patternEngine.detectSubscriptions(transactions);
 
-			// Should only detect the active subscription, not the canceled one
-			expect(candidates).toHaveLength(1);
-			expect(candidates[0].name).toBe('Active Streaming Service');
-			expect(candidates[0].amount).toBe(149.0);
+			// Recency annotates history instead of deleting valid recurring evidence.
+			expect(candidates).toHaveLength(2);
+			expect(candidates.find((c) => c.name === 'Canceled Streaming Service')?.activity).toBe(
+				'no_recent_payment',
+			);
+			expect(candidates.find((c) => c.name === 'Active Streaming Service')?.activity).toBe(
+				'recent',
+			);
 		});
 
 		it('should handle amount variations within tolerance', async () => {
@@ -410,6 +407,7 @@ describe('Subscription Detection System', () => {
 						description: 'SPOTIFY',
 						amount: -99,
 						type: 'expense' as const,
+						currency: 'NOK',
 					},
 					{
 						id: 'tx2',
@@ -417,6 +415,7 @@ describe('Subscription Detection System', () => {
 						description: 'SPOTIFY',
 						amount: -99,
 						type: 'expense' as const,
+						currency: 'NOK',
 					},
 				],
 				detectedPatterns: [],

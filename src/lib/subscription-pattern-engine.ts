@@ -1,4 +1,5 @@
 import { currencyCode } from './money';
+import { hasRecentDetectedPayment } from './detected-subscription';
 /**
  * Subscription pattern detection and management engine
  * Integrates with existing categorization system for subscription detection
@@ -38,6 +39,9 @@ export interface SubscriptionCandidate {
 	}>;
 	/** Reason for detection */
 	reason: string;
+	/** Recency describes evidence, not whether a subscription is actually cancelled. */
+	activity?: 'recent' | 'no_recent_payment';
+	lastPaymentDate?: string;
 }
 
 /**
@@ -95,7 +99,11 @@ export class SubscriptionPatternEngine {
 		for (const pattern of recurringPatterns) {
 			if (pattern.confidence >= 0.6) {
 				// Only suggest high-confidence patterns
+				const lastPayment = pattern.transactions[pattern.transactions.length - 1].date;
+				const stale = !hasRecentDetectedPayment(lastPayment, pattern.billingFrequency);
 				const candidate: SubscriptionCandidate = {
+					activity: stale ? 'no_recent_payment' : 'recent',
+					lastPaymentDate: lastPayment.toISOString().slice(0, 10),
 					name: this.generateSubscriptionName(pattern.description),
 					amount: Math.abs(pattern.amount),
 					currency: pattern.currency,
@@ -115,11 +123,23 @@ export class SubscriptionPatternEngine {
 
 		// Filter out candidates that match existing active subscriptions
 		const filteredCandidates = await this.filterExistingSubscriptions(candidates);
+		const existingMatches = await this.matchExistingSubscriptions(transactions);
+		const matchedBySubscription = new Map<string, Set<string>>();
+		for (const match of existingMatches) {
+			const ids = matchedBySubscription.get(match.subscription.id) ?? new Set<string>();
+			ids.add(match.transaction.id);
+			matchedBySubscription.set(match.subscription.id, ids);
+		}
 
-		// Filter out monthly candidates that haven't been paid in the last 4 months (likely canceled)
-		const recentCandidates = this.filterStaleMonthlyCandidates(filteredCandidates);
-
-		return recentCandidates.sort((a, b) => b.confidence - a.confidence);
+		// Historical recurrence remains useful evidence even after payments stop.
+		return filteredCandidates
+			.filter(
+				(candidate) =>
+					![...matchedBySubscription.values()].some((ids) =>
+						candidate.matchingTransactions.every((t) => ids.has(t.id)),
+					),
+			)
+			.sort((a, b) => b.confidence - a.confidence);
 	}
 
 	/**
@@ -146,41 +166,14 @@ export class SubscriptionPatternEngine {
 
 				// If name is similar (>60%) and amount matches closely, consider it a duplicate
 				// Lower threshold because subscription names can have small variations
-				return nameSimilarity > 0.6 && amountMatch;
+				return (
+					currencyCode(existing.currency) === candidate.currency &&
+					nameSimilarity > 0.6 &&
+					amountMatch
+				);
 			});
 
 			return !existingMatch; // Keep only candidates that don't match existing subscriptions
-		});
-	}
-
-	/**
-	 * Filter out monthly subscription candidates that appear to have been canceled
-	 * (no payments in the last 4 months relative to today)
-	 */
-	private filterStaleMonthlyCandidates(
-		candidates: SubscriptionCandidate[],
-	): SubscriptionCandidate[] {
-		const now = new Date();
-		const fourMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 4, now.getDate());
-
-		return candidates.filter((candidate) => {
-			// Only filter monthly subscriptions
-			if (candidate.billingFrequency !== 'monthly') {
-				return true; // Keep quarterly, annual, etc.
-			}
-
-			// Find the most recent transaction
-			const mostRecentTransaction = candidate.matchingTransactions
-				.map((t) => ({
-					...t,
-					date: t.date instanceof Date ? t.date : new Date(t.date as unknown as string),
-				}))
-				.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-
-			// If the most recent payment is within the last 4 months, keep it
-			const isRecentEnough = new Date(mostRecentTransaction.date) >= fourMonthsAgo;
-
-			return isRecentEnough;
 		});
 	}
 
@@ -218,7 +211,12 @@ export class SubscriptionPatternEngine {
 			const patterns = await this.repository.findPatternsBySubscription(subscription.id);
 
 			for (const transaction of transactions) {
-				if (currencyCode(transaction.currency) !== currencyCode(subscription.currency)) continue;
+				if (
+					transaction.type !== 'expense' ||
+					transaction.amount >= 0 ||
+					currencyCode(transaction.currency) !== currencyCode(subscription.currency)
+				)
+					continue;
 
 				// Skip transactions already flagged as subscriptions
 				if ((transaction as TransactionWithSubscription).isSubscription) {
@@ -241,7 +239,15 @@ export class SubscriptionPatternEngine {
 			}
 		}
 
-		return matches.sort((a, b) => b.confidence - a.confidence);
+		// Multiple saved patterns can describe the same payment; review it only once
+		// for each possible subscription, preserving the strongest evidence.
+		const strongest = new Map<string, SubscriptionMatch>();
+		for (const match of matches) {
+			const key = JSON.stringify([match.subscription.id, match.transaction.id]);
+			if (!strongest.has(key) || strongest.get(key)!.confidence < match.confidence)
+				strongest.set(key, match);
+		}
+		return [...strongest.values()].sort((a, b) => b.confidence - a.confidence);
 	}
 
 	/**
@@ -294,41 +300,48 @@ export class SubscriptionPatternEngine {
 		originalDescription: string;
 		baseAmount: number;
 	}> {
-		const groups = new Map<string, Transaction[]>();
-
+		const merchants = new Map<string, Transaction[]>();
 		for (const transaction of transactions) {
-			// Only consider expense transactions for subscriptions
-			if (transaction.type !== 'expense') continue;
-
-			// Normalize description and amount for grouping
-			const normalizedDesc = this.normalizeDescription(transaction.description);
-			const normalizedAmount = Math.abs(transaction.amount);
-
-			// Create a key for grouping (description + amount with tolerance)
-			const amountKey = Math.round(normalizedAmount * 100); // Round to cents
-			const key = `${normalizedDesc}:${amountKey}:${currencyCode(transaction.currency)}`;
-
-			if (!groups.has(key)) {
-				groups.set(key, []);
-			}
-			groups.get(key)!.push(transaction);
+			const linked = transaction as TransactionWithSubscription;
+			if (
+				transaction.type !== 'expense' ||
+				transaction.amount >= 0 ||
+				!Number.isFinite(transaction.amount) ||
+				!Number.isFinite(transaction.date.getTime()) ||
+				linked.isSubscription ||
+				linked.subscriptionId
+			)
+				continue;
+			const description = this.normalizeDescription(transaction.description);
+			if (!description) continue;
+			const key = JSON.stringify([description, currencyCode(transaction.currency)]);
+			const rows = merchants.get(key) ?? [];
+			rows.push(transaction);
+			merchants.set(key, rows);
 		}
-
-		// Convert to array format with metadata
-		return Array.from(groups.entries()).map(([key, transactions]) => {
-			const [baseDescription] = key.split(':');
-			const baseAmount = transactions[0].amount;
-			// Use the original description from the first transaction for naming
-			const originalDescription = transactions[0].description;
-
-			return {
-				key,
-				transactions: transactions.sort((a, b) => a.date.getTime() - b.date.getTime()),
-				baseDescription,
-				originalDescription,
-				baseAmount,
-			};
-		});
+		const groups = [];
+		for (const [key, rows] of merchants) {
+			// Bound the whole price range: modest increases/FX fluctuations must not split
+			// an otherwise regular series. Distinct price tiers remain separate.
+			const clusters: Transaction[][] = [];
+			for (const transaction of [...rows].sort((a, b) => Math.abs(a.amount) - Math.abs(b.amount))) {
+				const amount = Math.abs(transaction.amount);
+				const cluster = clusters.find((items) => amount <= Math.abs(items[0].amount) * 1.1 + 0.01);
+				if (cluster) cluster.push(transaction);
+				else clusters.push([transaction]);
+			}
+			for (const cluster of clusters) {
+				const transactions = cluster.sort((a, b) => a.date.getTime() - b.date.getTime());
+				groups.push({
+					key,
+					transactions,
+					baseDescription: this.normalizeDescription(transactions[0].description),
+					originalDescription: transactions[transactions.length - 1].description,
+					baseAmount: transactions[transactions.length - 1].amount,
+				});
+			}
+		}
+		return groups;
 	}
 
 	/**
@@ -544,7 +557,7 @@ export class SubscriptionPatternEngine {
 	private normalizeDescription(description: string): string {
 		return description
 			.toLowerCase()
-			.replace(/[^\w\s]/g, ' ') // Replace special chars with spaces
+			.replace(/[^\p{L}\p{N}\s]/gu, ' ') // Replace special chars with spaces
 			.replace(/\s+/g, ' ') // Normalize whitespace
 			.trim();
 	}
@@ -687,7 +700,7 @@ export class SubscriptionPatternEngine {
 		const normalize = (str: string) =>
 			str
 				.toLowerCase()
-				.replace(/[^\w\s]/g, ' ') // Replace punctuation with spaces
+				.replace(/[^\p{L}\p{N}\s]/gu, ' ') // Replace punctuation with spaces
 				.replace(/\s+/g, ' ') // Collapse multiple spaces
 				.trim();
 

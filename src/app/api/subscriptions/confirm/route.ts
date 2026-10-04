@@ -1,148 +1,110 @@
-import { createTransactionRepository } from '@/lib/database';
-import type { SubscriptionCandidate, SubscriptionMatch } from '@/lib/subscription-pattern-engine';
-import { createSubscriptionService } from '@/lib/subscription-service';
-import type { Subscription } from '@/lib/types';
-import { ErrorResponse } from '@/lib/types';
 import { NextRequest, NextResponse } from 'next/server';
+import { financeDb } from '@/lib/finance-db';
+import { saveDetectedSubscriptions } from '@/lib/detected-subscription';
+import { currencyCode } from '@/lib/money';
+import type { SubscriptionCandidate, SubscriptionMatch } from '@/lib/subscription-pattern-engine';
+import type { CreateSubscriptionRequest } from '@/lib/subscription-service';
 
-/**
- * Request body for confirming subscription candidates and matches
- */
 interface ConfirmSubscriptionsRequest {
-	/** Subscription candidates to confirm and create */
 	candidates?: Array<{
 		candidate: SubscriptionCandidate;
-		overrides?: {
-			name?: string;
-			description?: string;
-			amount?: number;
-			currency?: string;
-			billingFrequency?: 'monthly' | 'quarterly' | 'annually' | 'custom';
-			customFrequencyDays?: number;
-			nextPaymentDate?: string;
-			categoryId?: string;
-			startDate?: string;
-			notes?: string;
-			website?: string;
-			cancellationUrl?: string;
-		};
+		overrides?: Partial<CreateSubscriptionRequest>;
 	}>;
-	/** Subscription matches to confirm and flag transactions */
 	matches?: SubscriptionMatch[];
 }
-
-/**
- * POST /api/subscriptions/confirm - Confirm detected subscriptions and create/flag them
- */
+/** Candidates and existing matches are committed together, so a failed retry cannot duplicate earlier successes. */
 export async function POST(request: NextRequest) {
-	const repository = createTransactionRepository();
-
 	try {
-		await repository.initialize();
-
-		const body = (await request.json()) as ConfirmSubscriptionsRequest;
-		const { candidates = [], matches = [] } = body;
-
-		const subscriptionService = createSubscriptionService(repository);
-		const results = {
-			createdSubscriptions: [] as Subscription[],
-			flaggedTransactions: [] as {
-				transactionId: string;
-				subscriptionId: string;
-				subscriptionName: string;
-				confidence: number;
-			}[],
-			errors: [] as string[],
-		};
-
-		// Process subscription candidates
-		for (const { candidate, overrides } of candidates) {
-			try {
-				// Convert string dates to Date objects if provided
-				const processedOverrides = overrides
-					? {
-							...overrides,
-							nextPaymentDate: overrides.nextPaymentDate
-								? new Date(overrides.nextPaymentDate)
-								: undefined,
-							startDate: overrides.startDate ? new Date(overrides.startDate) : undefined,
-						}
-					: undefined;
-
-				// Hydrate candidate transaction dates (serialized from the client) back to Date objects
-				const hydratedCandidate: SubscriptionCandidate = {
-					...candidate,
-					matchingTransactions: candidate.matchingTransactions.map((t) => ({
-						...t,
-						// Support both Date and string inputs safely
-						date: t.date instanceof Date ? t.date : new Date(t.date as unknown as string),
-					})),
+		const { candidates = [], matches = [] } = (await request.json()) as ConfirmSubscriptionsRequest;
+		if (
+			!Array.isArray(candidates) ||
+			!Array.isArray(matches) ||
+			(!candidates.length && !matches.length) ||
+			candidates.length > 200 ||
+			matches.length > 10000
+		)
+			throw new Error('Select valid candidates or matches to confirm');
+		const db = await financeDb();
+		const results = db.transaction(() => {
+			const created = candidates.length
+				? saveDetectedSubscriptions(
+						db,
+						candidates.map(({ candidate, overrides = {} }) => ({
+							name: overrides.name || candidate.name,
+							description: overrides.description,
+							amount: overrides.amount ?? candidate.amount,
+							currency: overrides.currency ?? candidate.currency,
+							billingFrequency: overrides.billingFrequency ?? candidate.billingFrequency,
+							customFrequencyDays: overrides.customFrequencyDays,
+							categoryId: overrides.categoryId || candidate.categoryId,
+							transactionIds: candidate.matchingTransactions.map((transaction) => transaction.id),
+							isActive: overrides.isActive,
+							startDate: overrides.startDate,
+							nextPaymentDate: overrides.nextPaymentDate,
+							website: overrides.website,
+							cancellationUrl: overrides.cancellationUrl,
+							notes: overrides.notes,
+							patterns: candidate.detectedPatterns,
+						})),
+					)
+				: [];
+			const flagged = matches.map((match) => {
+				const subscription = db
+					.query('SELECT id,name,currency FROM subscriptions WHERE id=?')
+					.get(match.subscription?.id) as { id: string; name: string; currency: string } | null;
+				const transaction = db
+					.query('SELECT id,amount,type,currency,subscription_id FROM transactions WHERE id=?')
+					.get(match.transaction?.id) as {
+					id: string;
+					amount: number;
+					type: string;
+					currency: string | null;
+					subscription_id: string | null;
+				} | null;
+				if (!subscription || !transaction)
+					throw new Error('A selected subscription or transaction no longer exists');
+				if (
+					transaction.type !== 'expense' ||
+					transaction.amount >= 0 ||
+					currencyCode(subscription.currency) !== currencyCode(transaction.currency)
+				)
+					throw new Error('Existing matches must be expense payments in the subscription currency');
+				if (transaction.subscription_id && transaction.subscription_id !== subscription.id)
+					throw new Error('A selected payment is already linked to another subscription');
+				db.query(
+					'UPDATE transactions SET subscription_id=?,is_subscription=1,updated_at=? WHERE id=?',
+				).run(subscription.id, new Date().toISOString(), transaction.id);
+				if (!transaction.subscription_id && match.pattern?.id)
+					db.query(
+						'UPDATE subscription_patterns SET confidence_score=MIN(1,confidence_score+0.1*(1-confidence_score)),updated_at=? WHERE id=? AND subscription_id=?',
+					).run(new Date().toISOString(), match.pattern.id, subscription.id);
+				return {
+					transactionId: transaction.id,
+					subscriptionId: subscription.id,
+					subscriptionName: subscription.name,
+					confidence: match.confidence,
 				};
-
-				const subscription = await subscriptionService.confirmSubscription({
-					candidate: hydratedCandidate,
-					overrides: processedOverrides,
-				});
-
-				results.createdSubscriptions.push(subscription);
-			} catch (error) {
-				const errorMessage = `Failed to create subscription "${candidate.name}": ${
-					error instanceof Error ? error.message : 'Unknown error'
-				}`;
-				console.error(errorMessage, error);
-				results.errors.push(errorMessage);
-			}
-		}
-
-		// Process subscription matches
-		if (matches.length > 0)
-			try {
-				await subscriptionService.confirmSubscriptionMatches(matches);
-
-				// Get details of flagged transactions for response
-				for (const match of matches) {
-					results.flaggedTransactions.push({
-						transactionId: match.transaction.id,
-						subscriptionId: match.subscription.id,
-						subscriptionName: match.subscription.name,
-						confidence: match.confidence,
-					});
-				}
-			} catch (error) {
-				const errorMessage = `Failed to confirm subscription matches: ${
-					error instanceof Error ? error.message : 'Unknown error'
-				}`;
-				console.error(errorMessage, error);
-				results.errors.push(errorMessage);
-			}
-
-		// Return results
-		return NextResponse.json(
-			{
-				success: true,
-				data: {
-					...results,
-					summary: {
-						subscriptionsCreated: results.createdSubscriptions.length,
-						transactionsFlagged: results.flaggedTransactions.length,
-						errorsCount: results.errors.length,
-					},
+			});
+			return {
+				createdSubscriptions: created.map((item) => item.subscription),
+				flaggedTransactions: flagged,
+				errors: [],
+				summary: {
+					subscriptionsCreated: created.length,
+					transactionsFlagged: flagged.length,
+					errorsCount: 0,
 				},
-			},
-			{ status: 200 },
-		);
+			};
+		})();
+		return NextResponse.json({ success: true, data: results });
 	} catch (error) {
-		console.error('Subscription confirmation API error:', error);
-
 		return NextResponse.json(
 			{
-				error: 'INTERNAL_SERVER_ERROR',
-				message: 'An unexpected error occurred while confirming subscriptions',
-				details: error instanceof Error ? error.message : 'Unknown error',
-			} as ErrorResponse,
-			{ status: 500 },
+				success: false,
+				error: 'VALIDATION_ERROR',
+				message: error instanceof Error ? error.message : 'Unable to confirm subscriptions',
+			},
+			{ status: 400 },
 		);
-	} finally {
-		await repository.close();
 	}
 }
