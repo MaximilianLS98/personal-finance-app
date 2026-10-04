@@ -1,3 +1,5 @@
+import { hasRecentDetectedPayment, nextDetectedPayment } from './detected-subscription';
+import { currencyCode } from './money';
 /**
  * High-level subscription service that integrates pattern detection with repository operations
  * Provides business logic for subscription management and detection
@@ -20,6 +22,7 @@ import type {
  * Subscription creation request
  */
 export interface CreateSubscriptionRequest {
+	isActive?: boolean;
 	name: string;
 	description?: string;
 	amount: number;
@@ -86,7 +89,7 @@ export class SubscriptionService {
 			customFrequencyDays: request.customFrequencyDays,
 			nextPaymentDate: request.nextPaymentDate,
 			categoryId: request.categoryId,
-			isActive: true,
+			isActive: request.isActive ?? true,
 			startDate: request.startDate,
 			notes: request.notes,
 			website: request.website,
@@ -194,27 +197,39 @@ export class SubscriptionService {
 			}))
 			.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
 
-		const nextPaymentDate = new Date(latestTransaction.date);
-
-		// Add billing frequency to get next payment
-		switch (candidate.billingFrequency) {
-			case 'monthly':
-				nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
-				break;
-			case 'quarterly':
-				nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 3);
-				break;
-			case 'annually':
-				nextPaymentDate.setFullYear(nextPaymentDate.getFullYear() + 1);
-				break;
-		}
+		if (!latestTransaction) throw new Error('Matching transactions are required');
+		const frequency = overrides.billingFrequency || candidate.billingFrequency;
+		const activity = (candidate as { activity?: string }).activity;
+		const isActive =
+			overrides.isActive ??
+			(activity
+				? activity !== 'no_recent_payment'
+				: hasRecentDetectedPayment(
+						latestTransaction.date,
+						frequency,
+						overrides.customFrequencyDays,
+					));
+		const nextPaymentDate = nextDetectedPayment(
+			latestTransaction.date,
+			frequency,
+			overrides.customFrequencyDays,
+			isActive ? new Date() : undefined,
+		);
+		const currency = currencyCode(overrides.currency || candidate.currency);
+		if (
+			candidate.matchingTransactions.some(
+				(transaction) => currencyCode(transaction.currency) !== currency,
+			)
+		)
+			throw new Error('Candidate and payment currencies must match');
 
 		// Create subscription request
 		const subscriptionRequest: CreateSubscriptionRequest = {
 			name: overrides.name || candidate.name,
 			description: overrides.description,
 			amount: overrides.amount || candidate.amount,
-			currency: overrides.currency || candidate.currency,
+			currency,
+			isActive,
 			billingFrequency: overrides.billingFrequency || candidate.billingFrequency,
 			customFrequencyDays: overrides.customFrequencyDays,
 			nextPaymentDate: overrides.nextPaymentDate || nextPaymentDate,

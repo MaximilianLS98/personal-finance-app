@@ -407,6 +407,7 @@ describe('Subscription Detection System', () => {
 						description: 'SPOTIFY',
 						amount: -99,
 						type: 'expense' as const,
+						currency: 'NOK',
 					},
 					{
 						id: 'tx2',
@@ -414,6 +415,7 @@ describe('Subscription Detection System', () => {
 						description: 'SPOTIFY',
 						amount: -99,
 						type: 'expense' as const,
+						currency: 'NOK',
 					},
 				],
 				detectedPatterns: [],
