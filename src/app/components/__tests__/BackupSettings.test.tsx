@@ -54,3 +54,26 @@ it('requires file validation and explicit typed confirmation before replacing da
 	);
 	global.fetch = previousFetch;
 });
+
+it('keeps the recovery download discoverable when settings are reopened', () => {
+	const client = new QueryClient();
+	const view = render(
+		<QueryClientProvider client={client}>
+			<BackupSettings />
+		</QueryClientProvider>,
+	);
+	expect(screen.getByRole('link', { name: 'Download pre-restore backup' })).toHaveAttribute(
+		'href',
+		'/api/backups?safety=latest',
+	);
+	view.unmount();
+	render(
+		<QueryClientProvider client={new QueryClient()}>
+			<BackupSettings />
+		</QueryClientProvider>,
+	);
+	expect(screen.getByRole('link', { name: 'Download pre-restore backup' })).toHaveAttribute(
+		'href',
+		'/api/backups?safety=latest',
+	);
+});

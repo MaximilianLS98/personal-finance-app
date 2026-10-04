@@ -25,7 +25,6 @@ export function BackupSettings() {
 	const [success, setSuccess] = useState('');
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [confirmation, setConfirmation] = useState('');
-	const [restored, setRestored] = useState(false);
 	async function validate(file?: File) {
 		setBackup(null);
 		setPreview(null);
@@ -76,7 +75,6 @@ export function BackupSettings() {
 			setSuccess(
 				`Restored ${body.restored.totalRecords} records. A backup of the previous data was saved automatically.`,
 			);
-			setRestored(true);
 			setBackup(null);
 			setPreview(null);
 			setConfirmation('');
@@ -166,11 +164,15 @@ export function BackupSettings() {
 						</p>
 					)}
 					{success && <p role='status'>{success}</p>}
-					{restored && (
+					<div className='space-y-2'>
 						<Button asChild variant='outline'>
 							<a href='/api/backups?safety=latest'>Download pre-restore backup</a>
 						</Button>
-					)}
+						<p className='text-sm text-muted-foreground'>
+							Available after your first restore. The latest recovery copy stays available after
+							reopening the app.
+						</p>
+					</div>
 				</div>
 				<Dialog
 					open={confirmOpen}
