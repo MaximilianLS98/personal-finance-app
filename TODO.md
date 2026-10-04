@@ -1,3 +1,5 @@
-# TODO 
+# Follow-up ideas
 
-- when getting category suggestion and the ai/system not finding a match, there is basically no feedback at all
+- Add currency conversion or per-currency totals before combining imports in different currencies.
+- Replace subscription trend placeholders with measurements from transaction history.
+- Add authentication before exposing the app beyond localhost.
