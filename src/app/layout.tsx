@@ -1,3 +1,4 @@
+import { BASE_COLOR_INIT_SCRIPT } from '@/lib/base-color';
 import { AppSidebar } from '@/components/app-sidebar';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import type { Metadata } from 'next';
@@ -27,6 +28,9 @@ export default function RootLayout({
 }>) {
 	return (
 		<html lang='en' suppressHydrationWarning>
+			<head>
+				<script id='base-color-init' dangerouslySetInnerHTML={{ __html: BASE_COLOR_INIT_SCRIPT }} />
+			</head>
 			<body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
 				<Providers>
 					<SidebarProvider>
