@@ -1,5 +1,6 @@
 import { createTransactionRepository } from '@/lib/database';
 import { ErrorResponse } from '@/lib/types';
+import { getEffectiveTransactions } from '@/lib/transaction-ledger';
 import { currencySummaries } from '@/lib/currency-report';
 import { NextResponse } from 'next/server';
 
@@ -13,7 +14,7 @@ export async function GET(request: Request) {
 	try {
 		await repository.initialize();
 
-		const summaries = currencySummaries(await repository.findAll());
+		const summaries = currencySummaries(await getEffectiveTransactions());
 		const selected = request ? new URL(request.url).searchParams.get('currency') : null;
 		const summary =
 			summaries.find((s) => s.currency === selected) ||

@@ -19,6 +19,7 @@ const navigation = [
 	{ title: 'Home', url: '/home', icon: Home },
 	{ title: 'Dashboard', url: '/dashboard', icon: BarChart3 },
 	{ title: 'Accounts', url: '/accounts', icon: Wallet },
+	{ title: 'Review', url: '/review', icon: Receipt },
 	{ title: 'Statements', url: '/imports', icon: Receipt },
 	{
 		title: 'Transactions',

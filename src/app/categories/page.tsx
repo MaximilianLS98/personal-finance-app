@@ -1,4 +1,5 @@
 'use client';
+import CategoryAnalytics from '@/app/components/CategoryAnalytics';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -640,24 +641,7 @@ export default function CategoriesPage() {
 				</TabsContent>
 
 				<TabsContent value='analytics'>
-					<Card>
-						<CardHeader>
-							<CardTitle className='flex items-center gap-2'>
-								<TrendingUp className='w-5 h-5' />
-								Category Analytics
-							</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className='text-center text-muted-foreground py-12'>
-								<TrendingUp className='w-16 h-16 mx-auto mb-4 opacity-50' />
-								<p>Category analytics and spending insights coming soon!</p>
-								<p className='text-sm mt-2'>
-									This will show category spending trends, budget tracking, and AI performance
-									metrics.
-								</p>
-							</div>
-						</CardContent>
-					</Card>
+					<CategoryAnalytics />
 				</TabsContent>
 			</Tabs>
 

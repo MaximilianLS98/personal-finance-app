@@ -284,15 +284,21 @@ export class TransactionsRepository {
 				// Build an IN clause for category IDs
 				const placeholders = categoryIds.map(() => '?').join(', ');
 				if (includeUncategorized) {
-					conditions.push(`(t.category_id IN (${placeholders}) OR t.category_id IS NULL)`);
+					conditions.push(
+						`EXISTS(SELECT 1 FROM effective_transactions e WHERE e.id=t.id AND (e.category_id IN (${placeholders}) OR e.category_id IS NULL))`,
+					);
 					params.push(...categoryIds);
 				} else {
-					conditions.push(`t.category_id IN (${placeholders})`);
+					conditions.push(
+						`EXISTS(SELECT 1 FROM effective_transactions e WHERE e.id=t.id AND e.category_id IN (${placeholders}))`,
+					);
 					params.push(...categoryIds);
 				}
 			} else if (includeUncategorized) {
 				// Only uncategorized
-				conditions.push('t.category_id IS NULL');
+				conditions.push(
+					'EXISTS(SELECT 1 FROM effective_transactions e WHERE e.id=t.id AND e.category_id IS NULL)',
+				);
 			}
 
 			const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -463,102 +469,32 @@ export class TransactionsRepository {
 	 * Uses efficient SQL aggregation with proper indexing for optimal performance
 	 */
 	async calculateSummary(startDate?: Date, endDate?: Date): Promise<FinancialSummary> {
-		try {
-			const db = this.context.connection();
-
-			// Validate date range if provided
-			if (startDate && endDate && startDate > endDate) {
-				throw new DatabaseConnectionError(
-					DatabaseErrorType.TRANSACTION_FAILED,
-					'Invalid date range: start date must be before or equal to end date',
-					'calculateSummary validation',
-					[startDate, endDate],
-				);
-			}
-
-			let query: string;
-			let params: string[] = [];
-
-			if (startDate && endDate) {
-				// Date range query - uses idx_transactions_date index for optimal performance
-				query = `
-					SELECT
-						COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as totalIncome,
-						COALESCE(SUM(CASE WHEN type = 'expense' THEN ABS(amount) ELSE 0 END), 0) as totalExpenses,
-						COUNT(*) as transactionCount
-					FROM transactions
-					WHERE date >= ? AND date <= ?
-				`;
-				params = [startDate.toISOString(), endDate.toISOString()];
-			} else if (startDate) {
-				// From start date onwards - uses idx_transactions_date index
-				query = `
-					SELECT
-						COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as totalIncome,
-						COALESCE(SUM(CASE WHEN type = 'expense' THEN ABS(amount) ELSE 0 END), 0) as totalExpenses,
-						COUNT(*) as transactionCount
-					FROM transactions
-					WHERE date >= ?
-				`;
-				params = [startDate.toISOString()];
-			} else if (endDate) {
-				// Up to end date - uses idx_transactions_date index
-				query = `
-					SELECT
-						COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as totalIncome,
-						COALESCE(SUM(CASE WHEN type = 'expense' THEN ABS(amount) ELSE 0 END), 0) as totalExpenses,
-						COUNT(*) as transactionCount
-					FROM transactions
-					WHERE date <= ?
-				`;
-				params = [endDate.toISOString()];
-			} else {
-				// All transactions - full table scan but optimized with aggregation
-				query = `
-					SELECT
-						COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as totalIncome,
-						COALESCE(SUM(CASE WHEN type = 'expense' THEN ABS(amount) ELSE 0 END), 0) as totalExpenses,
-						COUNT(*) as transactionCount
-					FROM transactions
-				`;
-			}
-
-			const stmt = db.prepare(query);
-			const result = stmt.get(...params) as {
-				totalIncome: number;
-				totalExpenses: number;
-				transactionCount: number;
-			};
-
-			// Handle edge case of empty database or no matching transactions
-			if (result.transactionCount === 0) {
-				return {
-					totalIncome: 0,
-					totalExpenses: 0,
-					netAmount: 0,
-					transactionCount: 0,
-				};
-			}
-
-			return {
-				totalIncome: result.totalIncome,
-				totalExpenses: result.totalExpenses,
-				netAmount: result.totalIncome - result.totalExpenses,
-				transactionCount: result.transactionCount,
-			};
-		} catch (error) {
-			// Re-throw our custom errors
-			if (error instanceof DatabaseConnectionError) {
-				throw error;
-			}
-
-			throw new DatabaseConnectionError(
-				DatabaseErrorType.TRANSACTION_FAILED,
-				`Failed to calculate summary: ${error instanceof Error ? error.message : 'Unknown error'}`,
-				'SELECT summary FROM transactions',
-				startDate || endDate ? [startDate, endDate] : undefined,
-			);
-		}
+		if (startDate && endDate && startDate > endDate)
+			throw new Error('Invalid date range: start date must be before or equal to end date');
+		const db = this.context.connection();
+		const rows = db
+			.query(
+				`SELECT COALESCE(currency,'UNKNOWN') currency,
+		COALESCE(SUM(CASE WHEN type='income' THEN amount ELSE 0 END),0) totalIncome,
+		COALESCE(SUM(CASE WHEN type='expense' THEN -amount ELSE 0 END),0) totalExpenses,
+		COUNT(DISTINCT id) transactionCount FROM effective_transactions
+		WHERE (? IS NULL OR date>=?) AND (? IS NULL OR date<=?) GROUP BY COALESCE(currency,'UNKNOWN')`,
+			)
+			.all(
+				startDate?.toISOString() || null,
+				startDate?.toISOString() || null,
+				endDate?.toISOString() || null,
+				endDate?.toISOString() || null,
+			) as { totalIncome: number; totalExpenses: number; transactionCount: number }[];
+		if (rows.length > 1)
+			throw new Error('Choose a single currency; use per-currency summaries for mixed history');
+		const row = rows[0] || { totalIncome: 0, totalExpenses: 0, transactionCount: 0 };
+		return {
+			totalIncome: row.totalIncome,
+			totalExpenses: row.totalExpenses,
+			transactionCount: row.transactionCount,
+			netAmount: row.totalIncome - row.totalExpenses,
+		};
 	}
 
 	/**

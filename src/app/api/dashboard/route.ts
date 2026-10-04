@@ -3,6 +3,7 @@
  * Provides chart data for the dashboard including expense/income over time and category breakdown
  */
 
+import { getEffectiveTransactions } from '@/lib/transaction-ledger';
 import { currencyCode } from '@/lib/money';
 import { createTransactionRepository } from '@/lib/database';
 import type { ErrorResponse } from '@/lib/types';
@@ -65,7 +66,7 @@ export async function GET(
 		await transactionRepository.initialize();
 
 		// Get all transactions within date range
-		const allTransactions = await transactionRepository.findAll();
+		const allTransactions = await getEffectiveTransactions();
 		const currencies = [...new Set(allTransactions.map((t) => currencyCode(t.currency)))].sort();
 		const currency =
 			url.searchParams.get('currency') || (currencies.length === 1 ? currencies[0] : 'NOK');
@@ -197,9 +198,9 @@ export async function GET(
 		const categoryData = new Map<string, { amount: number; count: number }>();
 
 		filteredTransactions
-			.filter((transaction) => transaction.type === 'expense' && transaction.categoryId)
+			.filter((transaction) => transaction.type === 'expense')
 			.forEach((transaction) => {
-				const categoryId = transaction.categoryId!;
+				const categoryId = transaction.categoryId || 'cat_uncategorized';
 				const existing = categoryData.get(categoryId) || { amount: 0, count: 0 };
 				existing.amount -= transaction.amount;
 				existing.count += 1;

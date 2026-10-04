@@ -2,16 +2,32 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import Home from '../home/page';
 
-const empty = { totalIncome: 0, totalExpenses: 0, netAmount: 0, transactionCount: 0 };
-const populated = { totalIncome: 1000, totalExpenses: 100, netAmount: 900, transactionCount: 2 };
+const empty = {
+	month: '2026-10',
+	totals: [],
+	categories: [],
+	latestDate: null,
+	reviewCount: 0,
+	upcoming: [],
+	budgetRisks: [],
+	goals: [],
+};
+const populated = {
+	...empty,
+	latestDate: '2026-10-02',
+	reviewCount: 3,
+	totals: [
+		{ currency: 'NOK', income: 1000, expenses: 100, net: 900, count: 2 },
+		{ currency: 'USD', income: 0, expenses: 20, net: -20, count: 1 },
+	],
+	categories: [
+		{ categoryId: 'cat_groceries', name: 'Groceries', currency: 'NOK', amount: 100, count: 1 },
+	],
+	goals: [{ id: 'goal', name: 'Emergency savings', currency: 'NOK', target: 10000, saved: 2000 }],
+};
 const fetchMock = jest.fn();
 function response(data: unknown, ok = true) {
-	return {
-		ok,
-		status: ok ? 200 : 500,
-		text: async () => JSON.stringify(data),
-		json: async () => data,
-	};
+	return { ok, status: ok ? 200 : 500, json: async () => data };
 }
 function renderHome() {
 	const client = new QueryClient({
@@ -28,67 +44,53 @@ beforeEach(() => {
 	fetchMock.mockReset();
 	global.fetch = fetchMock as unknown as typeof fetch;
 });
-
-it('loads the persisted summary and offers CSV import', async () => {
-	fetchMock.mockResolvedValue(response({ success: true, data: populated }));
+it('loads a monthly overview, keeps currencies separate and offers import', async () => {
+	fetchMock.mockResolvedValue(response(populated));
 	renderHome();
-	expect(screen.getByRole('button', { name: 'Choose File' })).toBeInTheDocument();
-	await waitFor(() => expect(screen.getByText('Yes')).toBeInTheDocument());
-	expect(fetchMock).toHaveBeenCalledWith(
-		'/api/summary',
-		expect.objectContaining({ method: 'GET' }),
+	expect(screen.getByRole('link', { name: 'Import statement' })).toHaveAttribute(
+		'href',
+		'/imports',
+	);
+	expect(await screen.findByText('NOK')).toBeInTheDocument();
+	expect(screen.getByText('USD')).toBeInTheDocument();
+	expect(screen.getAllByText('Cash surplus')).toHaveLength(2);
+	expect(screen.getByRole('progressbar', { name: 'Emergency savings progress' })).toHaveAttribute(
+		'value',
+		'2000',
 	);
 });
-
-it('shows an error and retries loading the summary', async () => {
-	fetchMock.mockResolvedValueOnce(response({ message: 'Unavailable' }, false));
+it('shows an error and retries loading', async () => {
+	fetchMock.mockResolvedValueOnce(response({ error: 'Unavailable' }, false));
 	renderHome();
-	expect(await screen.findByText('Failed to load financial summary')).toBeInTheDocument();
-	fetchMock.mockResolvedValue(response({ success: true, data: populated }));
+	expect(await screen.findByRole('alert')).toHaveTextContent('Unavailable');
+	fetchMock.mockResolvedValue(response(populated));
 	fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+	await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+	expect(screen.getByText('NOK')).toBeInTheDocument();
+});
+it('changes period and passes month/category to drill-through', async () => {
+	fetchMock.mockResolvedValue(response(populated));
+	renderHome();
+	await screen.findByText('Groceries · 1 transactions');
+	fireEvent.change(screen.getByLabelText('Month'), { target: { value: '2026-09' } });
 	await waitFor(() =>
-		expect(screen.queryByText('Failed to load financial summary')).not.toBeInTheDocument(),
+		expect(fetchMock).toHaveBeenCalledWith('/api/overview?month=2026-09', undefined),
+	);
+	expect(await screen.findByRole('link', { name: 'Groceries · 1 transactions' })).toHaveAttribute(
+		'href',
+		'/transactions?category=cat_groceries&month=2026-09',
+	);
+	expect(screen.getByRole('link', { name: 'Open review inbox' })).toHaveAttribute(
+		'href',
+		'/review?month=2026-09',
 	);
 });
-
-it('imports a CSV then refreshes reports and cached transaction data', async () => {
-	let uploaded = false;
-	fetchMock.mockImplementation(async (url: string) => {
-		if (url === '/api/upload') {
-			uploaded = true;
-			return response({ success: true, data: { transactions: [], summary: populated } });
-		}
-		return response({ success: true, data: uploaded ? populated : empty });
-	});
-	const client = renderHome();
-	client.setQueryData(['transactions', { page: 1 }], []);
-	await screen.findByText('Yes');
-	fireEvent.change(screen.getByTestId('file-input'), {
-		target: {
-			files: [
-				new File(['date,description,amount\n2026-10-01,Test,100'], 'synthetic.csv', {
-					type: 'text/csv',
-				}),
-			],
-		},
-	});
-	await waitFor(() => expect(uploaded).toBe(true));
-	await waitFor(() => expect(client.getQueryData(['summary'])).toEqual(populated));
-	expect(client.getQueryState(['transactions', { page: 1 }])?.isInvalidated).toBe(true);
-});
-
-it('reports upload failures and rejects invalid files before sending', async () => {
-	fetchMock.mockResolvedValue(response({ success: true, data: empty }));
+it('guides an empty account toward import without fabricated totals', async () => {
+	fetchMock.mockResolvedValue(response(empty));
 	renderHome();
-	await screen.findByText('Yes');
-	fireEvent.change(screen.getByTestId('file-input'), {
-		target: { files: [new File(['bad'], 'bad.txt', { type: 'text/plain' })] },
-	});
-	expect(await screen.findByText('Please select a valid CSV file')).toBeInTheDocument();
-	expect(fetchMock).toHaveBeenCalledTimes(1);
-	fetchMock.mockResolvedValue(response({ message: 'Could not import CSV' }, false));
-	fireEvent.change(screen.getByTestId('file-input'), {
-		target: { files: [new File(['csv'], 'test.csv', { type: 'text/csv' })] },
-	});
-	expect(await screen.findByText('Could not import CSV')).toBeInTheDocument();
+	expect(
+		await screen.findByText('Import a bank statement to build your first monthly overview.'),
+	).toBeInTheDocument();
+	expect(screen.queryByText('Cash surplus')).not.toBeInTheDocument();
+	expect(screen.getByRole('link', { name: 'Import statement' })).toBeInTheDocument();
 });

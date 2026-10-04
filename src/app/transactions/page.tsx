@@ -1,6 +1,9 @@
 'use client';
 
 import FileUpload from '@/app/components/FileUpload';
+import TransactionDetails from '@/app/components/TransactionDetails';
+import { currencyCode, displayMoney } from '@/lib/money';
+import Link from 'next/link';
 import { useCurrencySettings } from '@/app/providers';
 import SimpleCategorySelector from '@/components/SimpleCategorySelector';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -173,6 +176,29 @@ export default function TransactionsPage() {
 		includeUncategorized,
 		setState,
 	} = useTransactionsFilters();
+	useEffect(() => {
+		const params = new URLSearchParams(window.location.search);
+		const category = params.get('category'),
+			month = params.get('month'),
+			search = params.get('search');
+		if (!category && !month && !search) return;
+		setState((prev) => ({
+			...prev,
+			page: 1,
+			transactionType: 'all',
+			searchTerm: search ?? '',
+			selectedCategoryIds: category ? [category] : [],
+			includeUncategorized: category === 'cat_uncategorized',
+			preset: month ? 'custom' : 'all',
+			dateRange:
+				month && /^\d{4}-(0[1-9]|1[0-2])$/.test(month)
+					? {
+							from: startOfMonth(new Date(`${month}-01T12:00:00`)),
+							to: endOfMonth(new Date(`${month}-01T12:00:00`)),
+						}
+					: {},
+		}));
+	}, [setState]);
 
 	const currentParams = useMemo(
 		() => ({
@@ -411,13 +437,10 @@ export default function TransactionsPage() {
 	const canGoPrevious = page > 1;
 	const canGoNext = page < totalPages;
 
-	const { currency: appCurrency, locale: appLocale } = useCurrencySettings();
+	const { locale: appLocale } = useCurrencySettings();
 
 	const formatCurrency = (amount: number, currencyOverride?: string) =>
-		new Intl.NumberFormat(appLocale, {
-			style: 'currency',
-			currency: currencyOverride ?? appCurrency,
-		}).format(Math.abs(amount));
+		displayMoney(Math.abs(amount), currencyCode(currencyOverride), appLocale);
 
 	const SortableHeader = ({
 		field,
@@ -464,6 +487,9 @@ export default function TransactionsPage() {
 			{/* Header */}
 			<div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
 				<div>
+					<Link href='/review' className='text-primary underline'>
+						Monthly review inbox
+					</Link>
 					<h1 className='text-3xl font-bold text-foreground'>Transactions</h1>
 					<p className='text-muted-foreground mt-2'>
 						View and manage all your uploaded transactions ({transactions.length} of {totalCount})
@@ -895,6 +921,7 @@ export default function TransactionsPage() {
 										</TableCell>
 										<TableCell className='text-right'>
 											<div className='flex justify-end space-x-2'>
+												<TransactionDetails id={transaction.id} />
 												<Button
 													variant='outline'
 													size='sm'
