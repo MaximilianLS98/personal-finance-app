@@ -50,6 +50,7 @@ export interface SubscriptionBudgetIntegration {
 		categoryId: string,
 		historicalSpending: number,
 		period: 'monthly' | 'yearly',
+		currency?: string,
 	): Promise<SubscriptionAwareSuggestion>;
 
 	/**
@@ -333,10 +334,11 @@ export class SubscriptionBudgetIntegrationService implements SubscriptionBudgetI
 		categoryId: string,
 		historicalSpending: number,
 		period: 'monthly' | 'yearly',
+		currency?: string,
 	): Promise<SubscriptionAwareSuggestion> {
 		try {
 			// Get subscription allocation
-			const allocation = await this.calculateSubscriptionAllocation(categoryId);
+			const allocation = await this.calculateSubscriptionAllocation(categoryId, currency);
 
 			// Convert to appropriate period
 			const fixedCosts = period === 'yearly' ? allocation.fixedAmount * 12 : allocation.fixedAmount;

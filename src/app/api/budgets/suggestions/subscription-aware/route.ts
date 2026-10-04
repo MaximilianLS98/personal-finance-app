@@ -1,3 +1,4 @@
+import { validCurrency } from '@/lib/money';
 import { createTransactionRepository } from '@/lib/database';
 import { SubscriptionBudgetIntegrationService } from '@/lib/subscription-budget-integration';
 import { ErrorResponse } from '@/lib/types';
@@ -15,6 +16,12 @@ export async function GET(request: NextRequest) {
 
 		const url = new URL(request.url);
 		const categoryId = url.searchParams.get('categoryId');
+		const currency = url.searchParams.get('currency');
+		if (!currency || (!validCurrency(currency) && currency !== 'UNKNOWN'))
+			return NextResponse.json(
+				{ error: 'Choose a currency for budget suggestions' },
+				{ status: 400 },
+			);
 		const period = (url.searchParams.get('period') as 'monthly' | 'yearly') || 'monthly';
 		const historicalMonthsParam = url.searchParams.get('historicalMonths');
 		const historicalMonths = historicalMonthsParam ? parseInt(historicalMonthsParam, 10) : 6;
@@ -65,6 +72,7 @@ export async function GET(request: NextRequest) {
 		const spendingAnalysis = await repository.analyzeHistoricalSpending(
 			categoryId,
 			historicalMonths,
+			currency,
 		);
 		const historicalSpending =
 			period === 'yearly' ? spendingAnalysis.averageMonthly * 12 : spendingAnalysis.averageMonthly;
@@ -75,11 +83,14 @@ export async function GET(request: NextRequest) {
 			categoryId,
 			historicalSpending,
 			period,
+			currency,
 		);
 
 		// Get subscription allocation details
-		const subscriptionAllocation =
-			await subscriptionIntegration.calculateSubscriptionAllocation(categoryId);
+		const subscriptionAllocation = await subscriptionIntegration.calculateSubscriptionAllocation(
+			categoryId,
+			currency,
+		);
 
 		return NextResponse.json(
 			{

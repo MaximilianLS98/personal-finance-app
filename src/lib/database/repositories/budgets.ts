@@ -1,4 +1,5 @@
-import { budgetForecast } from '../../planning';
+import { currencyCode } from '../../money';
+import { budgetForecast, spendingSource } from '../../planning';
 import type { Budget, BudgetProgress, SpendingAnalysis } from '../../types';
 import { DatabaseConnectionError } from '../connection';
 import type { RepositoryContext } from '../repository-context';
@@ -635,7 +636,31 @@ export class BudgetsRepository {
 	/**
 	 * Analyze historical spending for a category over specified months
 	 */
-	async analyzeHistoricalSpending(categoryId: string, months: number): Promise<SpendingAnalysis> {
+	async categorySpendingInRange(
+		categoryId: string,
+		currency: string,
+		start: Date,
+		end: Date,
+	): Promise<number> {
+		const db = this.context.connection();
+		return (
+			db
+				.query(
+					`SELECT COALESCE(SUM(-amount),0) AS total FROM ${spendingSource(db)} WHERE category_id=? AND type='expense' AND UPPER(COALESCE(NULLIF(TRIM(currency),''),'UNKNOWN'))=? AND substr(date,1,10)>=? AND substr(date,1,10)<=?`,
+				)
+				.get(
+					categoryId,
+					currencyCode(currency),
+					start.toISOString().slice(0, 10),
+					end.toISOString().slice(0, 10),
+				) as { total: number }
+		).total;
+	}
+	async analyzeHistoricalSpending(
+		categoryId: string,
+		months: number,
+		currency = 'UNKNOWN',
+	): Promise<SpendingAnalysis> {
 		try {
 			const db = this.context.connection();
 
@@ -647,18 +672,20 @@ export class BudgetsRepository {
 			// Get transaction data for the category
 			const transactionStmt = db.prepare(`
 				SELECT amount, date
-				FROM transactions
+				FROM ${spendingSource(db)}
 				WHERE category_id = ?
 				  AND type = 'expense'
-				  AND date >= ?
-				  AND date <= ?
+                  AND UPPER(COALESCE(NULLIF(TRIM(currency),''),'UNKNOWN')) = ?
+				  AND substr(date,1,10) >= ?
+				  AND substr(date,1,10) <= ?
 				ORDER BY date ASC
 			`);
 
 			const transactions = transactionStmt.all(
 				categoryId,
-				startDate.toISOString(),
-				endDate.toISOString(),
+				currencyCode(currency),
+				startDate.toISOString().slice(0, 10),
+				endDate.toISOString().slice(0, 10),
 			) as Array<{ amount: number; date: string }>;
 
 			if (transactions.length === 0) {
@@ -683,7 +710,7 @@ export class BudgetsRepository {
 				const date = new Date(transaction.date);
 				const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 				const current = monthlySpending.get(monthKey) || 0;
-				monthlySpending.set(monthKey, current + Math.abs(transaction.amount));
+				monthlySpending.set(monthKey, current - transaction.amount);
 			}
 
 			// Calculate monthly statistics
@@ -691,7 +718,7 @@ export class BudgetsRepository {
 			const averageMonthly =
 				monthlyAmounts.reduce((sum, amount) => sum + amount, 0) /
 				Math.max(1, monthlyAmounts.length);
-			const minMonthly = Math.min(...monthlyAmounts, 0);
+			const minMonthly = Math.min(...monthlyAmounts);
 			const maxMonthly = Math.max(...monthlyAmounts, 0);
 
 			// Calculate standard deviation
@@ -722,10 +749,10 @@ export class BudgetsRepository {
 					END
 				), 0) as monthly_subscription_cost
 				FROM subscriptions
-				WHERE category_id = ? AND is_active = 1
+				WHERE category_id = ? AND is_active = 1 AND UPPER(COALESCE(NULLIF(TRIM(currency),''),'UNKNOWN')) = ?
 			`);
 
-			const subscriptionResult = subscriptionStmt.get(categoryId) as {
+			const subscriptionResult = subscriptionStmt.get(categoryId, currencyCode(currency)) as {
 				monthly_subscription_cost: number;
 			};
 			const subscriptionCosts = subscriptionResult.monthly_subscription_cost;

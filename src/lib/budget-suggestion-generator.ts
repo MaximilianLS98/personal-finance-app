@@ -1,3 +1,4 @@
+import { currencyCode } from './money';
 /**
  * Budget Suggestion Generator
  * Specialized service for generating intelligent budget amount suggestions
@@ -18,7 +19,11 @@ export class BudgetSuggestionGenerator {
 	/**
 	 * Generate comprehensive budget suggestions for a category
 	 */
-	async generateSuggestions(categoryId: string, period: BudgetPeriod): Promise<BudgetSuggestion> {
+	async generateSuggestions(
+		categoryId: string,
+		period: BudgetPeriod,
+		currency = 'UNKNOWN',
+	): Promise<BudgetSuggestion> {
 		try {
 			// Get category details
 			const category = await this.repository.getCategoryById(categoryId);
@@ -27,10 +32,10 @@ export class BudgetSuggestionGenerator {
 			}
 
 			// Analyze spending patterns over different time periods
-			const spendingAnalysis = await this.analyzeSpendingPatterns(categoryId);
+			const spendingAnalysis = await this.analyzeSpendingPatterns(categoryId, currency);
 
 			// Get subscription information for this category
-			const subscriptionInfo = await this.calculateSubscriptionAllocation(categoryId);
+			const subscriptionInfo = await this.calculateSubscriptionAllocation(categoryId, currency);
 
 			// Generate the three suggestion tiers
 			const suggestions = this.calculateSuggestionTiers(
@@ -72,13 +77,16 @@ export class BudgetSuggestionGenerator {
 	/**
 	 * Analyze spending patterns using intelligent data processing
 	 */
-	async analyzeSpendingPatterns(categoryId: string): Promise<SpendingAnalysis> {
+	async analyzeSpendingPatterns(
+		categoryId: string,
+		currency = 'UNKNOWN',
+	): Promise<SpendingAnalysis> {
 		try {
 			// Get different time periods for comprehensive analysis
 			const analyses = await Promise.all([
-				this.repository.analyzeHistoricalSpending(categoryId, 3), // 3 months
-				this.repository.analyzeHistoricalSpending(categoryId, 6), // 6 months
-				this.repository.analyzeHistoricalSpending(categoryId, 12), // 12 months
+				this.repository.analyzeHistoricalSpending(categoryId, 3, currency), // 3 months
+				this.repository.analyzeHistoricalSpending(categoryId, 6, currency), // 6 months
+				this.repository.analyzeHistoricalSpending(categoryId, 12, currency), // 12 months
 			]);
 
 			// Filter out analyses with insufficient data
@@ -163,14 +171,19 @@ export class BudgetSuggestionGenerator {
 	/**
 	 * Calculate subscription cost allocation for the category
 	 */
-	async calculateSubscriptionAllocation(categoryId: string): Promise<{
+	async calculateSubscriptionAllocation(
+		categoryId: string,
+		currency = 'UNKNOWN',
+	): Promise<{
 		monthlyTotal: number;
 		count: number;
 		subscriptions: Array<{ name: string; monthlyAmount: number }>;
 	}> {
 		try {
 			const subscriptions = await this.repository.findSubscriptionsByCategory(categoryId);
-			const activeSubscriptions = subscriptions.filter((s) => s.isActive);
+			const activeSubscriptions = subscriptions.filter(
+				(s) => s.isActive && currencyCode(s.currency) === currencyCode(currency),
+			);
 
 			let monthlyTotal = 0;
 			const subscriptionDetails = activeSubscriptions.map((subscription) => {

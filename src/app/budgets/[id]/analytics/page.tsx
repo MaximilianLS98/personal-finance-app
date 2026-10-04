@@ -130,12 +130,12 @@ export default function BudgetAnalyticsPage() {
 						<p className='text-xs text-muted-foreground mt-1'>
 							{progress.currentSpent.toLocaleString('nb-NO', {
 								style: 'currency',
-								currency: 'NOK',
+								currency: budget.currency,
 							})}{' '}
 							of{' '}
 							{budget.amount.toLocaleString('nb-NO', {
 								style: 'currency',
-								currency: 'NOK',
+								currency: budget.currency,
 							})}
 						</p>
 					</CardContent>
@@ -150,7 +150,7 @@ export default function BudgetAnalyticsPage() {
 						<div className='text-2xl font-bold'>
 							{projection.projectedTotalSpent.toLocaleString('nb-NO', {
 								style: 'currency',
-								currency: 'NOK',
+								currency: budget.currency,
 							})}
 						</div>
 						<p className='text-xs text-muted-foreground'>
@@ -194,7 +194,7 @@ export default function BudgetAnalyticsPage() {
 						<div className='text-2xl font-bold'>
 							{projection.recommendedDailySpend.toLocaleString('nb-NO', {
 								style: 'currency',
-								currency: 'NOK',
+								currency: budget.currency,
 							})}
 						</div>
 						<p className='text-xs text-muted-foreground'>To stay within budget</p>
@@ -227,7 +227,7 @@ export default function BudgetAnalyticsPage() {
 											<p className='text-lg font-medium'>
 												{variance.overallVariance.averageVariance.toLocaleString('nb-NO', {
 													style: 'currency',
-													currency: 'NOK',
+													currency: budget.currency,
 												})}
 											</p>
 										</div>
@@ -236,7 +236,7 @@ export default function BudgetAnalyticsPage() {
 											<p className='text-lg font-medium text-red-600'>
 												{variance.overallVariance.totalOverspend.toLocaleString('nb-NO', {
 													style: 'currency',
-													currency: 'NOK',
+													currency: budget.currency,
 												})}
 											</p>
 										</div>
@@ -247,7 +247,7 @@ export default function BudgetAnalyticsPage() {
 											<p className='text-lg font-medium'>
 												{variance.overallVariance.varianceStdDev.toLocaleString('nb-NO', {
 													style: 'currency',
-													currency: 'NOK',
+													currency: budget.currency,
 												})}
 											</p>
 										</div>
@@ -256,7 +256,7 @@ export default function BudgetAnalyticsPage() {
 											<p className='text-lg font-medium text-green-600'>
 												{variance.overallVariance.totalUnderspend.toLocaleString('nb-NO', {
 													style: 'currency',
-													currency: 'NOK',
+													currency: budget.currency,
 												})}
 											</p>
 										</div>
@@ -283,7 +283,7 @@ export default function BudgetAnalyticsPage() {
 												<p className='text-sm text-muted-foreground'>
 													{month.actual.toLocaleString('nb-NO', {
 														style: 'currency',
-														currency: 'NOK',
+														currency: budget.currency,
 													})}{' '}
 													spent
 												</p>
@@ -295,7 +295,7 @@ export default function BudgetAnalyticsPage() {
 													{month.variance > 0 ? '+' : ''}
 													{month.variance.toLocaleString('nb-NO', {
 														style: 'currency',
-														currency: 'NOK',
+														currency: budget.currency,
 													})}
 												</p>
 												<p className='text-sm text-muted-foreground'>
@@ -349,7 +349,7 @@ export default function BudgetAnalyticsPage() {
 										<span className='font-bold'>
 											{progress.subscriptionAllocated.toLocaleString('nb-NO', {
 												style: 'currency',
-												currency: 'NOK',
+												currency: budget.currency,
 											})}
 										</span>
 									</div>
@@ -358,7 +358,7 @@ export default function BudgetAnalyticsPage() {
 										<span className='font-bold'>
 											{progress.variableSpent.toLocaleString('nb-NO', {
 												style: 'currency',
-												currency: 'NOK',
+												currency: budget.currency,
 											})}
 										</span>
 									</div>
@@ -367,7 +367,7 @@ export default function BudgetAnalyticsPage() {
 										<span className='font-bold text-green-600'>
 											{progress.remainingAmount.toLocaleString('nb-NO', {
 												style: 'currency',
-												currency: 'NOK',
+												currency: budget.currency,
 											})}
 										</span>
 									</div>
@@ -388,7 +388,7 @@ export default function BudgetAnalyticsPage() {
 										<p className='text-2xl font-bold'>
 											{progress.averageDailySpend.toLocaleString('nb-NO', {
 												style: 'currency',
-												currency: 'NOK',
+												currency: budget.currency,
 											})}
 										</p>
 									</div>
@@ -397,7 +397,7 @@ export default function BudgetAnalyticsPage() {
 										<p className='text-2xl font-bold text-blue-600'>
 											{projection.recommendedDailySpend.toLocaleString('nb-NO', {
 												style: 'currency',
-												currency: 'NOK',
+												currency: budget.currency,
 											})}
 										</p>
 									</div>

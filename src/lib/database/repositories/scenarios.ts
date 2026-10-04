@@ -1,3 +1,4 @@
+import { budgetTotals, comparableBudgetTotal } from '../../budget-totals';
 import type { BudgetScenario } from '../../types';
 import { DatabaseConnectionError } from '../connection';
 import type { RepositoryContext } from '../repository-context';
@@ -95,7 +96,7 @@ export class ScenariosRepository {
 			for (const row of rows) {
 				// Get budgets for this scenario
 				const budgets = await this.context.repository.findBudgetsByScenario(row.id);
-				const totalBudgeted = budgets.reduce((sum, budget) => sum + budget.amount, 0);
+				const totalBudgeted = comparableBudgetTotal(budgets);
 
 				scenarios.push({
 					id: row.id,
@@ -104,6 +105,7 @@ export class ScenariosRepository {
 					isActive: row.is_active === 1,
 					budgets,
 					totalBudgeted,
+					totals: budgetTotals(budgets),
 					createdAt: new Date(row.created_at),
 					updatedAt: new Date(row.updated_at),
 				});
@@ -148,7 +150,7 @@ export class ScenariosRepository {
 
 			// Get budgets for this scenario
 			const budgets = await this.context.repository.findBudgetsByScenario(row.id);
-			const totalBudgeted = budgets.reduce((sum, budget) => sum + budget.amount, 0);
+			const totalBudgeted = comparableBudgetTotal(budgets);
 
 			return {
 				id: row.id,
@@ -157,6 +159,7 @@ export class ScenariosRepository {
 				isActive: row.is_active === 1,
 				budgets,
 				totalBudgeted,
+				totals: budgetTotals(budgets),
 				createdAt: new Date(row.created_at),
 				updatedAt: new Date(row.updated_at),
 			};

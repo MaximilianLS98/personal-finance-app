@@ -106,7 +106,17 @@ export interface TransactionRepository {
 	findBudgetsByPeriod(startDate: Date, endDate: Date): Promise<Budget[]>;
 	findBudgetsByScenario(scenarioId: string): Promise<Budget[]>;
 	calculateBudgetProgress(budgetId: string): Promise<BudgetProgress | null>;
-	analyzeHistoricalSpending(categoryId: string, months: number): Promise<SpendingAnalysis>;
+	categorySpendingInRange(
+		categoryId: string,
+		currency: string,
+		start: Date,
+		end: Date,
+	): Promise<number>;
+	analyzeHistoricalSpending(
+		categoryId: string,
+		months: number,
+		currency?: string,
+	): Promise<SpendingAnalysis>;
 
 	// Budget scenario management
 	createBudgetScenario(

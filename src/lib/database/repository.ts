@@ -85,6 +85,7 @@ export class SQLiteTransactionRepository implements TransactionRepository {
 	findBudgetsByPeriod = this.budgets.findBudgetsByPeriod.bind(this.budgets);
 	findBudgetsByScenario = this.budgets.findBudgetsByScenario.bind(this.budgets);
 	calculateBudgetProgress = this.budgets.calculateBudgetProgress.bind(this.budgets);
+	categorySpendingInRange = this.budgets.categorySpendingInRange.bind(this.budgets);
 	analyzeHistoricalSpending = this.budgets.analyzeHistoricalSpending.bind(this.budgets);
 	private readonly scenarios = new ScenariosRepository(this.context);
 	createBudgetScenario = this.scenarios.createBudgetScenario.bind(this.scenarios);

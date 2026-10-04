@@ -49,6 +49,7 @@ export function createRepositoryMock(): jest.Mocked<TransactionRepository> {
 		findBudgetsByPeriod: jest.fn(),
 		findBudgetsByScenario: jest.fn(),
 		calculateBudgetProgress: jest.fn(),
+		categorySpendingInRange: jest.fn(),
 		analyzeHistoricalSpending: jest.fn(),
 		createBudgetScenario: jest.fn(),
 		findAllBudgetScenarios: jest.fn(),

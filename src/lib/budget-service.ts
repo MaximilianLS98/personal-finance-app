@@ -201,8 +201,12 @@ export class BudgetService {
 	/**
 	 * Get intelligent budget suggestions for a category
 	 */
-	async getBudgetSuggestions(categoryId: string, period: BudgetPeriod): Promise<BudgetSuggestion> {
-		return await this.suggestionGenerator.generateSuggestions(categoryId, period);
+	async getBudgetSuggestions(
+		categoryId: string,
+		period: BudgetPeriod,
+		currency = 'UNKNOWN',
+	): Promise<BudgetSuggestion> {
+		return await this.suggestionGenerator.generateSuggestions(categoryId, period, currency);
 	}
 
 	/**

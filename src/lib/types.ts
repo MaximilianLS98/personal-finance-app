@@ -342,6 +342,8 @@ export interface BudgetAmount {
  * Budget scenario for managing multiple budget sets
  */
 export interface BudgetScenario {
+	/** Scalar legacy total is zero when currencies or periods differ; use totals. */
+	totals?: Array<{ currency: string; period: 'monthly' | 'yearly'; amount: number }>;
 	/** Unique identifier for the scenario */
 	id: string;
 	/** Display name of the scenario */
