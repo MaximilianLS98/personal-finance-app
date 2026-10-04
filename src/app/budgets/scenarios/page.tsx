@@ -53,6 +53,8 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 
+import { budgetTotals } from '@/lib/budget-totals';
+import { displayMoney } from '@/lib/money';
 import type { BudgetScenario } from '@/lib/types';
 
 interface CreateScenarioForm {
@@ -327,10 +329,11 @@ export default function BudgetScenariosPage() {
 								<div>
 									<p className='text-sm text-muted-foreground'>Total Budgeted</p>
 									<p className='text-2xl font-bold'>
-										{activeScenario.totalBudgeted.toLocaleString('nb-NO', {
-											style: 'currency',
-											currency: 'NOK',
-										})}
+										{budgetTotals(activeScenario.budgets).map((total) => (
+											<div key={`${total.currency}:${total.period}`}>
+												{displayMoney(total.amount, total.currency)} / {total.period}
+											</div>
+										))}
 									</p>
 								</div>
 								<div>
@@ -389,10 +392,11 @@ export default function BudgetScenariosPage() {
 											<div>
 												<p className='text-muted-foreground'>Total</p>
 												<p className='font-medium'>
-													{scenario.totalBudgeted.toLocaleString('nb-NO', {
-														style: 'currency',
-														currency: 'NOK',
-													})}
+													{budgetTotals(scenario.budgets).map((total) => (
+														<div key={`${total.currency}:${total.period}`}>
+															{displayMoney(total.amount, total.currency)} / {total.period}
+														</div>
+													))}
 												</p>
 											</div>
 										</div>

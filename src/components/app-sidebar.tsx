@@ -20,6 +20,7 @@ const navigation = [
 	{ title: 'Dashboard', url: '/dashboard', icon: BarChart3 },
 	{ title: 'Accounts', url: '/accounts', icon: Wallet },
 	{ title: 'Review', url: '/review', icon: Receipt },
+	{ title: 'Savings Goals', url: '/goals', icon: Target },
 	{ title: 'Statements', url: '/imports', icon: Receipt },
 	{
 		title: 'Transactions',
@@ -51,6 +52,7 @@ const navigation = [
 		items: [
 			{ title: 'Overview', url: '/budgets' },
 			{ title: 'Scenarios', url: '/budgets/scenarios' },
+			{ title: 'Payday & Rollover', url: '/budgets/planning' },
 			{ title: 'New Budget', url: '/budgets/new' },
 		],
 	},

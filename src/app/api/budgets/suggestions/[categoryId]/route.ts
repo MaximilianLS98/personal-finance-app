@@ -1,3 +1,4 @@
+import { validCurrency } from '@/lib/money';
 /**
  * Budget Suggestions API Endpoint
  * GET /api/budgets/suggestions/[categoryId] - Get smart budget suggestions for a category
@@ -22,6 +23,12 @@ export async function GET(
 		const { categoryId } = await params;
 		const { searchParams } = new URL(request.url);
 
+		const currency = searchParams.get('currency');
+		if (!currency || (!validCurrency(currency) && currency !== 'UNKNOWN'))
+			return NextResponse.json(
+				{ error: 'Choose a currency for budget suggestions' },
+				{ status: 400 },
+			);
 		const period = (searchParams.get('period') as 'monthly' | 'yearly') || 'monthly';
 		const startDate = searchParams.get('startDate');
 		const endDate = searchParams.get('endDate');
@@ -51,7 +58,11 @@ export async function GET(
 		};
 
 		// Get suggestions
-		const suggestions = await budgetService.getBudgetSuggestions(categoryId, budgetPeriod);
+		const suggestions = await budgetService.getBudgetSuggestions(
+			categoryId,
+			budgetPeriod,
+			currency,
+		);
 
 		await repository.close();
 

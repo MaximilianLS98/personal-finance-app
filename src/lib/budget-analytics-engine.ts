@@ -1,3 +1,4 @@
+import { currencyCode } from './money';
 /**
  * Budget Analytics Engine
  * Provides advanced analytics and insights for budget data including
@@ -25,6 +26,7 @@ export class BudgetAnalyticsEngine {
 	async generateBudgetSuggestions(
 		categoryId: string,
 		period: BudgetPeriod,
+		currency = 'UNKNOWN',
 	): Promise<BudgetSuggestion> {
 		try {
 			// Get category information
@@ -35,9 +37,9 @@ export class BudgetAnalyticsEngine {
 
 			// Analyze spending for different time periods to get comprehensive data
 			const [threeMonthAnalysis, sixMonthAnalysis, twelveMonthAnalysis] = await Promise.all([
-				this.repository.analyzeHistoricalSpending(categoryId, 3),
-				this.repository.analyzeHistoricalSpending(categoryId, 6),
-				this.repository.analyzeHistoricalSpending(categoryId, 12),
+				this.repository.analyzeHistoricalSpending(categoryId, 3, currency),
+				this.repository.analyzeHistoricalSpending(categoryId, 6, currency),
+				this.repository.analyzeHistoricalSpending(categoryId, 12, currency),
 			]);
 
 			// Use the analysis with the highest confidence, or combine them intelligently
@@ -48,7 +50,7 @@ export class BudgetAnalyticsEngine {
 			// Calculate subscription costs for this category
 			const subscriptionCosts = {
 				fixedAmount: primaryAnalysis.subscriptionCosts,
-				subscriptionCount: await this.getSubscriptionCount(categoryId),
+				subscriptionCount: await this.getSubscriptionCount(categoryId, currency),
 			};
 
 			// Generate three tiers of budget suggestions
@@ -96,25 +98,31 @@ export class BudgetAnalyticsEngine {
 			const endDate = new Date(Math.min(budget.endDate.getTime(), Date.now()));
 
 			// Iterate through each month in the budget period
-			const currentDate = new Date(startDate);
+			const currentDate = new Date(
+				Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), 1),
+			);
 			while (currentDate <= endDate) {
-				const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-				const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+				const monthStart = new Date(
+					Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth(), 1),
+				);
+				const monthEnd = new Date(
+					Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth() + 1, 0),
+				);
 
 				// Don't analyze future months
 				if (monthStart > new Date()) {
 					break;
 				}
 
-				const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+				const monthKey = `${currentDate.getUTCFullYear()}-${String(currentDate.getUTCMonth() + 1).padStart(2, '0')}`;
 
 				// Get transactions for this month and category
-				const monthTransactions = await this.repository.findByDateRange(monthStart, monthEnd);
-				const categoryTransactions = monthTransactions.filter(
-					(t) => t.categoryId === budget.categoryId && t.type === 'expense',
+				const actualSpending = await this.repository.categorySpendingInRange(
+					budget.categoryId,
+					budget.currency,
+					new Date(Math.max(monthStart.getTime(), startDate.getTime())),
+					new Date(Math.min(monthEnd.getTime(), endDate.getTime())),
 				);
-
-				const actualSpending = categoryTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
 				const variance = actualSpending - monthlyBudgetAmount;
 				const variancePercentage =
@@ -137,7 +145,7 @@ export class BudgetAnalyticsEngine {
 				}
 
 				// Move to next month
-				currentDate.setMonth(currentDate.getMonth() + 1);
+				currentDate.setUTCMonth(currentDate.getUTCMonth() + 1);
 			}
 
 			// Calculate overall statistics
@@ -300,10 +308,12 @@ export class BudgetAnalyticsEngine {
 	/**
 	 * Get the number of active subscriptions for a category
 	 */
-	private async getSubscriptionCount(categoryId: string): Promise<number> {
+	private async getSubscriptionCount(categoryId: string, currency = 'UNKNOWN'): Promise<number> {
 		try {
 			const subscriptions = await this.repository.findSubscriptionsByCategory(categoryId);
-			return subscriptions.filter((s) => s.isActive).length;
+			return subscriptions.filter(
+				(s) => s.isActive && currencyCode(s.currency) === currencyCode(currency),
+			).length;
 		} catch {
 			// Return 0 if there's an error getting subscriptions
 			return 0;
@@ -329,12 +339,13 @@ export class BudgetAnalyticsEngine {
 			const { budget, currentSpent, averageDailySpend, daysRemaining } = progress;
 
 			// Calculate projected spending
-			const projectedTotalSpent = currentSpent + averageDailySpend * daysRemaining;
+			const projectedTotalSpent = progress.projectedSpent;
 
 			// Calculate risk level
 			let riskLevel: 'low' | 'medium' | 'high' = 'low';
-			const spentPercentage = (currentSpent / budget.amount) * 100;
-			const projectedPercentage = (projectedTotalSpent / budget.amount) * 100;
+			const spentPercentage = (currentSpent / (progress.availableAmount ?? budget.amount)) * 100;
+			const projectedPercentage =
+				(projectedTotalSpent / (progress.availableAmount ?? budget.amount)) * 100;
 
 			if (projectedPercentage > 100) {
 				riskLevel = 'high';
@@ -343,7 +354,7 @@ export class BudgetAnalyticsEngine {
 			}
 
 			// Calculate days until budget depletion at current rate
-			const remainingBudget = budget.amount - currentSpent;
+			const remainingBudget = progress.discretionaryRemaining ?? progress.remainingAmount;
 			const daysUntilDepletion =
 				averageDailySpend > 0 ? Math.floor(remainingBudget / averageDailySpend) : null;
 
@@ -351,7 +362,7 @@ export class BudgetAnalyticsEngine {
 			const recommendedDailySpend = daysRemaining > 0 ? remainingBudget / daysRemaining : 0;
 
 			return {
-				projectedEndDate: budget.endDate,
+				projectedEndDate: progress.periodEnd ? new Date(progress.periodEnd) : budget.endDate,
 				projectedTotalSpent: Math.round(projectedTotalSpent),
 				riskLevel,
 				daysUntilDepletion,

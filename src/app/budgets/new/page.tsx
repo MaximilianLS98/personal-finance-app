@@ -102,6 +102,7 @@ function NewBudgetForm() {
 	const { data: suggestions, isLoading: suggestionsLoading } = useQuery<BudgetSuggestion>({
 		queryKey: [
 			'budget-suggestions',
+			formData.currency,
 			formData.categoryId,
 			formData.period,
 			formData.startDate,
@@ -112,6 +113,7 @@ function NewBudgetForm() {
 
 			const params = new URLSearchParams({
 				period: formData.period,
+				currency: formData.currency,
 				startDate: formData.startDate,
 				endDate: formData.endDate,
 			});
@@ -430,6 +432,25 @@ function NewBudgetForm() {
 									<Label htmlFor='indefinite'>No end date (run indefinitely)</Label>
 								</div>
 
+								<div>
+									<Label htmlFor='budget-currency'>Budget currency</Label>
+									<Input
+										id='budget-currency'
+										required
+										pattern='[A-Z]{3}'
+										maxLength={3}
+										value={formData.currency}
+										onChange={(e) =>
+											setFormData((previous) => ({
+												...previous,
+												currency: e.target.value.toUpperCase(),
+											}))
+										}
+									/>
+									<p className='text-xs text-muted-foreground'>
+										Only transactions and bills in this currency count toward this budget.
+									</p>
+								</div>
 								{/* Amount */}
 								<div>
 									<Label htmlFor='amount'>Budget Amount</Label>
@@ -509,7 +530,7 @@ function NewBudgetForm() {
 														<span className='font-medium text-lg'>
 															{suggestions.suggestions[type].amount.toLocaleString('nb-NO', {
 																style: 'currency',
-																currency: 'NOK',
+																currency: formData.currency,
 															})}
 														</span>
 														<Badge variant='outline'>
@@ -542,7 +563,7 @@ function NewBudgetForm() {
 												<span className='font-medium'>
 													{suggestions.historicalData.averageSpending.toLocaleString('nb-NO', {
 														style: 'currency',
-														currency: 'NOK',
+														currency: formData.currency,
 													})}
 												</span>
 											</div>
@@ -551,12 +572,12 @@ function NewBudgetForm() {
 												<span className='font-medium'>
 													{suggestions.historicalData.minSpending.toLocaleString('nb-NO', {
 														style: 'currency',
-														currency: 'NOK',
+														currency: formData.currency,
 													})}{' '}
 													-{' '}
 													{suggestions.historicalData.maxSpending.toLocaleString('nb-NO', {
 														style: 'currency',
-														currency: 'NOK',
+														currency: formData.currency,
 													})}
 												</span>
 											</div>
@@ -567,7 +588,7 @@ function NewBudgetForm() {
 												<span className='font-medium'>
 													{suggestions.subscriptionCosts.fixedAmount.toLocaleString('nb-NO', {
 														style: 'currency',
-														currency: 'NOK',
+														currency: formData.currency,
 													})}{' '}
 													from {suggestions.subscriptionCosts.subscriptionCount} subscription
 													{suggestions.subscriptionCosts.subscriptionCount > 1 ? 's' : ''}

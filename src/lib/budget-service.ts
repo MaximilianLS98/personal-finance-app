@@ -1,3 +1,4 @@
+import { currencyCode } from './money';
 /**
  * Budget Management Service
  * Core service layer for budget operations, integrating repository,
@@ -200,8 +201,12 @@ export class BudgetService {
 	/**
 	 * Get intelligent budget suggestions for a category
 	 */
-	async getBudgetSuggestions(categoryId: string, period: BudgetPeriod): Promise<BudgetSuggestion> {
-		return await this.suggestionGenerator.generateSuggestions(categoryId, period);
+	async getBudgetSuggestions(
+		categoryId: string,
+		period: BudgetPeriod,
+		currency = 'UNKNOWN',
+	): Promise<BudgetSuggestion> {
+		return await this.suggestionGenerator.generateSuggestions(categoryId, period, currency);
 	}
 
 	/**
@@ -258,6 +263,7 @@ export class BudgetService {
 		budgetProgress: Array<BudgetProgress>;
 		totalBudgeted: number;
 		totalSpent: number;
+		totalsByCurrency: Record<string, { budgeted: number; spent: number }>;
 		overallStatus: 'on-track' | 'at-risk' | 'over-budget';
 		alerts: BudgetAlert[];
 	}> {
@@ -272,9 +278,18 @@ export class BudgetService {
 			const progressResults = await Promise.all(progressPromises);
 			const budgetProgress = progressResults.filter((p) => p !== null) as BudgetProgress[];
 
-			// Calculate totals
-			const totalBudgeted = activeBudgets.reduce((sum, budget) => sum + budget.amount, 0);
-			const totalSpent = budgetProgress.reduce((sum, progress) => sum + progress.currentSpent, 0);
+			// Keep currency domains separate; legacy totals are provided only for one currency.
+			const totalsByCurrency: Record<string, { budgeted: number; spent: number }> = {};
+			for (const progress of budgetProgress) {
+				const currency = currencyCode(progress.budget.currency);
+				const total = totalsByCurrency[currency] ?? { budgeted: 0, spent: 0 };
+				total.budgeted += progress.availableAmount ?? progress.budget.amount;
+				total.spent += progress.currentSpent;
+				totalsByCurrency[currency] = total;
+			}
+			const single = Object.values(totalsByCurrency);
+			const totalBudgeted = single.length === 1 ? single[0].budgeted : 0;
+			const totalSpent = single.length === 1 ? single[0].spent : 0;
 
 			// Determine overall status
 			const overBudgetCount = budgetProgress.filter((p) => p.status === 'over-budget').length;
@@ -295,6 +310,7 @@ export class BudgetService {
 				activeBudgets,
 				budgetProgress,
 				totalBudgeted,
+				totalsByCurrency,
 				totalSpent,
 				overallStatus,
 				alerts,
@@ -319,18 +335,10 @@ export class BudgetService {
 		copyFromScenarioId?: string,
 	): Promise<BudgetScenario> {
 		try {
-			const scenario = await this.repository.createBudgetScenario({
-				name,
-				description,
-				isActive: false, // New scenarios start inactive
-			});
-
-			// Copy budgets from existing scenario if requested
-			if (copyFromScenarioId) {
-				await this.copyBudgetsToScenario(copyFromScenarioId, scenario.id);
-			}
-
-			return scenario;
+			return await this.repository.createBudgetScenario(
+				{ name, description, isActive: false },
+				copyFromScenarioId,
+			);
 		} catch (error) {
 			throw new Error(
 				`Failed to create budget scenario: ${
@@ -391,38 +399,6 @@ export class BudgetService {
 			await this.createInitialAlerts(budget);
 		} catch (error) {
 			console.warn(`Failed to update alerts for budget ${budget.id}:`, error);
-		}
-	}
-
-	/**
-	 * Copy budgets from one scenario to another
-	 */
-	private async copyBudgetsToScenario(
-		sourceScenarioId: string,
-		targetScenarioId: string,
-	): Promise<void> {
-		try {
-			const sourceBudgets = await this.repository.findBudgetsByScenario(sourceScenarioId);
-
-			const copyPromises = sourceBudgets.map((budget) =>
-				this.repository.createBudget({
-					name: `${budget.name} (Copy)`,
-					description: budget.description,
-					categoryId: budget.categoryId,
-					amount: budget.amount,
-					currency: budget.currency,
-					period: budget.period,
-					startDate: budget.startDate,
-					endDate: budget.endDate,
-					isActive: budget.isActive,
-					alertThresholds: budget.alertThresholds,
-					scenarioId: targetScenarioId,
-				}),
-			);
-
-			await Promise.all(copyPromises);
-		} catch (error) {
-			console.warn(`Failed to copy budgets to scenario ${targetScenarioId}:`, error);
 		}
 	}
 }

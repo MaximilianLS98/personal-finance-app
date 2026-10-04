@@ -425,6 +425,25 @@ export default function EditBudgetPage() {
 									<Label htmlFor='indefinite'>No end date (run indefinitely)</Label>
 								</div>
 
+								<div>
+									<Label htmlFor='budget-currency'>Budget currency</Label>
+									<Input
+										id='budget-currency'
+										required
+										pattern='[A-Z]{3}'
+										maxLength={3}
+										value={formData.currency}
+										onChange={(e) =>
+											setFormData((previous) => ({
+												...previous,
+												currency: e.target.value.toUpperCase(),
+											}))
+										}
+									/>
+									<p className='text-xs text-muted-foreground'>
+										Only transactions and bills in this currency count toward this budget.
+									</p>
+								</div>
 								{/* Amount */}
 								<div>
 									<Label htmlFor='amount'>Budget Amount</Label>

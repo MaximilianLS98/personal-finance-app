@@ -1,4 +1,6 @@
 import type { Database } from 'bun:sqlite';
+import type { Budget } from './types';
+import { budgetForecast } from './planning';
 import { money } from './money';
 export function monthlyOverview(db: Database, month: string) {
 	if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error('Provide a valid month');
@@ -48,20 +50,44 @@ export function monthlyOverview(db: Database, month: string) {
 		currency: string;
 		date: string;
 	}[];
-	const budgets = db
+	const asOf = new Date(Math.min(Date.now(), Date.parse(`${end}T23:59:59Z`)));
+	const models = db
 		.query(
-			`SELECT b.id,b.name,b.currency,b.amount,
-  COALESCE((SELECT SUM(-e.amount) FROM effective_transactions e WHERE e.type='expense' AND e.category_id=b.category_id AND COALESCE(e.currency,'UNKNOWN')=b.currency AND substr(e.date,1,10)>=substr(b.start_date,1,10) AND substr(e.date,1,10)<=substr(b.end_date,1,10)),0) spent
-  FROM budgets b LEFT JOIN budget_scenarios s ON s.id=b.scenario_id
-  WHERE b.is_active=1 AND (b.scenario_id IS NULL OR s.is_active=1) AND substr(b.start_date,1,10)<=? AND substr(b.end_date,1,10)>=?`,
+			`SELECT b.id,b.name,b.currency,b.amount,b.category_id AS categoryId,b.period,b.start_date AS startDate,b.end_date AS endDate,b.created_at AS createdAt,b.updated_at AS updatedAt
+	 FROM budgets b LEFT JOIN budget_scenarios s ON s.id=b.scenario_id
+	 WHERE b.is_active=1 AND (b.scenario_id IS NULL OR s.is_active=1) AND substr(b.start_date,1,10)<=? AND substr(b.end_date,1,10)>=?`,
 		)
-		.all(end, start) as {
-		id: string;
-		name: string;
-		currency: string;
-		amount: number;
-		spent: number;
-	}[];
+		.all(end, start) as Array<
+		Omit<
+			Budget,
+			'startDate' | 'endDate' | 'createdAt' | 'updatedAt' | 'isActive' | 'alertThresholds'
+		> & { startDate: string; endDate: string; createdAt: string; updatedAt: string }
+	>;
+	const budgets = models.map((row) => {
+		const forecast = budgetForecast(
+			db,
+			{
+				...row,
+				startDate: new Date(row.startDate),
+				endDate: new Date(row.endDate),
+				createdAt: new Date(row.createdAt),
+				updatedAt: new Date(row.updatedAt),
+				isActive: true,
+				alertThresholds: [],
+			},
+			asOf,
+		);
+		return {
+			id: row.id,
+			name: row.name,
+			currency: row.currency,
+			amount: forecast.availableAmount ?? row.amount,
+			spent: forecast.currentSpent,
+			projected: forecast.projectedSpent,
+			atRisk: forecast.status !== 'on-track',
+		};
+	});
+
 	const goals = db
 		.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='savings_goals'")
 		.get()
@@ -80,7 +106,7 @@ export function monthlyOverview(db: Database, month: string) {
 		reviewCount: review.count,
 		upcoming,
 		budgetRisks: budgets
-			.filter((b) => b.spent >= b.amount * 0.8)
+			.filter((b) => b.atRisk || b.spent >= b.amount * 0.8)
 			.map((b) => ({ ...b, spent: money(b.spent) })),
 	};
 }

@@ -108,7 +108,7 @@ export default function Home() {
 								<CardHeader>
 									<CardTitle>Budgets to watch</CardTitle>
 									<CardDescription>
-										Active budgets at or above 80% of their allowance
+										Budgets near their allowance or projected to exceed it
 									</CardDescription>
 								</CardHeader>
 								<CardContent className='space-y-3'>

@@ -1,3 +1,5 @@
+import { currencyCode } from '../../money';
+import { budgetForecast, spendingSource } from '../../planning';
 import type { Budget, BudgetProgress, SpendingAnalysis } from '../../types';
 import { DatabaseConnectionError } from '../connection';
 import type { RepositoryContext } from '../repository-context';
@@ -627,144 +629,38 @@ export class BudgetsRepository {
 	 * Calculate budget progress for a specific budget
 	 */
 	async calculateBudgetProgress(budgetId: string): Promise<BudgetProgress | null> {
-		try {
-			const db = this.context.connection();
-
-			// First get the budget
-			const budget = await this.findBudgetById(budgetId);
-			if (!budget) {
-				return null;
-			}
-
-			// Determine effective period for calculation
-			const now = new Date();
-			const isIndefinite = budget.endDate.getFullYear() >= 9999;
-			let effectiveStart = new Date(
-				budget.startDate.getFullYear(),
-				budget.startDate.getMonth(),
-				budget.startDate.getDate(),
-				0,
-				0,
-				0,
-				0,
-			);
-			let effectiveEnd = new Date(
-				budget.endDate.getFullYear(),
-				budget.endDate.getMonth(),
-				budget.endDate.getDate(),
-				23,
-				59,
-				59,
-				999,
-			);
-			if (isIndefinite) {
-				if (budget.period === 'monthly') {
-					// Current month window: 1st to last day of this month
-					effectiveStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-					effectiveEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-				} else {
-					// Yearly: Jan 1 to Dec 31 of current year
-					effectiveStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
-					effectiveEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
-				}
-			}
-
-			// Calculate current spending in this (effective) budget period
-			const spendingStmt = db.prepare(`
-				SELECT COALESCE(SUM(ABS(amount)), 0) as total_spent
-				FROM transactions
-				WHERE category_id = ?
-				  AND type = 'expense'
-				  AND date >= ?
-				  AND date <= ?
-			`);
-
-			const spendingResult = spendingStmt.get(
-				budget.categoryId,
-				effectiveStart.toISOString(),
-				effectiveEnd.toISOString(),
-			) as { total_spent: number };
-
-			const currentSpent = spendingResult.total_spent;
-			const remainingAmount = Math.max(0, budget.amount - currentSpent);
-			const percentageSpent = budget.amount > 0 ? (currentSpent / budget.amount) * 100 : 0;
-
-			// Calculate status
-			let status: BudgetProgress['status'] = 'on-track';
-			if (percentageSpent >= 100) {
-				status = 'over-budget';
-			} else if (percentageSpent >= 85) {
-				status = 'at-risk';
-			}
-
-			// Calculate days remaining and projections
-			const daysRemaining = Math.max(
-				0,
-				Math.ceil((effectiveEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
-			);
-			const totalDays = Math.ceil(
-				(effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24),
-			);
-			const daysElapsed = Math.max(1, totalDays - daysRemaining);
-			const averageDailySpend = currentSpent / daysElapsed;
-			const projectedSpent =
-				daysRemaining > 0 ? currentSpent + averageDailySpend * daysRemaining : currentSpent;
-
-			// Get subscription costs for this category
-			const subscriptionStmt = db.prepare(`
-				SELECT COALESCE(SUM(
-					CASE
-						WHEN billing_frequency = 'monthly' THEN amount
-						WHEN billing_frequency = 'quarterly' THEN amount / 3
-						WHEN billing_frequency = 'annually' THEN amount / 12
-						ELSE amount / (COALESCE(custom_frequency_days, 30) / 30.44)
-					END
-				), 0) as monthly_subscription_cost
-				FROM subscriptions
-				WHERE category_id = ? AND is_active = 1
-			`);
-
-			const subscriptionResult = subscriptionStmt.get(budget.categoryId) as {
-				monthly_subscription_cost: number;
-			};
-			const monthlySubscriptionCost = subscriptionResult.monthly_subscription_cost;
-
-			// Calculate subscription allocation for budget period
-			const budgetMonths =
-				(effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
-			const subscriptionAllocated = monthlySubscriptionCost * budgetMonths;
-			const variableSpent = Math.max(0, currentSpent - subscriptionAllocated);
-
-			return {
-				budgetId,
-				budget,
-				currentSpent,
-				remainingAmount,
-				percentageSpent,
-				status,
-				projectedSpent,
-				daysRemaining,
-				averageDailySpend,
-				subscriptionAllocated,
-				variableSpent,
-				lastUpdated: new Date(),
-			};
-		} catch (error) {
-			throw new DatabaseConnectionError(
-				DatabaseErrorType.TRANSACTION_FAILED,
-				`Failed to calculate budget progress: ${
-					error instanceof Error ? error.message : 'Unknown error'
-				}`,
-				'SELECT budget progress calculations',
-				[budgetId],
-			);
-		}
+		const budget = await this.findBudgetById(budgetId);
+		return budget ? budgetForecast(this.context.connection(), budget) : null;
 	}
 
 	/**
 	 * Analyze historical spending for a category over specified months
 	 */
-	async analyzeHistoricalSpending(categoryId: string, months: number): Promise<SpendingAnalysis> {
+	async categorySpendingInRange(
+		categoryId: string,
+		currency: string,
+		start: Date,
+		end: Date,
+	): Promise<number> {
+		const db = this.context.connection();
+		return (
+			db
+				.query(
+					`SELECT COALESCE(SUM(-amount),0) AS total FROM ${spendingSource(db)} WHERE category_id=? AND type='expense' AND UPPER(COALESCE(NULLIF(TRIM(currency),''),'UNKNOWN'))=? AND substr(date,1,10)>=? AND substr(date,1,10)<=?`,
+				)
+				.get(
+					categoryId,
+					currencyCode(currency),
+					start.toISOString().slice(0, 10),
+					end.toISOString().slice(0, 10),
+				) as { total: number }
+		).total;
+	}
+	async analyzeHistoricalSpending(
+		categoryId: string,
+		months: number,
+		currency = 'UNKNOWN',
+	): Promise<SpendingAnalysis> {
 		try {
 			const db = this.context.connection();
 
@@ -776,18 +672,20 @@ export class BudgetsRepository {
 			// Get transaction data for the category
 			const transactionStmt = db.prepare(`
 				SELECT amount, date
-				FROM transactions
+				FROM ${spendingSource(db)}
 				WHERE category_id = ?
 				  AND type = 'expense'
-				  AND date >= ?
-				  AND date <= ?
+                  AND UPPER(COALESCE(NULLIF(TRIM(currency),''),'UNKNOWN')) = ?
+				  AND substr(date,1,10) >= ?
+				  AND substr(date,1,10) <= ?
 				ORDER BY date ASC
 			`);
 
 			const transactions = transactionStmt.all(
 				categoryId,
-				startDate.toISOString(),
-				endDate.toISOString(),
+				currencyCode(currency),
+				startDate.toISOString().slice(0, 10),
+				endDate.toISOString().slice(0, 10),
 			) as Array<{ amount: number; date: string }>;
 
 			if (transactions.length === 0) {
@@ -812,7 +710,7 @@ export class BudgetsRepository {
 				const date = new Date(transaction.date);
 				const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 				const current = monthlySpending.get(monthKey) || 0;
-				monthlySpending.set(monthKey, current + Math.abs(transaction.amount));
+				monthlySpending.set(monthKey, current - transaction.amount);
 			}
 
 			// Calculate monthly statistics
@@ -820,7 +718,7 @@ export class BudgetsRepository {
 			const averageMonthly =
 				monthlyAmounts.reduce((sum, amount) => sum + amount, 0) /
 				Math.max(1, monthlyAmounts.length);
-			const minMonthly = Math.min(...monthlyAmounts, 0);
+			const minMonthly = Math.min(...monthlyAmounts);
 			const maxMonthly = Math.max(...monthlyAmounts, 0);
 
 			// Calculate standard deviation
@@ -851,10 +749,10 @@ export class BudgetsRepository {
 					END
 				), 0) as monthly_subscription_cost
 				FROM subscriptions
-				WHERE category_id = ? AND is_active = 1
+				WHERE category_id = ? AND is_active = 1 AND UPPER(COALESCE(NULLIF(TRIM(currency),''),'UNKNOWN')) = ?
 			`);
 
-			const subscriptionResult = subscriptionStmt.get(categoryId) as {
+			const subscriptionResult = subscriptionStmt.get(categoryId, currencyCode(currency)) as {
 				monthly_subscription_cost: number;
 			};
 			const subscriptionCosts = subscriptionResult.monthly_subscription_cost;

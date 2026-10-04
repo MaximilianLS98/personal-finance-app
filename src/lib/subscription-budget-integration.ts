@@ -1,3 +1,4 @@
+import { currencyCode } from './money';
 import { monthlySubscriptionCost } from '@/lib/subscription-costs';
 /**
  * Subscription Budget Integration Service
@@ -29,7 +30,10 @@ export interface SubscriptionBudgetIntegration {
 	/**
 	 * Calculate subscription allocation for budget suggestions
 	 */
-	calculateSubscriptionAllocation(categoryId: string): Promise<SubscriptionAllocation>;
+	calculateSubscriptionAllocation(
+		categoryId: string,
+		currency?: string,
+	): Promise<SubscriptionAllocation>;
 
 	/**
 	 * Analyze subscription change impact on budgets
@@ -46,6 +50,7 @@ export interface SubscriptionBudgetIntegration {
 		categoryId: string,
 		historicalSpending: number,
 		period: 'monthly' | 'yearly',
+		currency?: string,
 	): Promise<SubscriptionAwareSuggestion>;
 
 	/**
@@ -100,7 +105,9 @@ export class SubscriptionBudgetIntegrationService implements SubscriptionBudgetI
 		try {
 			// Find budgets for this subscription's category
 			const budgets = await this.repository.findBudgetsByCategory(subscription.categoryId);
-			const activeBudgets = budgets.filter((b) => b.isActive);
+			const activeBudgets = budgets.filter(
+				(b) => b.isActive && currencyCode(b.currency) === currencyCode(subscription.currency),
+			);
 
 			if (activeBudgets.length === 0) {
 				return; // No budgets to update
@@ -170,7 +177,9 @@ export class SubscriptionBudgetIntegrationService implements SubscriptionBudgetI
 		try {
 			// Find budgets for this subscription's category
 			const budgets = await this.repository.findBudgetsByCategory(subscription.categoryId);
-			const activeBudgets = budgets.filter((b) => b.isActive);
+			const activeBudgets = budgets.filter(
+				(b) => b.isActive && currencyCode(b.currency) === currencyCode(subscription.currency),
+			);
 
 			if (activeBudgets.length === 0) {
 				return;
@@ -204,11 +213,18 @@ export class SubscriptionBudgetIntegrationService implements SubscriptionBudgetI
 	/**
 	 * Calculate subscription allocation for budget suggestions
 	 */
-	async calculateSubscriptionAllocation(categoryId: string): Promise<SubscriptionAllocation> {
+	async calculateSubscriptionAllocation(
+		categoryId: string,
+		currency?: string,
+	): Promise<SubscriptionAllocation> {
 		try {
 			// Get active subscriptions for this category
 			const subscriptions = await this.repository.findSubscriptionsByCategory(categoryId);
-			const activeSubscriptions = subscriptions.filter((s) => s.isActive);
+			const activeSubscriptions = subscriptions.filter(
+				(s) => s.isActive && (!currency || currencyCode(s.currency) === currencyCode(currency)),
+			);
+			if (!currency && new Set(activeSubscriptions.map((s) => currencyCode(s.currency))).size > 1)
+				throw new Error('Select a currency for subscription allocation');
 
 			let fixedAmount = 0;
 			const subscriptionDetails: SubscriptionAllocation['subscriptions'] = [];
@@ -259,7 +275,9 @@ export class SubscriptionBudgetIntegrationService implements SubscriptionBudgetI
 		try {
 			// Find budgets for this subscription's category
 			const budgets = await this.repository.findBudgetsByCategory(subscription.categoryId);
-			const activeBudgets = budgets.filter((b) => b.isActive);
+			const activeBudgets = budgets.filter(
+				(b) => b.isActive && currencyCode(b.currency) === currencyCode(subscription.currency),
+			);
 
 			if (activeBudgets.length === 0) {
 				return result;
@@ -316,10 +334,11 @@ export class SubscriptionBudgetIntegrationService implements SubscriptionBudgetI
 		categoryId: string,
 		historicalSpending: number,
 		period: 'monthly' | 'yearly',
+		currency?: string,
 	): Promise<SubscriptionAwareSuggestion> {
 		try {
 			// Get subscription allocation
-			const allocation = await this.calculateSubscriptionAllocation(categoryId);
+			const allocation = await this.calculateSubscriptionAllocation(categoryId, currency);
 
 			// Convert to appropriate period
 			const fixedCosts = period === 'yearly' ? allocation.fixedAmount * 12 : allocation.fixedAmount;
@@ -381,7 +400,9 @@ export class SubscriptionBudgetIntegrationService implements SubscriptionBudgetI
 			for (const subscription of upcomingSubscriptions) {
 				// Find budgets for this subscription's category
 				const budgets = await this.repository.findBudgetsByCategory(subscription.categoryId);
-				const activeBudgets = budgets.filter((b) => b.isActive);
+				const activeBudgets = budgets.filter(
+					(b) => b.isActive && currencyCode(b.currency) === currencyCode(subscription.currency),
+				);
 
 				for (const budget of activeBudgets) {
 					// Check if budget has enough remaining for the subscription
@@ -442,7 +463,9 @@ export class SubscriptionBudgetIntegrationService implements SubscriptionBudgetI
 		const categoryId =
 			operation === 'added' ? newSubscription.categoryId : oldSubscription.categoryId;
 		const budgets = await this.repository.findBudgetsByCategory(categoryId);
-		const activeBudgets = budgets.filter((b) => b.isActive);
+		const activeBudgets = budgets.filter(
+			(b) => b.isActive && currencyCode(b.currency) === currencyCode(newSubscription.currency),
+		);
 
 		const monthlyImpact = this.calculateMonthlyAmount(newSubscription);
 		const sign = operation === 'added' ? '+' : '-';
@@ -467,7 +490,9 @@ export class SubscriptionBudgetIntegrationService implements SubscriptionBudgetI
 		newSubscription: Subscription,
 	): Promise<void> {
 		const budgets = await this.repository.findBudgetsByCategory(newSubscription.categoryId);
-		const activeBudgets = budgets.filter((b) => b.isActive);
+		const activeBudgets = budgets.filter(
+			(b) => b.isActive && currencyCode(b.currency) === currencyCode(newSubscription.currency),
+		);
 
 		const oldMonthlyAmount = this.calculateMonthlyAmount(oldSubscription);
 		const newMonthlyAmount = this.calculateMonthlyAmount(newSubscription);
@@ -494,7 +519,9 @@ export class SubscriptionBudgetIntegrationService implements SubscriptionBudgetI
 		newSubscription: Subscription,
 	): Promise<void> {
 		const budgets = await this.repository.findBudgetsByCategory(newSubscription.categoryId);
-		const activeBudgets = budgets.filter((b) => b.isActive);
+		const activeBudgets = budgets.filter(
+			(b) => b.isActive && currencyCode(b.currency) === currencyCode(newSubscription.currency),
+		);
 
 		const oldMonthlyAmount = this.calculateMonthlyAmount(oldSubscription);
 		const newMonthlyAmount = this.calculateMonthlyAmount(newSubscription);
