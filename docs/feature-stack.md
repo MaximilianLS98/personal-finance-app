@@ -53,3 +53,20 @@ Run the checks described in the README after integrating the complete stack. Dom
 The user-provided statement is a private local test input. It is not committed to the repository, included in public fixtures, or imported into the live database as part of development verification. Any unresolved rejected rows must be reported separately from successfully imported rows.
 
 Final integrated test counts, browser results, and pull request links belong in the final verification report and PR descriptions; this document does not claim a completed final run.
+
+## Integrated verification — 2026-10-04
+
+The complete stack passes typecheck, lint, 152 Jest tests, 131 SQLite/API tests, the production build, formatting, and `git diff --check`. The database suite includes populated schema 8→12 upgrade preservation and full-feature backup roundtrips across all 21 finance tables, including restored triggers and sequences.
+
+Browser checks used disposable synthetic data on port 3101: account/import preview and confirmation, monthly overview, review categorization and undo, goal contributions, payday/rollover changes, subscription payment and price histories, reminder settings and ICS export, and backup validation/restoration/recovery. Home, review, planning, settings, and calendar were checked at 390px; the calendar scrolls within its container.
+
+The private statement produced 524 source rows: 521 booked transactions and 3 pending `Reservert` rows explicitly rejected for review. Independent booked-amount totals matched; reimport created no duplicate transactions; undo restored the empty ledger. No statement content was committed or imported into the live database.
+
+Review and merge the PRs from bottom to top:
+
+1. [Baseline #1](https://github.com/MaximilianLS98/personal-finance-app/pull/1)
+2. [Accounts and imports #2](https://github.com/MaximilianLS98/personal-finance-app/pull/2)
+3. [Review and reporting #3](https://github.com/MaximilianLS98/personal-finance-app/pull/3)
+4. [Planning and goals #4](https://github.com/MaximilianLS98/personal-finance-app/pull/4)
+5. [Subscriptions and calendar #5](https://github.com/MaximilianLS98/personal-finance-app/pull/5)
+6. [Backup, restore, and integrated acceptance #6](https://github.com/MaximilianLS98/personal-finance-app/pull/6)
