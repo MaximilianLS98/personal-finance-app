@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import {
 	Card,
 	CardContent,
@@ -8,8 +7,8 @@ import {
 	CardHeader,
 	CardTitle,
 } from '../../components/ui/card';
-import { FinancialSummary as FinancialSummaryType } from '../../lib/types';
 import { formatCurrency } from '../../lib/financial-calculator';
+import { FinancialSummary as FinancialSummaryType } from '../../lib/types';
 import { useCurrencySettings } from '../providers';
 
 interface FinancialSummaryProps {
@@ -63,9 +62,7 @@ export function FinancialSummary({ summary, isLoading = false, error }: Financia
 			<Card className='text-center'>
 				<CardHeader>
 					<CardTitle className='text-muted-foreground'>No Financial Data</CardTitle>
-					<CardDescription>
-						Upload a CSV file to see your financial summary
-					</CardDescription>
+					<CardDescription>Upload a CSV file to see your financial summary</CardDescription>
 				</CardHeader>
 				<CardContent>
 					<div className='grid gap-4 md:grid-cols-2 lg:grid-cols-3'>

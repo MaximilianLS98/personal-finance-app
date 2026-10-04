@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
 	Select,
 	SelectContent,
@@ -10,14 +10,14 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@/components/ui/select';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Sparkles, Check, X } from 'lucide-react';
-import type { Category, CategorySuggestion } from '@/lib/types';
 import {
 	useCategoriesQuery,
-	useSuggestCategoryMutation,
 	useLearnFromActionMutation,
+	useSuggestCategoryMutation,
 } from '@/lib/queries';
+import type { CategorySuggestion } from '@/lib/types';
+import { Check, Sparkles, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 interface CategorySelectorProps {
 	description: string;
@@ -33,7 +33,7 @@ export default function CategorySelector({
 	disabled = false,
 }: CategorySelectorProps) {
 	const { data: categories = [], isLoading: isLoadingCategories, error } = useCategoriesQuery();
-	const suggest = useSuggestCategoryMutation();
+	const { mutateAsync: suggest } = useSuggestCategoryMutation();
 	const learn = useLearnFromActionMutation();
 
 	const [suggestion, setSuggestion] = useState<CategorySuggestion | null>(null);
@@ -47,10 +47,15 @@ export default function CategorySelector({
 			if (description && !currentCategoryId) {
 				setIsLoadingSuggestion(true);
 				try {
-					const result = await suggest.mutateAsync(description);
-					if (!cancelled && result) {
+					const result = await suggest(description);
+					if (!cancelled) {
 						setSuggestion(result);
-						setShowSuggestion(true);
+						setShowSuggestion(!!result);
+					}
+				} catch {
+					if (!cancelled) {
+						setSuggestion(null);
+						setShowSuggestion(false);
 					}
 				} finally {
 					if (!cancelled) setIsLoadingSuggestion(false);
@@ -64,7 +69,7 @@ export default function CategorySelector({
 		return () => {
 			cancelled = true;
 		};
-	}, [description, currentCategoryId]);
+	}, [description, currentCategoryId, suggest]);
 
 	const handleSuggestionAccept = async () => {
 		if (!suggestion) return;
@@ -118,7 +123,8 @@ export default function CategorySelector({
 						style={{
 							backgroundColor: currentCategory.color + '20',
 							color: currentCategory.color,
-						}}>
+						}}
+					>
 						{currentCategory.name}
 					</Badge>
 				</div>
@@ -143,14 +149,16 @@ export default function CategorySelector({
 								variant='ghost'
 								onClick={handleSuggestionAccept}
 								disabled={disabled}
-								className='h-6 px-2 text-green-600 hover:text-green-700'>
+								className='h-6 px-2 text-green-600 hover:text-green-700'
+							>
 								<Check className='h-3 w-3' />
 							</Button>
 							<Button
 								size='sm'
 								variant='ghost'
 								onClick={handleSuggestionReject}
-								className='h-6 px-2 text-muted-foreground hover:text-foreground'>
+								className='h-6 px-2 text-muted-foreground hover:text-foreground'
+							>
 								<X className='h-3 w-3' />
 							</Button>
 						</div>
@@ -172,7 +180,8 @@ export default function CategorySelector({
 			<Select
 				value={currentCategoryId || '__none__'}
 				onValueChange={handleManualSelection}
-				disabled={disabled || isLoadingCategories}>
+				disabled={disabled || isLoadingCategories}
+			>
 				<SelectTrigger className='w-full'>
 					<SelectValue placeholder='Select a category...' />
 				</SelectTrigger>
@@ -181,10 +190,7 @@ export default function CategorySelector({
 					{categories.map((category) => (
 						<SelectItem key={category.id} value={category.id}>
 							<div className='flex items-center gap-2'>
-								<div
-									className='w-3 h-3 rounded-full'
-									style={{ backgroundColor: category.color }}
-								/>
+								<div className='w-3 h-3 rounded-full' style={{ backgroundColor: category.color }} />
 								{category.name}
 							</div>
 						</SelectItem>

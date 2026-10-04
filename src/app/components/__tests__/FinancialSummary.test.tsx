@@ -1,8 +1,7 @@
-import React from 'react';
-import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { FinancialSummary } from '../FinancialSummary';
+import { render, screen } from '@testing-library/react';
 import { FinancialSummary as FinancialSummaryType } from '../../../lib/types';
+import { FinancialSummary } from '../FinancialSummary';
 
 // Mock the financial calculator module
 jest.mock('../../../lib/financial-calculator', () => ({

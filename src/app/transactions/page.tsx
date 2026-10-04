@@ -1,7 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import FileUpload from '@/app/components/FileUpload';
+import { useCurrencySettings } from '@/app/providers';
+import SimpleCategorySelector from '@/components/SimpleCategorySelector';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
 	Dialog,
@@ -13,7 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
 	Select,
 	SelectContent,
@@ -21,8 +25,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@/components/ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
 import {
 	Table,
 	TableBody,
@@ -32,50 +34,48 @@ import {
 	TableHeader,
 	TableRow,
 } from '@/components/ui/table';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import FileUpload from '@/app/components/FileUpload';
-import SimpleCategorySelector from '@/components/SimpleCategorySelector';
-import { Transaction, CategorySuggestion } from '@/lib/types';
-import { getTransactionTypeStyle, getTransactionTypeLabel } from '@/lib/transaction-utils';
+import { Textarea } from '@/components/ui/textarea';
 import {
-	Pencil,
-	Trash2,
-	Upload,
+	prefetchTransactions,
+	useCategoriesQuery,
+	useDeleteTransactionMutation,
+	useLearnFromActionMutation,
+	useSuggestBulkMutation,
+	useSuggestCategoryMutation,
+	useTransactionsQuery,
+	useUpdateTransactionMutation,
+} from '@/lib/queries';
+import { useTransactionsFilters } from '@/lib/stores/filters';
+import { getTransactionTypeLabel, getTransactionTypeStyle } from '@/lib/transaction-utils';
+import { CategorySuggestion, Transaction } from '@/lib/types';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+	endOfDay,
+	endOfMonth,
+	endOfYear,
+	format,
+	startOfDay,
+	startOfMonth,
+	startOfYear,
+	subDays,
+} from 'date-fns';
+import {
 	Calendar as CalendarIcon,
-	Filter,
-	X,
+	CheckCircle2,
+	ChevronDown,
 	ChevronLeft,
 	ChevronRight,
 	ChevronsLeft,
 	ChevronsRight,
-	Sparkles,
 	ChevronUp,
-	ChevronDown,
-	CheckCircle2,
+	Filter,
+	Pencil,
+	Sparkles,
+	Trash2,
+	Upload,
+	X,
 } from 'lucide-react';
-import {
-	format,
-	startOfDay,
-	endOfDay,
-	startOfMonth,
-	endOfMonth,
-	startOfYear,
-	endOfYear,
-	subDays,
-} from 'date-fns';
-import {
-	useCategoriesQuery,
-	useDeleteTransactionMutation,
-	useTransactionsQuery,
-	useUpdateTransactionMutation,
-	prefetchTransactions,
-	useSuggestCategoryMutation,
-	useSuggestBulkMutation,
-	useLearnFromActionMutation,
-} from '@/lib/queries';
-import { useTransactionsFilters } from '@/lib/stores/filters';
-import { useQueryClient } from '@tanstack/react-query';
-import { useCurrencySettings } from '@/app/providers';
+import React, { useEffect, useMemo, useState } from 'react';
 
 interface EditTransaction {
 	id: string;
@@ -91,25 +91,7 @@ interface DateRange {
 	to?: Date;
 }
 
-interface FilterState {
-	dateRange: DateRange;
-	transactionType: 'all' | 'income' | 'expense' | 'transfer';
-	searchTerm: string;
-	preset: string;
-}
-
-interface PaginationState {
-	currentPage: number;
-	pageSize: number;
-}
-
 type SortField = 'date' | 'description' | 'category' | 'type' | 'amount';
-type SortDirection = 'asc' | 'desc';
-
-interface SortState {
-	field: SortField | null;
-	direction: SortDirection;
-}
 
 const DATE_PRESETS = {
 	all: { label: 'All Time', getValue: () => ({ from: undefined, to: undefined }) },
@@ -192,18 +174,32 @@ export default function TransactionsPage() {
 		setState,
 	} = useTransactionsFilters();
 
-	const currentParams = {
-		page,
-		limit: pageSize,
-		sortBy: sortField ?? undefined,
-		sortOrder: (sortDirection || 'desc').toUpperCase() as 'ASC' | 'DESC',
-		type: transactionType,
-		search: searchTerm || undefined,
-		from: dateRange.from,
-		to: dateRange.to,
-		categories: selectedCategoryIds.length > 0 ? selectedCategoryIds : undefined,
-		includeUncategorized: includeUncategorized || undefined,
-	};
+	const currentParams = useMemo(
+		() => ({
+			page,
+			limit: pageSize,
+			sortBy: sortField ?? undefined,
+			sortOrder: (sortDirection || 'desc').toUpperCase() as 'ASC' | 'DESC',
+			type: transactionType,
+			search: searchTerm || undefined,
+			from: dateRange.from,
+			to: dateRange.to,
+			categories: selectedCategoryIds.length > 0 ? selectedCategoryIds : undefined,
+			includeUncategorized: includeUncategorized || undefined,
+		}),
+		[
+			page,
+			pageSize,
+			sortField,
+			sortDirection,
+			transactionType,
+			searchTerm,
+			dateRange.from,
+			dateRange.to,
+			selectedCategoryIds,
+			includeUncategorized,
+		],
+	);
 
 	const { data: txData, isLoading, isError, error } = useTransactionsQuery(currentParams);
 
@@ -222,17 +218,7 @@ export default function TransactionsPage() {
 		if (prevPage >= 1) {
 			prefetchTransactions(queryClient, { ...currentParams, page: prevPage });
 		}
-	}, [
-		page,
-		pageSize,
-		sortField,
-		sortDirection,
-		dateRange.from,
-		dateRange.to,
-		transactionType,
-		searchTerm,
-		totalPages,
-	]);
+	}, [page, totalPages, currentParams, queryClient]);
 
 	const updateTx = useUpdateTransactionMutation();
 	const deleteTx = useDeleteTransactionMutation();
@@ -387,17 +373,6 @@ export default function TransactionsPage() {
 		}
 	};
 
-	const handleUpdateTransactionCategory = async (
-		transactionId: string,
-		categoryId: string | undefined,
-	) => {
-		try {
-			await updateTx.mutateAsync({ id: transactionId, updates: { categoryId } });
-		} catch (error) {
-			console.error('Error updating transaction category:', error);
-		}
-	};
-
 	const handleDateRangeChange = (range: DateRange) => {
 		setState((prev) => ({ ...prev, dateRange: range, preset: 'custom', page: 1 }));
 	};
@@ -458,7 +433,8 @@ export default function TransactionsPage() {
 		return (
 			<TableHead
 				className={`${field ? 'cursor-pointer select-none hover:bg-accent/40' : ''} ${isActive ? 'bg-accent/30 text-foreground' : ''} ${className}`}
-				onClick={() => field && handleSort(field)}>
+				onClick={() => field && handleSort(field)}
+			>
 				<div className='flex items-center gap-1'>
 					<span className={isActive ? 'text-blue-900 font-medium' : ''}>{children}</span>
 					{field && (
@@ -490,18 +466,15 @@ export default function TransactionsPage() {
 				<div>
 					<h1 className='text-3xl font-bold text-foreground'>Transactions</h1>
 					<p className='text-muted-foreground mt-2'>
-						View and manage all your uploaded transactions ({transactions.length} of{' '}
-						{totalCount})
+						View and manage all your uploaded transactions ({transactions.length} of {totalCount})
 					</p>
 				</div>
 				<div className='flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end'>
 					<Button
 						variant='outline'
 						onClick={handleBulkSuggestions}
-						disabled={
-							isBulkSuggesting ||
-							transactions.filter((t) => !t.categoryId).length === 0
-						}>
+						disabled={isBulkSuggesting || transactions.filter((t) => !t.categoryId).length === 0}
+					>
 						{isBulkSuggesting ? (
 							<>
 								<Sparkles className='mr-2 h-4 w-4 animate-pulse' />
@@ -525,7 +498,8 @@ export default function TransactionsPage() {
 									variant='default'
 									onClick={handleAcceptAllSuggestions}
 									disabled={isAcceptingAllSuggestions}
-									className='bg-green-600 hover:bg-green-700'>
+									className='bg-green-600 hover:bg-green-700'
+								>
 									{isAcceptingAllSuggestions ? (
 										<>
 											<CheckCircle2 className='mr-2 h-4 w-4 animate-pulse' />
@@ -641,8 +615,7 @@ export default function TransactionsPage() {
 									<Popover>
 										<PopoverTrigger asChild>
 											<Button variant='outline'>
-												{selectedCategoryIds.length === 0 &&
-												!includeUncategorized
+												{selectedCategoryIds.length === 0 && !includeUncategorized
 													? 'All categories'
 													: `${selectedCategoryIds.length} selected${includeUncategorized ? ' + uncategorized' : ''}`}
 											</Button>
@@ -650,17 +623,14 @@ export default function TransactionsPage() {
 										<PopoverContent className='w-72 p-2'>
 											<div className='space-y-2 max-h-72 overflow-auto'>
 												<div className='flex items-center justify-between'>
-													<Label className='text-sm'>
-														Include uncategorized
-													</Label>
+													<Label className='text-sm'>Include uncategorized</Label>
 													<input
 														type='checkbox'
 														checked={includeUncategorized}
 														onChange={(e) =>
 															setState((prev) => ({
 																...prev,
-																includeUncategorized:
-																	e.target.checked,
+																includeUncategorized: e.target.checked,
 																page: 1,
 															}))
 														}
@@ -669,29 +639,18 @@ export default function TransactionsPage() {
 												<div className='h-px bg-border my-1' />
 												<div className='space-y-1'>
 													{categories.map((c) => {
-														const checked =
-															selectedCategoryIds.includes(c.id);
+														const checked = selectedCategoryIds.includes(c.id);
 														return (
-															<label
-																key={c.id}
-																className='flex items-center gap-2 text-sm'>
+															<label key={c.id} className='flex items-center gap-2 text-sm'>
 																<input
 																	type='checkbox'
 																	checked={checked}
 																	onChange={(e) =>
 																		setState((prev) => ({
 																			...prev,
-																			selectedCategoryIds: e
-																				.target.checked
-																				? [
-																						...prev.selectedCategoryIds,
-																						c.id,
-																					]
-																				: prev.selectedCategoryIds.filter(
-																						(id) =>
-																							id !==
-																							c.id,
-																					),
+																			selectedCategoryIds: e.target.checked
+																				? [...prev.selectedCategoryIds, c.id]
+																				: prev.selectedCategoryIds.filter((id) => id !== c.id),
 																			page: 1,
 																		}))
 																	}
@@ -700,8 +659,7 @@ export default function TransactionsPage() {
 																	<span
 																		className='w-3 h-3 rounded-full inline-block'
 																		style={{
-																			backgroundColor:
-																				c.color,
+																			backgroundColor: c.color,
 																		}}
 																	/>
 																	{c.name}
@@ -722,7 +680,8 @@ export default function TransactionsPage() {
 																includeUncategorized: false,
 																page: 1,
 															}))
-														}>
+														}
+													>
 														Clear
 													</Button>
 													<Button
@@ -731,12 +690,11 @@ export default function TransactionsPage() {
 														onClick={() =>
 															setState((prev) => ({
 																...prev,
-																selectedCategoryIds: categories.map(
-																	(c) => c.id,
-																),
+																selectedCategoryIds: categories.map((c) => c.id),
 																page: 1,
 															}))
-														}>
+														}
+													>
 														Select all
 													</Button>
 												</div>
@@ -755,11 +713,10 @@ export default function TransactionsPage() {
 										<PopoverTrigger asChild>
 											<Button
 												variant='outline'
-												className='mt-1 w-full justify-start text-left font-normal'>
+												className='mt-1 w-full justify-start text-left font-normal'
+											>
 												<CalendarIcon className='mr-2 h-4 w-4' />
-												{dateRange.from
-													? format(dateRange.from, 'MMM dd, yyyy')
-													: 'Pick a date'}
+												{dateRange.from ? format(dateRange.from, 'MMM dd, yyyy') : 'Pick a date'}
 											</Button>
 										</PopoverTrigger>
 										<PopoverContent className='w-auto p-0'>
@@ -783,11 +740,10 @@ export default function TransactionsPage() {
 										<PopoverTrigger asChild>
 											<Button
 												variant='outline'
-												className='mt-1 w-full justify-start text-left font-normal'>
+												className='mt-1 w-full justify-start text-left font-normal'
+											>
 												<CalendarIcon className='mr-2 h-4 w-4' />
-												{dateRange.to
-													? format(dateRange.to, 'MMM dd, yyyy')
-													: 'Pick a date'}
+												{dateRange.to ? format(dateRange.to, 'MMM dd, yyyy') : 'Pick a date'}
 											</Button>
 										</PopoverTrigger>
 										<PopoverContent className='w-auto p-0'>
@@ -817,9 +773,7 @@ export default function TransactionsPage() {
 						selectedCategoryIds.length > 0 ||
 						includeUncategorized) && (
 						<div className='flex flex-wrap gap-2 pt-2 border-t'>
-							<span className='text-sm font-medium text-muted-foreground'>
-								Active filters:
-							</span>
+							<span className='text-sm font-medium text-muted-foreground'>Active filters:</span>
 							{searchTerm && (
 								<span className='bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs'>
 									Search: &quot;{searchTerm}&quot;
@@ -901,9 +855,7 @@ export default function TransactionsPage() {
 							<TableBody>
 								{transactions.map((transaction) => (
 									<TableRow key={transaction.id}>
-										<TableCell className='font-medium'>
-											{formatDate(transaction.date)}
-										</TableCell>
+										<TableCell className='font-medium'>{formatDate(transaction.date)}</TableCell>
 										<TableCell>{transaction.description}</TableCell>
 										<TableCell>
 											<SimpleCategorySelector
@@ -917,35 +869,29 @@ export default function TransactionsPage() {
 													)
 												}
 												onSuggestRequest={() =>
-													handleGetSuggestion(
-														transaction.id,
-														transaction.description,
-													)
+													handleGetSuggestion(transaction.id, transaction.description)
 												}
 												suggestion={suggestions[transaction.id]}
-												isLoadingSuggestion={loadingSuggestions.has(
-													transaction.id,
-												)}
+												isLoadingSuggestion={loadingSuggestions.has(transaction.id)}
 												compact={true}
 											/>
 										</TableCell>
 										<TableCell>
 											<span
-												className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getTransactionTypeStyle(transaction.type).badgeClass}`}>
+												className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getTransactionTypeStyle(transaction.type).badgeClass}`}
+											>
 												{getTransactionTypeLabel(transaction.type)}
 											</span>
 										</TableCell>
 										<TableCell
-											className={`text-right font-medium ${getTransactionTypeStyle(transaction.type).amountClass}`}>
+											className={`text-right font-medium ${getTransactionTypeStyle(transaction.type).amountClass}`}
+										>
 											{transaction.type === 'income'
 												? '+'
 												: transaction.type === 'transfer'
 													? '±'
 													: '-'}
-											{formatCurrency(
-												transaction.amount,
-												transaction.currency,
-											)}
+											{formatCurrency(transaction.amount, transaction.currency)}
 										</TableCell>
 										<TableCell className='text-right'>
 											<div className='flex justify-end space-x-2'>
@@ -955,24 +901,22 @@ export default function TransactionsPage() {
 													onClick={() => {
 														setEditingTransaction({
 															id: transaction.id,
-															date: new Date(transaction.date)
-																.toISOString()
-																.split('T')[0],
+															date: new Date(transaction.date).toISOString().split('T')[0],
 															description: transaction.description,
-															amount: Math.abs(
-																transaction.amount,
-															).toString(),
+															amount: Math.abs(transaction.amount).toString(),
 															type: transaction.type,
 															categoryId: transaction.categoryId,
 														});
 														setIsEditDialogOpen(true);
-													}}>
+													}}
+												>
 													<Pencil className='h-4 w-4' />
 												</Button>
 												<Button
 													variant='outline'
 													size='sm'
-													onClick={() => handleDelete(transaction.id)}>
+													onClick={() => handleDelete(transaction.id)}
+												>
 													<Trash2 className='h-4 w-4' />
 												</Button>
 											</div>
@@ -1002,9 +946,8 @@ export default function TransactionsPage() {
 									<span className='text-sm text-muted-foreground'>Show:</span>
 									<Select
 										value={pageSize.toString()}
-										onValueChange={(value) =>
-											handlePageSizeChange(Number(value))
-										}>
+										onValueChange={(value) => handlePageSizeChange(Number(value))}
+									>
 										<SelectTrigger className='w-20'>
 											<SelectValue />
 										</SelectTrigger>
@@ -1025,14 +968,16 @@ export default function TransactionsPage() {
 											variant='outline'
 											size='sm'
 											onClick={() => handlePageChange(1)}
-											disabled={!canGoPrevious}>
+											disabled={!canGoPrevious}
+										>
 											<ChevronsLeft className='h-4 w-4' />
 										</Button>
 										<Button
 											variant='outline'
 											size='sm'
 											onClick={() => handlePageChange(page - 1)}
-											disabled={!canGoPrevious}>
+											disabled={!canGoPrevious}
+										>
 											<ChevronLeft className='h-4 w-4' />
 										</Button>
 										<span className='text-sm text-muted-foreground min-w-[100px] text-center'>
@@ -1042,14 +987,16 @@ export default function TransactionsPage() {
 											variant='outline'
 											size='sm'
 											onClick={() => handlePageChange(page + 1)}
-											disabled={!canGoNext}>
+											disabled={!canGoNext}
+										>
 											<ChevronRight className='h-4 w-4' />
 										</Button>
 										<Button
 											variant='outline'
 											size='sm'
 											onClick={() => handlePageChange(totalPages)}
-											disabled={!canGoNext}>
+											disabled={!canGoNext}
+										>
 											<ChevronsRight className='h-4 w-4' />
 										</Button>
 									</div>
@@ -1065,9 +1012,7 @@ export default function TransactionsPage() {
 				<DialogContent className='sm:max-w-[425px]'>
 					<DialogHeader>
 						<DialogTitle>Edit Transaction</DialogTitle>
-						<DialogDescription>
-							Make changes to the transaction details below.
-						</DialogDescription>
+						<DialogDescription>Make changes to the transaction details below.</DialogDescription>
 					</DialogHeader>
 					{editingTransaction && (
 						<div className='grid gap-4 py-4'>
@@ -1139,7 +1084,8 @@ export default function TransactionsPage() {
 											...editingTransaction,
 											type: value,
 										})
-									}>
+									}
+								>
 									<SelectTrigger className='col-span-3'>
 										<SelectValue />
 									</SelectTrigger>
@@ -1167,9 +1113,7 @@ export default function TransactionsPage() {
 								</div>
 							</div>
 							<div className='flex justify-end space-x-2 pt-4'>
-								<Button
-									variant='outline'
-									onClick={() => setIsEditDialogOpen(false)}>
+								<Button variant='outline' onClick={() => setIsEditDialogOpen(false)}>
 									Cancel
 								</Button>
 								<Button onClick={handleSaveEdit}>Save Changes</Button>

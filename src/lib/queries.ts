@@ -1,16 +1,17 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
-import { getJson, postJson, putJson, deleteJson } from './api';
-import { queryKeys } from './query-keys';
+import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { format as formatDate } from 'date-fns';
+import { deleteJson, getJson, postJson, putJson } from './api';
+import type { DashboardData } from './dashboard-types';
+import { invalidateFinanceQueries, queryKeys } from './query-keys';
 import type {
-	FinancialSummary,
-	Transaction,
 	Category,
 	CategoryRule,
 	CategorySuggestion,
+	FinancialSummary,
+	Transaction,
 } from './types';
-import { format as formatDate } from 'date-fns';
 
 // Summary
 export const useSummaryQuery = () =>
@@ -54,7 +55,7 @@ export const useDashboardQuery = (params: {
 			if (params.from) search.append('from', formatDate(params.from, 'yyyy-MM-dd'));
 			if (params.to) search.append('to', formatDate(params.to, 'yyyy-MM-dd'));
 			search.append('interval', params.interval);
-			return getJson<any>(`/api/dashboard?${search.toString()}`);
+			return getJson<DashboardData>(`/api/dashboard?${search.toString()}`);
 		},
 	});
 
@@ -112,9 +113,13 @@ export type TransactionsResponse = {
 	pagination: { total: number };
 };
 
-export const fetchTransactions = (params: TransactionsQueryParams) => {
+export const fetchTransactions = async (params: TransactionsQueryParams) => {
 	const search = buildTransactionsSearchParams(params);
-	return getJson<TransactionsResponse>(`/api/transactions?${search.toString()}`);
+	const result = await getJson<TransactionsResponse>(`/api/transactions?${search.toString()}`);
+	return {
+		...result,
+		data: result.data.map((transaction) => ({ ...transaction, date: new Date(transaction.date) })),
+	};
 };
 
 export const prefetchTransactions = (qc: QueryClient, params: TransactionsQueryParams) =>
@@ -131,27 +136,6 @@ export const useTransactionsQuery = (params: TransactionsQueryParams) => {
 	});
 };
 
-// Upload CSV
-export const useUploadMutation = () => {
-	const qc = useQueryClient();
-	return useMutation({
-		mutationFn: async (file: File) => {
-			const formData = new FormData();
-			formData.append('file', file);
-			const res = await fetch('/api/upload', { method: 'POST', body: formData });
-			if (!res.ok) {
-				const data = await res.json();
-				throw new Error(data?.message || 'Upload failed');
-			}
-			return res.json();
-		},
-		onSuccess: () => {
-			qc.invalidateQueries({ queryKey: queryKeys.summary() });
-			qc.invalidateQueries({ queryKey: ['dashboard'] });
-		},
-	});
-};
-
 // Transaction updates
 export const useUpdateTransactionMutation = () => {
 	const qc = useQueryClient();
@@ -159,11 +143,7 @@ export const useUpdateTransactionMutation = () => {
 		mutationFn: async ({ id, updates }: { id: string; updates: Partial<Transaction> }) => {
 			return putJson(`/api/transactions/${id}`, updates);
 		},
-		onSuccess: () => {
-			qc.invalidateQueries({ queryKey: ['transactions'] });
-			qc.invalidateQueries({ queryKey: queryKeys.summary() });
-			qc.invalidateQueries({ queryKey: ['dashboard'] });
-		},
+		onSuccess: () => invalidateFinanceQueries(qc),
 	});
 };
 
@@ -171,11 +151,7 @@ export const useDeleteTransactionMutation = () => {
 	const qc = useQueryClient();
 	return useMutation({
 		mutationFn: async (id: string) => deleteJson(`/api/transactions/${id}`),
-		onSuccess: () => {
-			qc.invalidateQueries({ queryKey: ['transactions'] });
-			qc.invalidateQueries({ queryKey: queryKeys.summary() });
-			qc.invalidateQueries({ queryKey: ['dashboard'] });
-		},
+		onSuccess: () => invalidateFinanceQueries(qc),
 	});
 };
 
@@ -184,7 +160,7 @@ export const useCreateCategoryMutation = () => {
 	const qc = useQueryClient();
 	return useMutation({
 		mutationFn: (payload: Partial<Category>) => postJson<Category>(`/api/categories`, payload),
-		onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.categories() }),
+		onSuccess: () => invalidateFinanceQueries(qc),
 	});
 };
 
@@ -193,7 +169,7 @@ export const useUpdateCategoryMutation = () => {
 	return useMutation({
 		mutationFn: ({ id, payload }: { id: string; payload: Partial<Category> }) =>
 			putJson<Category>(`/api/categories/${id}`, payload),
-		onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.categories() }),
+		onSuccess: () => invalidateFinanceQueries(qc),
 	});
 };
 
@@ -201,7 +177,7 @@ export const useDeleteCategoryMutation = () => {
 	const qc = useQueryClient();
 	return useMutation({
 		mutationFn: (id: string) => deleteJson(`/api/categories/${id}`),
-		onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.categories() }),
+		onSuccess: () => invalidateFinanceQueries(qc),
 	});
 };
 

@@ -1,20 +1,20 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import { useCurrencySettings } from '@/app/providers';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-	ResponsiveContainer,
-	BarChart,
-	CartesianGrid,
-	XAxis,
-	YAxis,
-	Tooltip,
-	Legend,
-	Bar,
-} from 'recharts';
 import { useDashboardQuery } from '@/lib/queries';
 import { useDashboardFilters } from '@/lib/stores/filters';
-import { useCurrencySettings } from '@/app/providers';
+import React, { useMemo } from 'react';
+import {
+	Bar,
+	BarChart,
+	CartesianGrid,
+	Legend,
+	ResponsiveContainer,
+	Tooltip,
+	XAxis,
+	YAxis,
+} from 'recharts';
 
 const MonthlyIncomeVsExpensesChart: React.FC = () => {
 	const { dateRange, interval } = useDashboardFilters();
@@ -32,17 +32,14 @@ const MonthlyIncomeVsExpensesChart: React.FC = () => {
 	});
 
 	const monthly = useMemo(() => {
-		const src = ((data as any)?.expenseIncomeOverTime ?? []) as Array<{
+		const src = (data?.expenseIncomeOverTime ?? []) as Array<{
 			dateKeyIso?: string;
 			income: number;
 			expenses: number;
 		}>;
-		const monthMap = new Map<
-			string,
-			{ monthLabel: string; income: number; expenses: number }
-		>();
+		const monthMap = new Map<string, { monthLabel: string; income: number; expenses: number }>();
 		for (const item of src) {
-			const keyIso = (item as any).dateKeyIso as string | undefined;
+			const keyIso = item.dateKeyIso;
 			if (!keyIso) continue;
 			const d = new Date(keyIso);
 			const ymKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -78,9 +75,7 @@ const MonthlyIncomeVsExpensesChart: React.FC = () => {
 								<CartesianGrid strokeDasharray='3 3' />
 								<XAxis dataKey='month' angle={-30} textAnchor='end' height={60} />
 								<YAxis />
-								<Tooltip
-									formatter={(value: any) => formatCurrency(value as number)}
-								/>
+								<Tooltip formatter={(value) => formatCurrency(value as number)} />
 								<Legend />
 								<Bar dataKey='income' name='Income' fill='var(--chart-1)' />
 								<Bar dataKey='expenses' name='Expenses' fill='var(--chart-2)' />

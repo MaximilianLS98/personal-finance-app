@@ -1,6 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
 	Dialog,
 	DialogContent,
@@ -9,13 +12,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import {
 	Select,
 	SelectContent,
@@ -24,10 +22,12 @@ import {
 	SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, CreditCard, TrendingUp, CheckCircle2 } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { getJson } from '@/lib/api';
 import type { SubscriptionCandidate, SubscriptionMatch } from '@/lib/subscription-pattern-engine';
 import type { Category } from '@/lib/types';
-import { getJson } from '@/lib/api';
+import { Calendar, CheckCircle2, CreditCard, TrendingUp } from 'lucide-react';
+import React, { useState } from 'react';
 
 interface SubscriptionDetectionData {
 	candidates: SubscriptionCandidate[];
@@ -222,9 +222,8 @@ export default function SubscriptionConfirmationDialog({
 						Subscription Detection Results
 					</DialogTitle>
 					<DialogDescription>
-						We found {candidates.length} potential new subscriptions and{' '}
-						{matches.length} existing subscription matches. Review and confirm which
-						ones you’d like to add or update.
+						We found {candidates.length} potential new subscriptions and {matches.length} existing
+						subscription matches. Review and confirm which ones you’d like to add or update.
 					</DialogDescription>
 				</DialogHeader>
 
@@ -254,58 +253,34 @@ export default function SubscriptionConfirmationDialog({
 							candidates.map((candidate, index) => {
 								const selection = candidateSelections[index];
 								return (
-									<Card
-										key={index}
-										className={
-											selection?.selected ? 'ring-2 ring-blue-500' : ''
-										}>
+									<Card key={index} className={selection?.selected ? 'ring-2 ring-blue-500' : ''}>
 										<CardHeader className='pb-3'>
 											<div className='flex items-start justify-between'>
 												<div className='flex items-center gap-3'>
 													<Checkbox
 														checked={selection?.selected || false}
 														onCheckedChange={(checked) =>
-															handleCandidateToggle(
-																index,
-																checked as boolean,
-															)
+															handleCandidateToggle(index, checked as boolean)
 														}
 													/>
 													<div>
-														<CardTitle className='text-lg'>
-															{candidate.name}
-														</CardTitle>
+														<CardTitle className='text-lg'>{candidate.name}</CardTitle>
 														<div className='flex items-center gap-2 mt-1'>
-															<Badge
-																className={getConfidenceColor(
-																	candidate.confidence,
-																)}>
-																{Math.round(
-																	candidate.confidence * 100,
-																)}
-																% confidence
+															<Badge className={getConfidenceColor(candidate.confidence)}>
+																{Math.round(candidate.confidence * 100)}% confidence
 															</Badge>
 															<Badge variant='outline'>
-																{formatFrequency(
-																	candidate.billingFrequency,
-																)}
+																{formatFrequency(candidate.billingFrequency)}
 															</Badge>
 														</div>
 													</div>
 												</div>
 												<div className='text-right'>
 													<div className='text-2xl font-bold'>
-														{formatCurrency(
-															candidate.amount,
-															candidate.currency,
-														)}
+														{formatCurrency(candidate.amount, candidate.currency)}
 													</div>
 													<div className='text-sm text-muted-foreground'>
-														per{' '}
-														{candidate.billingFrequency.replace(
-															'ly',
-															'',
-														)}
+														per {candidate.billingFrequency.replace('ly', '')}
 													</div>
 												</div>
 											</div>
@@ -313,8 +288,7 @@ export default function SubscriptionConfirmationDialog({
 										<CardContent className='space-y-4'>
 											<div className='text-sm text-muted-foreground'>
 												<p>
-													<strong>Detection reason:</strong>{' '}
-													{candidate.reason}
+													<strong>Detection reason:</strong> {candidate.reason}
 												</p>
 												<p>
 													<strong>Matching transactions:</strong>{' '}
@@ -325,41 +299,25 @@ export default function SubscriptionConfirmationDialog({
 											{selection?.selected && (
 												<div className='grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg'>
 													<div>
-														<Label htmlFor={`name-${index}`}>
-															Subscription Name
-														</Label>
+														<Label htmlFor={`name-${index}`}>Subscription Name</Label>
 														<Input
 															id={`name-${index}`}
 															placeholder={candidate.name}
 															value={selection.overrides.name || ''}
 															onChange={(e) =>
-																handleCandidateOverride(
-																	index,
-																	'name',
-																	e.target.value,
-																)
+																handleCandidateOverride(index, 'name', e.target.value)
 															}
 														/>
 													</div>
 													<div>
-														<Label htmlFor={`category-${index}`}>
-															Category
-														</Label>
+														<Label htmlFor={`category-${index}`}>Category</Label>
 														<Select
-															value={
-																selection.overrides.categoryId || ''
-															}
+															value={selection.overrides.categoryId || ''}
 															onValueChange={(value: string) =>
-																handleCandidateOverride(
-																	index,
-																	'categoryId',
-																	value,
-																)
+																handleCandidateOverride(index, 'categoryId', value)
 															}
-															disabled={
-																isLoadingCategories ||
-																categoryOptions.length === 0
-															}>
+															disabled={isLoadingCategories || categoryOptions.length === 0}
+														>
 															<SelectTrigger>
 																<SelectValue
 																	placeholder={
@@ -371,15 +329,12 @@ export default function SubscriptionConfirmationDialog({
 															</SelectTrigger>
 															<SelectContent>
 																{categoryOptions.map((cat) => (
-																	<SelectItem
-																		key={cat.id}
-																		value={cat.id}>
+																	<SelectItem key={cat.id} value={cat.id}>
 																		<div className='flex items-center gap-2'>
 																			<div
 																				className='h-3 w-3 rounded-full'
 																				style={{
-																					backgroundColor:
-																						cat.color,
+																					backgroundColor: cat.color,
 																				}}
 																			/>
 																			<span>{cat.name}</span>
@@ -390,19 +345,13 @@ export default function SubscriptionConfirmationDialog({
 														</Select>
 													</div>
 													<div className='md:col-span-2'>
-														<Label htmlFor={`notes-${index}`}>
-															Notes
-														</Label>
+														<Label htmlFor={`notes-${index}`}>Notes</Label>
 														<Textarea
 															id={`notes-${index}`}
 															placeholder='Optional notes about this subscription'
 															value={selection.overrides.notes || ''}
 															onChange={(e) =>
-																handleCandidateOverride(
-																	index,
-																	'notes',
-																	e.target.value,
-																)
+																handleCandidateOverride(index, 'notes', e.target.value)
 															}
 															rows={2}
 														/>
@@ -428,11 +377,7 @@ export default function SubscriptionConfirmationDialog({
 							</Card>
 						) : (
 							matches.map((match, index) => (
-								<Card
-									key={index}
-									className={
-										matchSelections[index] ? 'ring-2 ring-green-500' : ''
-									}>
+								<Card key={index} className={matchSelections[index] ? 'ring-2 ring-green-500' : ''}>
 									<CardHeader className='pb-3'>
 										<div className='flex items-start justify-between'>
 											<div className='flex items-center gap-3'>
@@ -443,33 +388,21 @@ export default function SubscriptionConfirmationDialog({
 													}
 												/>
 												<div>
-													<CardTitle className='text-lg'>
-														{match.subscription.name}
-													</CardTitle>
+													<CardTitle className='text-lg'>{match.subscription.name}</CardTitle>
 													<div className='flex items-center gap-2 mt-1'>
 														<Badge className='bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'>
-															{Math.round(match.confidence * 100)}%
-															match
+															{Math.round(match.confidence * 100)}% match
 														</Badge>
-														<Badge variant='outline'>
-															Existing subscription
-														</Badge>
+														<Badge variant='outline'>Existing subscription</Badge>
 													</div>
 												</div>
 											</div>
 											<div className='text-right'>
 												<div className='text-2xl font-bold'>
-													{formatCurrency(
-														match.subscription.amount,
-														match.subscription.currency,
-													)}
+													{formatCurrency(match.subscription.amount, match.subscription.currency)}
 												</div>
 												<div className='text-sm text-muted-foreground'>
-													per{' '}
-													{match.subscription.billingFrequency.replace(
-														'ly',
-														'',
-													)}
+													per {match.subscription.billingFrequency.replace('ly', '')}
 												</div>
 											</div>
 										</div>
@@ -477,8 +410,7 @@ export default function SubscriptionConfirmationDialog({
 									<CardContent>
 										<div className='text-sm text-muted-foreground'>
 											<p>
-												<strong>Transaction:</strong>{' '}
-												{match.transaction.description}
+												<strong>Transaction:</strong> {match.transaction.description}
 											</p>
 											<p>
 												<strong>Amount:</strong>{' '}
@@ -488,8 +420,7 @@ export default function SubscriptionConfirmationDialog({
 												)}
 											</p>
 											<p>
-												<strong>Date:</strong>{' '}
-												{match.transaction.date.toLocaleDateString()}
+												<strong>Date:</strong> {match.transaction.date.toLocaleDateString()}
 											</p>
 										</div>
 									</CardContent>
@@ -501,8 +432,7 @@ export default function SubscriptionConfirmationDialog({
 
 				<DialogFooter className='flex items-center justify-between'>
 					<div className='text-sm text-muted-foreground'>
-						{selectedCandidatesCount} new subscriptions and {selectedMatchesCount}{' '}
-						matches selected
+						{selectedCandidatesCount} new subscriptions and {selectedMatchesCount} matches selected
 					</div>
 					<div className='flex gap-2'>
 						<Button variant='outline' onClick={onClose} disabled={isConfirming}>
@@ -511,9 +441,9 @@ export default function SubscriptionConfirmationDialog({
 						<Button
 							onClick={handleConfirm}
 							disabled={
-								isConfirming ||
-								(selectedCandidatesCount === 0 && selectedMatchesCount === 0)
-							}>
+								isConfirming || (selectedCandidatesCount === 0 && selectedMatchesCount === 0)
+							}
+						>
 							{isConfirming
 								? 'Confirming...'
 								: `Confirm ${selectedCandidatesCount + selectedMatchesCount} Items`}

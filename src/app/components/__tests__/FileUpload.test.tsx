@@ -1,11 +1,11 @@
-import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { Transaction } from '@/lib/types';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import FileUpload from '../FileUpload';
-import { Transaction } from '@/lib/types';
 
 // Mock fetch globally
-global.fetch = jest.fn();
+const fetchMock = jest.fn();
+global.fetch = fetchMock as unknown as typeof fetch;
 
 // Mock lucide-react icons
 jest.mock('lucide-react', () => ({
@@ -22,7 +22,7 @@ describe('FileUpload Component', () => {
 
 	beforeEach(() => {
 		jest.clearAllMocks();
-		(fetch as jest.Mock).mockClear();
+		fetchMock.mockClear();
 	});
 
 	const createMockFile = (name: string, type: string, size: number = 1000): File => {
@@ -116,7 +116,7 @@ describe('FileUpload Component', () => {
 		};
 
 		// Add a delay to the mock to simulate network request
-		(fetch as jest.Mock).mockImplementationOnce(
+		fetchMock.mockImplementationOnce(
 			() =>
 				new Promise((resolve) =>
 					setTimeout(
@@ -165,7 +165,7 @@ describe('FileUpload Component', () => {
 			message: 'Invalid CSV format',
 		};
 
-		(fetch as jest.Mock).mockResolvedValueOnce({
+		fetchMock.mockResolvedValueOnce({
 			ok: false,
 			json: async () => mockErrorResponse,
 		});
@@ -188,7 +188,7 @@ describe('FileUpload Component', () => {
 	it('accepts CSV files with .csv extension regardless of MIME type', async () => {
 		const user = userEvent.setup();
 
-		(fetch as jest.Mock).mockResolvedValueOnce({
+		fetchMock.mockResolvedValueOnce({
 			ok: true,
 			json: async () => ({ success: true, data: { transactions: [], summary: {} } }),
 		});
@@ -206,4 +206,16 @@ describe('FileUpload Component', () => {
 			expect(screen.queryByText('Please select a valid CSV file')).not.toBeInTheDocument();
 		});
 	});
+});
+
+it('clears upload progress timers after a network failure', async () => {
+	const clear = jest.spyOn(global, 'clearInterval');
+	fetchMock.mockRejectedValueOnce(new Error('Network unavailable'));
+	render(<FileUpload />);
+	fireEvent.change(screen.getByTestId('file-input'), {
+		target: { files: [new File(['csv'], 'test.csv', { type: 'text/csv' })] },
+	});
+	await screen.findByText('Network unavailable');
+	expect(clear).toHaveBeenCalled();
+	clear.mockRestore();
 });
