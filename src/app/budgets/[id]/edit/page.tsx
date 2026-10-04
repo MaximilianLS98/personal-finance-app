@@ -1,14 +1,17 @@
 'use client';
+import { invalidateFinanceQueries } from '@/lib/query-keys';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Calendar as CalendarIcon } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
 	Select,
 	SelectContent,
@@ -16,13 +19,11 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@/components/ui/select';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
 
-import type { Category, Budget, BudgetScenario } from '@/lib/types';
+import type { Budget, BudgetScenario, Category } from '@/lib/types';
 
 interface FormData {
 	name: string;
@@ -38,12 +39,6 @@ interface FormData {
 }
 
 const SENTINEL_END_DATE = '9999-12-31';
-
-const toDateInput = (d: Date | string | undefined): string => {
-	if (!d) return '';
-	const date = typeof d === 'string' ? new Date(d) : d;
-	return date.toISOString().split('T')[0];
-};
 
 const isIndefinite = (endDate: Date | string | undefined): boolean => {
 	if (!endDate) return false;
@@ -133,7 +128,7 @@ export default function EditBudgetPage() {
 		if (!formData.categoryId) {
 			setFormData((prev) => ({ ...prev, categoryId: budgetData.budget.categoryId }));
 		}
-	}, [categories, budgetData]);
+	}, [categories, budgetData, formData.categoryId]);
 
 	// Update end date automatically when startDate/period change (if not indefinite)
 	useEffect(() => {
@@ -186,8 +181,7 @@ export default function EditBudgetPage() {
 			return resp.json();
 		},
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ['budget-dashboard'] });
-			queryClient.invalidateQueries({ queryKey: ['budget', budgetId] });
+			void invalidateFinanceQueries(queryClient);
 			router.push('/budgets');
 		},
 	});
@@ -295,11 +289,10 @@ export default function EditBudgetPage() {
 								<div>
 									<Label htmlFor='category'>Category</Label>
 									<Select
-										value={formData.categoryId || undefined}
-										onValueChange={(v) =>
-											setFormData((prev) => ({ ...prev, categoryId: v }))
-										}
-										required>
+										value={formData.categoryId || ''}
+										onValueChange={(v) => setFormData((prev) => ({ ...prev, categoryId: v }))}
+										required
+									>
 										<SelectTrigger>
 											<SelectValue placeholder='Select a category' />
 										</SelectTrigger>
@@ -323,7 +316,8 @@ export default function EditBudgetPage() {
 												...prev,
 												scenarioId: value === 'active' ? undefined : value,
 											}))
-										}>
+										}
+									>
 										<SelectTrigger>
 											<SelectValue placeholder='Select a scenario' />
 										</SelectTrigger>
@@ -347,7 +341,8 @@ export default function EditBudgetPage() {
 											value={formData.period}
 											onValueChange={(v: 'monthly' | 'yearly') =>
 												setFormData((prev) => ({ ...prev, period: v }))
-											}>
+											}
+										>
 											<SelectTrigger>
 												<SelectValue />
 											</SelectTrigger>
@@ -364,24 +359,18 @@ export default function EditBudgetPage() {
 											<PopoverTrigger asChild>
 												<Button
 													variant='outline'
-													className='w-full justify-start text-left font-normal'>
+													className='w-full justify-start text-left font-normal'
+												>
 													<CalendarIcon className='mr-2 h-4 w-4' />
 													{formData.startDate
-														? format(
-																new Date(formData.startDate),
-																'MMM dd, yyyy',
-															)
+														? format(new Date(formData.startDate), 'MMM dd, yyyy')
 														: 'Pick a date'}
 												</Button>
 											</PopoverTrigger>
 											<PopoverContent className='w-auto p-0'>
 												<Calendar
 													mode='single'
-													selected={
-														formData.startDate
-															? new Date(formData.startDate)
-															: undefined
-													}
+													selected={formData.startDate ? new Date(formData.startDate) : undefined}
 													onSelect={(date) => {
 														if (!date) return;
 														setFormData((prev) => ({
@@ -402,26 +391,20 @@ export default function EditBudgetPage() {
 												<Button
 													variant='outline'
 													className='w-full justify-start text-left font-normal'
-													disabled={indefinite}>
+													disabled={indefinite}
+												>
 													<CalendarIcon className='mr-2 h-4 w-4' />
 													{indefinite
 														? 'No end date'
 														: formData.endDate
-															? format(
-																	new Date(formData.endDate),
-																	'MMM dd, yyyy',
-																)
+															? format(new Date(formData.endDate), 'MMM dd, yyyy')
 															: 'Pick a date'}
 												</Button>
 											</PopoverTrigger>
 											<PopoverContent className='w-auto p-0'>
 												<Calendar
 													mode='single'
-													selected={
-														formData.endDate
-															? new Date(formData.endDate)
-															: undefined
-													}
+													selected={formData.endDate ? new Date(formData.endDate) : undefined}
 													onSelect={(date) => {
 														if (!date) return;
 														setFormData((prev) => ({
@@ -438,14 +421,8 @@ export default function EditBudgetPage() {
 
 								{/* Indefinite toggle */}
 								<div className='flex items-center space-x-2'>
-									<Switch
-										id='indefinite'
-										checked={indefinite}
-										onCheckedChange={setIndefinite}
-									/>
-									<Label htmlFor='indefinite'>
-										No end date (run indefinitely)
-									</Label>
+									<Switch id='indefinite' checked={indefinite} onCheckedChange={setIndefinite} />
+									<Label htmlFor='indefinite'>No end date (run indefinitely)</Label>
 								</div>
 
 								{/* Amount */}
@@ -478,10 +455,7 @@ export default function EditBudgetPage() {
 
 						{/* Submit */}
 						<div className='flex justify-end space-x-4'>
-							<Button
-								type='button'
-								variant='outline'
-								onClick={() => router.push('/budgets')}>
+							<Button type='button' variant='outline' onClick={() => router.push('/budgets')}>
 								Cancel
 							</Button>
 							<Button type='submit'>Save Changes</Button>

@@ -1,23 +1,21 @@
+'use client';
 /**
  * Budget Management Dashboard
  * Main page for viewing and managing budgets with progress tracking
  */
 
-'use client';
-
-import { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, TrendingUp, TrendingDown, AlertTriangle, DollarSign, Settings } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertTriangle, DollarSign, Plus, Settings, TrendingDown, TrendingUp } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-import type { Budget, BudgetProgress } from '@/lib/types';
-import type { Category } from '@/lib/types';
+import type { Budget, BudgetProgress, Category } from '@/lib/types';
 
 interface BudgetDashboardData {
 	activeBudgets: Budget[];
@@ -69,20 +67,6 @@ export default function BudgetsPage() {
 		refetchInterval: 30000, // Refresh every 30 seconds
 	});
 
-	// Status color mapping
-	const getStatusColor = (status: BudgetProgress['status']) => {
-		switch (status) {
-			case 'on-track':
-				return 'text-green-600';
-			case 'at-risk':
-				return 'text-yellow-600';
-			case 'over-budget':
-				return 'text-red-600';
-			default:
-				return 'text-gray-600';
-		}
-	};
-
 	const getStatusIcon = (status: BudgetProgress['status']) => {
 		switch (status) {
 			case 'on-track':
@@ -122,10 +106,7 @@ export default function BudgetsPage() {
 			<div className='container mx-auto px-4 py-8'>
 				<div className='text-center py-8'>
 					<p className='text-red-600 mb-4'>Error loading budget data</p>
-					<Button
-						onClick={() =>
-							queryClient.invalidateQueries({ queryKey: ['budget-dashboard'] })
-						}>
+					<Button onClick={() => queryClient.invalidateQueries({ queryKey: ['budget-dashboard'] })}>
 						Retry
 					</Button>
 				</div>
@@ -137,8 +118,7 @@ export default function BudgetsPage() {
 		return <div className='container mx-auto px-4 py-8'>No data available</div>;
 	}
 
-	const { activeBudgets, budgetProgress, totalBudgeted, totalSpent, overallStatus, alerts } =
-		dashboardData;
+	const { budgetProgress, totalBudgeted, totalSpent, overallStatus, alerts } = dashboardData;
 
 	return (
 		<div className='container mx-auto px-4 py-8'>
@@ -192,8 +172,7 @@ export default function BudgetsPage() {
 							})}
 						</div>
 						<p className='text-xs text-muted-foreground'>
-							{((totalSpent / Math.max(totalBudgeted, 1)) * 100).toFixed(1)}% of
-							budget
+							{((totalSpent / Math.max(totalBudgeted, 1)) * 100).toFixed(1)}% of budget
 						</p>
 					</CardContent>
 				</Card>
@@ -227,10 +206,9 @@ export default function BudgetsPage() {
 										? 'secondary'
 										: 'destructive'
 							}
-							className='text-sm'>
-							{overallStatus
-								.replace('-', ' ')
-								.replace(/\b\w/g, (l) => l.toUpperCase())}
+							className='text-sm'
+						>
+							{overallStatus.replace('-', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
 						</Badge>
 					</CardContent>
 				</Card>
@@ -250,7 +228,8 @@ export default function BudgetsPage() {
 							{alerts.slice(0, 3).map((alert) => (
 								<div
 									key={alert.id}
-									className='flex items-center justify-between p-2 bg-white rounded border'>
+									className='flex items-center justify-between p-2 bg-white rounded border'
+								>
 									<span className='text-sm text-yellow-800'>{alert.message}</span>
 									<Badge variant='outline' className='text-xs'>
 										{alert.alertType}
@@ -258,9 +237,7 @@ export default function BudgetsPage() {
 								</div>
 							))}
 							{alerts.length > 3 && (
-								<p className='text-xs text-yellow-700'>
-									+{alerts.length - 3} more alerts
-								</p>
+								<p className='text-xs text-yellow-700'>+{alerts.length - 3} more alerts</p>
 							)}
 						</div>
 					</CardContent>
@@ -268,9 +245,7 @@ export default function BudgetsPage() {
 			)}
 
 			{/* Budget Cards */}
-			<Tabs
-				value={viewMode}
-				onValueChange={(value) => setViewMode(value as 'monthly' | 'yearly')}>
+			<Tabs value={viewMode} onValueChange={(value) => setViewMode(value as 'monthly' | 'yearly')}>
 				<div className='flex items-center justify-between mb-6'>
 					<TabsList>
 						<TabsTrigger value='monthly'>Monthly Budgets</TabsTrigger>
@@ -283,12 +258,9 @@ export default function BudgetsPage() {
 						<Card>
 							<CardContent className='flex flex-col items-center justify-center py-16'>
 								<DollarSign className='w-12 h-12 text-muted-foreground mb-4' />
-								<h3 className='text-lg font-semibold mb-2'>
-									No {viewMode} budgets found
-								</h3>
+								<h3 className='text-lg font-semibold mb-2'>No {viewMode} budgets found</h3>
 								<p className='text-muted-foreground text-center mb-4'>
-									Create your first {viewMode} budget to start tracking your
-									spending goals.
+									Create your first {viewMode} budget to start tracking your spending goals.
 								</p>
 								<Button onClick={() => router.push('/budgets/new')}>
 									<Plus className='w-4 h-4 mr-2' />
@@ -301,18 +273,14 @@ export default function BudgetsPage() {
 							{budgetProgress
 								.filter((progress) => progress.budget.period === viewMode)
 								.map((progress) => (
-									<Card
-										key={progress.budgetId}
-										className='hover:shadow-md transition-shadow'>
+									<Card key={progress.budgetId} className='hover:shadow-md transition-shadow'>
 										<CardHeader>
 											<div className='flex items-center justify-between'>
 												<CardTitle className='text-lg flex items-center gap-2'>
 													{progress.budget.name}
 													<span className='text-xs text-muted-foreground'>
 														•{' '}
-														{categoryNameById.get(
-															progress.budget.categoryId,
-														) ?? 'Unknown category'}
+														{categoryNameById.get(progress.budget.categoryId) ?? 'Unknown category'}
 													</span>
 												</CardTitle>
 												<Badge
@@ -322,34 +290,27 @@ export default function BudgetsPage() {
 															: progress.status === 'at-risk'
 																? 'secondary'
 																: 'destructive'
-													}>
+													}
+												>
 													{progress.status.replace('-', ' ')}
 												</Badge>
 											</div>
 											{progress.budget.description && (
-												<CardDescription>
-													{progress.budget.description}
-												</CardDescription>
+												<CardDescription>{progress.budget.description}</CardDescription>
 											)}
 											<div className='mt-2 flex gap-2'>
 												<Button
 													variant='outline'
 													size='sm'
-													onClick={() =>
-														router.push(
-															`/budgets/${progress.budgetId}/edit`,
-														)
-													}>
+													onClick={() => router.push(`/budgets/${progress.budgetId}/edit`)}
+												>
 													Edit
 												</Button>
 												<Button
 													variant='ghost'
 													size='sm'
-													onClick={() =>
-														router.push(
-															`/budgets/${progress.budgetId}/analytics`,
-														)
-													}>
+													onClick={() => router.push(`/budgets/${progress.budgetId}/analytics`)}
+												>
 													View Analytics
 												</Button>
 											</div>
@@ -361,30 +322,21 @@ export default function BudgetsPage() {
 													<div className='flex justify-between text-sm mb-2'>
 														<span>
 															Spent:{' '}
-															{progress.currentSpent.toLocaleString(
-																'nb-NO',
-																{
-																	style: 'currency',
-																	currency: 'NOK',
-																},
-															)}
+															{progress.currentSpent.toLocaleString('nb-NO', {
+																style: 'currency',
+																currency: 'NOK',
+															})}
 														</span>
 														<span>
 															Budget:{' '}
-															{progress.budget.amount.toLocaleString(
-																'nb-NO',
-																{
-																	style: 'currency',
-																	currency: 'NOK',
-																},
-															)}
+															{progress.budget.amount.toLocaleString('nb-NO', {
+																style: 'currency',
+																currency: 'NOK',
+															})}
 														</span>
 													</div>
 													<Progress
-														value={Math.min(
-															progress.percentageSpent,
-															100,
-														)}
+														value={Math.min(progress.percentageSpent, 100)}
 														className={`h-2 ${
 															progress.status === 'over-budget'
 																? '[&>div]:bg-red-500'
@@ -394,14 +346,9 @@ export default function BudgetsPage() {
 														}`}
 													/>
 													<div className='flex justify-between text-xs text-muted-foreground mt-1'>
+														<span>{progress.percentageSpent.toFixed(1)}% used</span>
 														<span>
-															{progress.percentageSpent.toFixed(1)}%
-															used
-														</span>
-														<span>
-															{isIndefiniteDate(
-																progress.budget.endDate,
-															)
+															{isIndefiniteDate(progress.budget.endDate)
 																? 'ongoing'
 																: `${progress.daysRemaining} days left`}
 														</span>
@@ -411,49 +358,38 @@ export default function BudgetsPage() {
 												{/* Stats */}
 												<div className='grid grid-cols-2 gap-4 text-sm'>
 													<div>
-														<p className='text-muted-foreground'>
-															Remaining
-														</p>
+														<p className='text-muted-foreground'>Remaining</p>
 														<p className='font-medium'>
-															{progress.remainingAmount.toLocaleString(
-																'nb-NO',
-																{
-																	style: 'currency',
-																	currency: 'NOK',
-																},
-															)}
+															{progress.remainingAmount.toLocaleString('nb-NO', {
+																style: 'currency',
+																currency: 'NOK',
+															})}
 														</p>
 													</div>
 													<div>
-														<p className='text-muted-foreground'>
-															Daily Average
-														</p>
+														<p className='text-muted-foreground'>Daily Average</p>
 														<p className='font-medium'>
-															{progress.averageDailySpend.toLocaleString(
-																'nb-NO',
-																{
-																	style: 'currency',
-																	currency: 'NOK',
-																},
-															)}
+															{progress.averageDailySpend.toLocaleString('nb-NO', {
+																style: 'currency',
+																currency: 'NOK',
+															})}
 														</p>
 													</div>
 												</div>
 
 												{/* Projected spending warning */}
-												{progress.projectedSpent >
-													progress.budget.amount && (
+												{progress.projectedSpent > progress.budget.amount && (
 													<div className='flex items-center p-2 bg-red-50 rounded border border-red-200'>
 														<AlertTriangle className='w-4 h-4 text-red-600 mr-2' />
 														<span className='text-xs text-red-800'>
 															Projected to exceed budget by{' '}
-															{(
-																progress.projectedSpent -
-																progress.budget.amount
-															).toLocaleString('nb-NO', {
-																style: 'currency',
-																currency: 'NOK',
-															})}
+															{(progress.projectedSpent - progress.budget.amount).toLocaleString(
+																'nb-NO',
+																{
+																	style: 'currency',
+																	currency: 'NOK',
+																},
+															)}
 														</span>
 													</div>
 												)}

@@ -1,26 +1,37 @@
+'use client';
+import { invalidateFinanceQueries } from '@/lib/query-keys';
 /**
  * Budget Scenarios Management Page
  * Interface for creating, managing, and switching between budget scenarios
  */
 
-'use client';
-
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-	Plus,
-	Settings,
 	Archive,
-	Copy,
+	BarChart3,
 	CheckCircle,
 	Circle,
+	Copy,
+	Plus,
+	Settings,
 	Trash2,
-	BarChart3,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
-import { Button } from '@/components/ui/button';
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
 	Dialog,
@@ -33,7 +44,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import {
 	Select,
 	SelectContent,
@@ -41,17 +51,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@/components/ui/select';
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-	AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+import { Textarea } from '@/components/ui/textarea';
 
 import type { BudgetScenario } from '@/lib/types';
 
@@ -104,7 +104,7 @@ export default function BudgetScenariosPage() {
 			return response.json();
 		},
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ['budget-scenarios'] });
+			void invalidateFinanceQueries(queryClient);
 			setIsCreateDialogOpen(false);
 			setCreateForm({ name: '', description: '', copyFromScenarioId: undefined });
 		},
@@ -122,8 +122,7 @@ export default function BudgetScenariosPage() {
 			return response.json();
 		},
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ['budget-scenarios'] });
-			queryClient.invalidateQueries({ queryKey: ['budget-dashboard'] });
+			void invalidateFinanceQueries(queryClient);
 		},
 	});
 
@@ -140,7 +139,7 @@ export default function BudgetScenariosPage() {
 			return response.json();
 		},
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ['budget-scenarios'] });
+			void invalidateFinanceQueries(queryClient);
 		},
 	});
 
@@ -177,10 +176,7 @@ export default function BudgetScenariosPage() {
 			<div className='container mx-auto px-4 py-8'>
 				<div className='text-center py-8'>
 					<p className='text-red-600 mb-4'>Error loading budget scenarios</p>
-					<Button
-						onClick={() =>
-							queryClient.invalidateQueries({ queryKey: ['budget-scenarios'] })
-						}>
+					<Button onClick={() => queryClient.invalidateQueries({ queryKey: ['budget-scenarios'] })}>
 						Retry
 					</Button>
 				</div>
@@ -194,17 +190,15 @@ export default function BudgetScenariosPage() {
 	return (
 		<div className='container mx-auto px-4 py-8'>
 			{/* Header */}
-			<div className='flex justify-between items-center mb-8'>
+			<div className='flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center mb-8'>
 				<div>
 					<h1 className='text-3xl font-bold tracking-tight'>Budget Scenarios</h1>
 					<p className='text-muted-foreground mt-2'>
 						Manage different budget scenarios for various financial situations
 					</p>
 				</div>
-				<div className='flex gap-2'>
-					<Button
-						variant='outline'
-						onClick={() => router.push('/budgets/scenarios/compare')}>
+				<div className='flex flex-wrap gap-2'>
+					<Button variant='outline' onClick={() => router.push('/budgets/scenarios/compare')}>
 						<BarChart3 className='w-4 h-4 mr-2' />
 						Compare
 					</Button>
@@ -219,8 +213,7 @@ export default function BudgetScenariosPage() {
 							<DialogHeader>
 								<DialogTitle>Create Budget Scenario</DialogTitle>
 								<DialogDescription>
-									Create a new budget scenario to manage different financial
-									plans.
+									Create a new budget scenario to manage different financial plans.
 								</DialogDescription>
 							</DialogHeader>
 							<div className='space-y-4'>
@@ -229,9 +222,7 @@ export default function BudgetScenariosPage() {
 									<Input
 										id='name'
 										value={createForm.name}
-										onChange={(e) =>
-											setCreateForm({ ...createForm, name: e.target.value })
-										}
+										onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
 										placeholder='e.g., Conservative, Vacation Planning'
 									/>
 								</div>
@@ -251,25 +242,21 @@ export default function BudgetScenariosPage() {
 									/>
 								</div>
 								<div>
-									<Label htmlFor='copyFrom'>
-										Copy From Existing Scenario (Optional)
-									</Label>
+									<Label htmlFor='copyFrom'>Copy From Existing Scenario (Optional)</Label>
 									<Select
 										value={createForm.copyFromScenarioId || 'none'}
 										onValueChange={(value) =>
 											setCreateForm({
 												...createForm,
-												copyFromScenarioId:
-													value === 'none' ? undefined : value,
+												copyFromScenarioId: value === 'none' ? undefined : value,
 											})
-										}>
+										}
+									>
 										<SelectTrigger>
 											<SelectValue placeholder='Select scenario to copy from' />
 										</SelectTrigger>
 										<SelectContent>
-											<SelectItem value='none'>
-												Don&apos;t copy from existing
-											</SelectItem>
+											<SelectItem value='none'>Don&apos;t copy from existing</SelectItem>
 											{scenarios?.map((scenario) => (
 												<SelectItem key={scenario.id} value={scenario.id}>
 													{scenario.name}
@@ -280,19 +267,14 @@ export default function BudgetScenariosPage() {
 								</div>
 							</div>
 							<DialogFooter>
-								<Button
-									variant='outline'
-									onClick={() => setIsCreateDialogOpen(false)}>
+								<Button variant='outline' onClick={() => setIsCreateDialogOpen(false)}>
 									Cancel
 								</Button>
 								<Button
 									onClick={handleCreateScenario}
-									disabled={
-										!createForm.name.trim() || createScenarioMutation.isPending
-									}>
-									{createScenarioMutation.isPending
-										? 'Creating...'
-										: 'Create Scenario'}
+									disabled={!createForm.name.trim() || createScenarioMutation.isPending}
+								>
+									{createScenarioMutation.isPending ? 'Creating...' : 'Create Scenario'}
 								</Button>
 							</DialogFooter>
 						</DialogContent>
@@ -309,7 +291,7 @@ export default function BudgetScenariosPage() {
 					</h2>
 					<Card className='border-green-200 bg-green-50'>
 						<CardHeader>
-							<div className='flex items-center justify-between'>
+							<div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
 								<div>
 									<CardTitle className='flex items-center gap-2'>
 										{activeScenario.name}
@@ -318,26 +300,18 @@ export default function BudgetScenariosPage() {
 										</Badge>
 									</CardTitle>
 									{activeScenario.description && (
-										<CardDescription className='mt-2'>
-											{activeScenario.description}
-										</CardDescription>
+										<CardDescription className='mt-2'>{activeScenario.description}</CardDescription>
 									)}
 								</div>
-								<div className='flex gap-2'>
-									<Button
-										variant='outline'
-										size='sm'
-										onClick={() => router.push('/budgets')}>
+								<div className='flex flex-wrap gap-2'>
+									<Button variant='outline' size='sm' onClick={() => router.push('/budgets')}>
 										<Settings className='w-4 h-4 mr-2' />
 										Manage Budgets
 									</Button>
 									<Button
 										size='sm'
-										onClick={() =>
-											router.push(
-												`/budgets/new?scenarioId=${activeScenario.id}`,
-											)
-										}>
+										onClick={() => router.push(`/budgets/new?scenarioId=${activeScenario.id}`)}
+									>
 										<Plus className='w-4 h-4 mr-2' />
 										Add Budget
 									</Button>
@@ -348,9 +322,7 @@ export default function BudgetScenariosPage() {
 							<div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
 								<div>
 									<p className='text-sm text-muted-foreground'>Total Budgets</p>
-									<p className='text-2xl font-bold'>
-										{activeScenario.budgets.length}
-									</p>
+									<p className='text-2xl font-bold'>{activeScenario.budgets.length}</p>
 								</div>
 								<div>
 									<p className='text-sm text-muted-foreground'>Total Budgeted</p>
@@ -364,9 +336,7 @@ export default function BudgetScenariosPage() {
 								<div>
 									<p className='text-sm text-muted-foreground'>Created</p>
 									<p className='text-sm'>
-										{new Date(activeScenario.createdAt).toLocaleDateString(
-											'nb-NO',
-										)}
+										{new Date(activeScenario.createdAt).toLocaleDateString('nb-NO')}
 									</p>
 								</div>
 							</div>
@@ -388,8 +358,7 @@ export default function BudgetScenariosPage() {
 							<Archive className='w-12 h-12 text-muted-foreground mb-4' />
 							<h3 className='text-lg font-semibold mb-2'>No other scenarios</h3>
 							<p className='text-muted-foreground text-center mb-4'>
-								Create additional scenarios to plan for different financial
-								situations.
+								Create additional scenarios to plan for different financial situations.
 							</p>
 						</CardContent>
 					</Card>
@@ -398,16 +367,14 @@ export default function BudgetScenariosPage() {
 						{inactiveScenarios.map((scenario) => (
 							<Card key={scenario.id} className='hover:shadow-md transition-shadow'>
 								<CardHeader>
-									<div className='flex items-center justify-between'>
+									<div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between'>
 										<div>
 											<CardTitle className='flex items-center gap-2'>
 												<Circle className='w-4 h-4 text-gray-400' />
 												{scenario.name}
 											</CardTitle>
 											{scenario.description && (
-												<CardDescription className='mt-2'>
-													{scenario.description}
-												</CardDescription>
+												<CardDescription className='mt-2'>{scenario.description}</CardDescription>
 											)}
 										</div>
 									</div>
@@ -417,37 +384,29 @@ export default function BudgetScenariosPage() {
 										<div className='grid grid-cols-2 gap-4 text-sm'>
 											<div>
 												<p className='text-muted-foreground'>Budgets</p>
-												<p className='font-medium'>
-													{scenario.budgets.length}
-												</p>
+												<p className='font-medium'>{scenario.budgets.length}</p>
 											</div>
 											<div>
 												<p className='text-muted-foreground'>Total</p>
 												<p className='font-medium'>
-													{scenario.totalBudgeted.toLocaleString(
-														'nb-NO',
-														{
-															style: 'currency',
-															currency: 'NOK',
-														},
-													)}
+													{scenario.totalBudgeted.toLocaleString('nb-NO', {
+														style: 'currency',
+														currency: 'NOK',
+													})}
 												</p>
 											</div>
 										</div>
 
 										<div className='space-y-2'>
-											<div className='flex gap-2'>
+											<div className='flex flex-wrap gap-2'>
 												<Button
 													variant='default'
 													size='sm'
-													onClick={() =>
-														handleActivateScenario(scenario.id)
-													}
+													onClick={() => handleActivateScenario(scenario.id)}
 													disabled={activateScenarioMutation.isPending}
-													className='flex-1'>
-													{activateScenarioMutation.isPending
-														? 'Activating...'
-														: 'Activate'}
+													className='flex-1'
+												>
+													{activateScenarioMutation.isPending ? 'Activating...' : 'Activate'}
 												</Button>
 												<Button
 													variant='outline'
@@ -459,7 +418,8 @@ export default function BudgetScenariosPage() {
 															copyFromScenarioId: scenario.id,
 														});
 														setIsCreateDialogOpen(true);
-													}}>
+													}}
+												>
 													<Copy className='w-4 h-4' />
 												</Button>
 												<AlertDialog>
@@ -470,28 +430,19 @@ export default function BudgetScenariosPage() {
 													</AlertDialogTrigger>
 													<AlertDialogContent>
 														<AlertDialogHeader>
-															<AlertDialogTitle>
-																Delete Scenario
-															</AlertDialogTitle>
+															<AlertDialogTitle>Delete Scenario</AlertDialogTitle>
 															<AlertDialogDescription>
-																Are you sure you want to delete
-																&quot;
-																{scenario.name}&quot;? This action
-																cannot be undone and will remove all
-																budgets in this scenario.
+																Are you sure you want to delete &quot;
+																{scenario.name}&quot;? This action cannot be undone and will remove
+																all budgets in this scenario.
 															</AlertDialogDescription>
 														</AlertDialogHeader>
 														<AlertDialogFooter>
-															<AlertDialogCancel>
-																Cancel
-															</AlertDialogCancel>
+															<AlertDialogCancel>Cancel</AlertDialogCancel>
 															<AlertDialogAction
-																onClick={() =>
-																	handleDeleteScenario(
-																		scenario.id,
-																	)
-																}
-																className='bg-red-600 hover:bg-red-700'>
+																onClick={() => handleDeleteScenario(scenario.id)}
+																className='bg-red-600 hover:bg-red-700'
+															>
 																Delete Scenario
 															</AlertDialogAction>
 														</AlertDialogFooter>
@@ -501,12 +452,9 @@ export default function BudgetScenariosPage() {
 											<Button
 												variant='outline'
 												size='sm'
-												onClick={() =>
-													router.push(
-														`/budgets/new?scenarioId=${scenario.id}`,
-													)
-												}
-												className='w-full'>
+												onClick={() => router.push(`/budgets/new?scenarioId=${scenario.id}`)}
+												className='w-full'
+											>
 												<Plus className='w-4 h-4 mr-2' />
 												Add Budget
 											</Button>

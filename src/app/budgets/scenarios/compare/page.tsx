@@ -1,26 +1,27 @@
+'use client';
 /**
  * Budget Scenarios Comparison Page
  * Side-by-side comparison of different budget scenarios
  */
 
-'use client';
-
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
 	ArrowLeft,
-	TrendingUp,
-	TrendingDown,
-	DollarSign,
 	BarChart3,
-	PieChart,
 	Calendar,
+	DollarSign,
+	PieChart,
 	Target,
+	TrendingDown,
+	TrendingUp,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import {
 	Select,
 	SelectContent,
@@ -28,10 +29,8 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Progress } from '@/components/ui/progress';
 
 import type { BudgetScenario, Category } from '@/lib/types';
 
@@ -116,7 +115,8 @@ export default function ScenarioComparePage() {
 						<CardContent>
 							<Select
 								value={selectedScenarios[index] || ''}
-								onValueChange={(value) => handleScenarioSelect(value, index)}>
+								onValueChange={(value) => handleScenarioSelect(value, index)}
+							>
 								<SelectTrigger>
 									<SelectValue placeholder='Select a scenario to compare' />
 								</SelectTrigger>
@@ -125,7 +125,8 @@ export default function ScenarioComparePage() {
 										<SelectItem
 											key={scenario.id}
 											value={scenario.id}
-											disabled={selectedScenarios.includes(scenario.id)}>
+											disabled={selectedScenarios.includes(scenario.id)}
+										>
 											{scenario.name} {scenario.isActive && '(Active)'}
 										</SelectItem>
 									))}
@@ -151,52 +152,35 @@ export default function ScenarioComparePage() {
 						<Card>
 							<CardHeader>
 								<CardTitle>Summary Comparison</CardTitle>
-								<CardDescription>
-									High-level comparison of the selected scenarios
-								</CardDescription>
+								<CardDescription>High-level comparison of the selected scenarios</CardDescription>
 							</CardHeader>
 							<CardContent>
 								<div className='grid grid-cols-1 md:grid-cols-2 gap-8'>
-									{selectedScenarioData.map((scenario, index) => (
+									{selectedScenarioData.map((scenario, _index) => (
 										<div key={scenario.id} className='space-y-4'>
 											<div className='flex items-center gap-2'>
-												<h3 className='text-lg font-semibold'>
-													{scenario.name}
-												</h3>
-												{scenario.isActive && (
-													<Badge variant='default'>Active</Badge>
-												)}
+												<h3 className='text-lg font-semibold'>{scenario.name}</h3>
+												{scenario.isActive && <Badge variant='default'>Active</Badge>}
 											</div>
 
 											<div className='grid grid-cols-2 gap-4'>
 												<div>
-													<p className='text-sm text-muted-foreground'>
-														Total Budgets
-													</p>
-													<p className='text-2xl font-bold'>
-														{scenario.budgets.length}
-													</p>
+													<p className='text-sm text-muted-foreground'>Total Budgets</p>
+													<p className='text-2xl font-bold'>{scenario.budgets.length}</p>
 												</div>
 												<div>
-													<p className='text-sm text-muted-foreground'>
-														Total Budgeted
-													</p>
+													<p className='text-sm text-muted-foreground'>Total Budgeted</p>
 													<p className='text-2xl font-bold'>
-														{scenario.totalBudgeted.toLocaleString(
-															'nb-NO',
-															{
-																style: 'currency',
-																currency: 'NOK',
-															},
-														)}
+														{scenario.totalBudgeted.toLocaleString('nb-NO', {
+															style: 'currency',
+															currency: 'NOK',
+														})}
 													</p>
 												</div>
 											</div>
 
 											{scenario.description && (
-												<p className='text-sm text-muted-foreground'>
-													{scenario.description}
-												</p>
+												<p className='text-sm text-muted-foreground'>{scenario.description}</p>
 											)}
 										</div>
 									))}
@@ -210,9 +194,7 @@ export default function ScenarioComparePage() {
 										<div className='flex items-center gap-2'>
 											<DollarSign className='w-4 h-4 text-muted-foreground' />
 											<div>
-												<p className='text-sm text-muted-foreground'>
-													Budget Difference
-												</p>
+												<p className='text-sm text-muted-foreground'>Budget Difference</p>
 												<p className='font-medium'>
 													{Math.abs(
 														selectedScenarioData[1].totalBudgeted -
@@ -232,9 +214,7 @@ export default function ScenarioComparePage() {
 												<TrendingDown className='w-4 h-4 text-red-600' />
 											)}
 											<div>
-												<p className='text-sm text-muted-foreground'>
-													Budget Count Difference
-												</p>
+												<p className='text-sm text-muted-foreground'>Budget Count Difference</p>
 												<p className='font-medium'>
 													{Math.abs(
 														selectedScenarioData[1].budgets.length -
@@ -252,9 +232,7 @@ export default function ScenarioComparePage() {
 												<TrendingDown className='w-4 h-4 text-orange-600' />
 											)}
 											<div>
-												<p className='text-sm text-muted-foreground'>
-													Higher Budget
-												</p>
+												<p className='text-sm text-muted-foreground'>Higher Budget</p>
 												<p className='font-medium'>
 													{selectedScenarioData[1].totalBudgeted >
 													selectedScenarioData[0].totalBudgeted
@@ -280,9 +258,7 @@ export default function ScenarioComparePage() {
 								<div className='grid grid-cols-1 md:grid-cols-2 gap-8'>
 									{selectedScenarioData.map((scenario) => (
 										<div key={scenario.id} className='space-y-4'>
-											<h3 className='text-lg font-semibold border-b pb-2'>
-												{scenario.name}
-											</h3>
+											<h3 className='text-lg font-semibold border-b pb-2'>{scenario.name}</h3>
 
 											{scenario.budgets.length === 0 ? (
 												<p className='text-muted-foreground text-center py-8'>
@@ -293,27 +269,21 @@ export default function ScenarioComparePage() {
 													{scenario.budgets.map((budget) => (
 														<div
 															key={budget.id}
-															className='flex justify-between items-center p-3 bg-gray-50 rounded'>
+															className='flex justify-between items-center p-3 bg-gray-50 rounded'
+														>
 															<div>
-																<p className='font-medium'>
-																	{budget.name}
-																</p>
+																<p className='font-medium'>{budget.name}</p>
 																<p className='text-sm text-muted-foreground'>
-																	{categoryNameById.get(
-																		budget.categoryId,
-																	) || 'Unknown category'}{' '}
-																	• {budget.period}
+																	{categoryNameById.get(budget.categoryId) || 'Unknown category'} •{' '}
+																	{budget.period}
 																</p>
 															</div>
 															<div className='text-right'>
 																<p className='font-medium'>
-																	{budget.amount.toLocaleString(
-																		'nb-NO',
-																		{
-																			style: 'currency',
-																			currency: 'NOK',
-																		},
-																	)}
+																	{budget.amount.toLocaleString('nb-NO', {
+																		style: 'currency',
+																		currency: 'NOK',
+																	})}
 																</p>
 															</div>
 														</div>
@@ -342,18 +312,13 @@ export default function ScenarioComparePage() {
 							<CardContent>
 								{(() => {
 									// Calculate category allocations for each scenario
-									const getAllocations = (
-										scenario: (typeof selectedScenarioData)[0],
-									) => {
+									const getAllocations = (scenario: (typeof selectedScenarioData)[0]) => {
 										const categoryTotals = new Map<string, number>();
 										scenario.budgets.forEach((budget) => {
-											const categoryName =
-												categoryNameById.get(budget.categoryId) ||
-												'Unknown';
+											const categoryName = categoryNameById.get(budget.categoryId) || 'Unknown';
 											categoryTotals.set(
 												categoryName,
-												(categoryTotals.get(categoryName) || 0) +
-													budget.amount,
+												(categoryTotals.get(categoryName) || 0) + budget.amount,
 											);
 										});
 										return Array.from(categoryTotals.entries())
@@ -361,9 +326,7 @@ export default function ScenarioComparePage() {
 												category,
 												amount,
 												percentage:
-													scenario.totalBudgeted > 0
-														? (amount / scenario.totalBudgeted) * 100
-														: 0,
+													scenario.totalBudgeted > 0 ? (amount / scenario.totalBudgeted) * 100 : 0,
 											}))
 											.sort((a, b) => b.amount - a.amount);
 									};
@@ -377,26 +340,19 @@ export default function ScenarioComparePage() {
 									return (
 										<div className='space-y-6'>
 											{Array.from(allCategories).map((category) => {
-												const allocation1 = allocations[0].find(
-													(a) => a.category === category,
-												);
-												const allocation2 = allocations[1].find(
-													(a) => a.category === category,
-												);
+												const allocation1 = allocations[0].find((a) => a.category === category);
+												const allocation2 = allocations[1].find((a) => a.category === category);
 
 												return (
 													<div key={category} className='space-y-2'>
 														<div className='flex justify-between items-center'>
-															<h4 className='font-medium'>
-																{category}
-															</h4>
+															<h4 className='font-medium'>{category}</h4>
 															<div className='text-sm text-muted-foreground'>
 																{allocation1 && allocation2 && (
 																	<span>
 																		Difference:{' '}
 																		{Math.abs(
-																			allocation1.amount -
-																				allocation2.amount,
+																			allocation1.amount - allocation2.amount,
 																		).toLocaleString('nb-NO', {
 																			style: 'currency',
 																			currency: 'NOK',
@@ -406,48 +362,28 @@ export default function ScenarioComparePage() {
 															</div>
 														</div>
 														<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-															{selectedScenarioData.map(
-																(scenario, index) => {
-																	const allocation = allocations[
-																		index
-																	].find(
-																		(a) =>
-																			a.category === category,
-																	);
-																	return (
-																		<div
-																			key={scenario.id}
-																			className='space-y-2'>
-																			<div className='flex justify-between text-sm'>
-																				<span>
-																					{scenario.name}
-																				</span>
-																				<span>
-																					{allocation
-																						? allocation.amount.toLocaleString(
-																								'nb-NO',
-																								{
-																									style: 'currency',
-																									currency:
-																										'NOK',
-																								},
-																							)
-																						: 'NOK 0'}
-																					{allocation &&
-																						` (${allocation.percentage.toFixed(1)}%)`}
-																				</span>
-																			</div>
-																			<Progress
-																				value={
-																					allocation?.percentage ||
-																					0
-																				}
-																				className='h-2'
-																			/>
+															{selectedScenarioData.map((scenario, index) => {
+																const allocation = allocations[index].find(
+																	(a) => a.category === category,
+																);
+																return (
+																	<div key={scenario.id} className='space-y-2'>
+																		<div className='flex justify-between text-sm'>
+																			<span>{scenario.name}</span>
+																			<span>
+																				{allocation
+																					? allocation.amount.toLocaleString('nb-NO', {
+																							style: 'currency',
+																							currency: 'NOK',
+																						})
+																					: 'NOK 0'}
+																				{allocation && ` (${allocation.percentage.toFixed(1)}%)`}
+																			</span>
 																		</div>
-																	);
-																},
-															)}
+																		<Progress value={allocation?.percentage || 0} className='h-2' />
+																	</div>
+																);
+															})}
 														</div>
 													</div>
 												);
@@ -475,8 +411,7 @@ export default function ScenarioComparePage() {
 								{(() => {
 									const scenario1 = selectedScenarioData[0];
 									const scenario2 = selectedScenarioData[1];
-									const budgetDifference =
-										scenario2.totalBudgeted - scenario1.totalBudgeted;
+									const budgetDifference = scenario2.totalBudgeted - scenario1.totalBudgeted;
 									const isIncrease = budgetDifference > 0;
 
 									return (
@@ -491,19 +426,15 @@ export default function ScenarioComparePage() {
 																<TrendingDown className='w-4 h-4 text-red-600' />
 															)}
 															<div>
-																<p className='text-sm text-muted-foreground'>
-																	Budget Change
-																</p>
+																<p className='text-sm text-muted-foreground'>Budget Change</p>
 																<p
-																	className={`text-2xl font-bold ${isIncrease ? 'text-green-600' : 'text-red-600'}`}>
+																	className={`text-2xl font-bold ${isIncrease ? 'text-green-600' : 'text-red-600'}`}
+																>
 																	{isIncrease ? '+' : ''}
-																	{budgetDifference.toLocaleString(
-																		'nb-NO',
-																		{
-																			style: 'currency',
-																			currency: 'NOK',
-																		},
-																	)}
+																	{budgetDifference.toLocaleString('nb-NO', {
+																		style: 'currency',
+																		currency: 'NOK',
+																	})}
 																</p>
 															</div>
 														</div>
@@ -515,9 +446,7 @@ export default function ScenarioComparePage() {
 														<div className='flex items-center gap-2'>
 															<BarChart3 className='w-4 h-4 text-blue-600' />
 															<div>
-																<p className='text-sm text-muted-foreground'>
-																	Percentage Change
-																</p>
+																<p className='text-sm text-muted-foreground'>Percentage Change</p>
 																<p className='text-2xl font-bold text-blue-600'>
 																	{scenario1.totalBudgeted > 0
 																		? `${((budgetDifference / scenario1.totalBudgeted) * 100).toFixed(1)}%`
@@ -533,13 +462,9 @@ export default function ScenarioComparePage() {
 														<div className='flex items-center gap-2'>
 															<Calendar className='w-4 h-4 text-purple-600' />
 															<div>
-																<p className='text-sm text-muted-foreground'>
-																	Monthly Impact
-																</p>
+																<p className='text-sm text-muted-foreground'>Monthly Impact</p>
 																<p className='text-2xl font-bold text-purple-600'>
-																	{(
-																		budgetDifference / 12
-																	).toLocaleString('nb-NO', {
+																	{(budgetDifference / 12).toLocaleString('nb-NO', {
 																		style: 'currency',
 																		currency: 'NOK',
 																	})}
@@ -551,9 +476,7 @@ export default function ScenarioComparePage() {
 											</div>
 
 											<div className='space-y-4'>
-												<h4 className='font-semibold'>
-													Category-Level Impact
-												</h4>
+												<h4 className='font-semibold'>Category-Level Impact</h4>
 												{(() => {
 													// Calculate category-level changes
 													const categoryChanges = new Map<
@@ -563,24 +486,16 @@ export default function ScenarioComparePage() {
 
 													// Get all categories from both scenarios
 													const allCategories = new Set([
-														...scenario1.budgets.map(
-															(b) => b.categoryId,
-														),
-														...scenario2.budgets.map(
-															(b) => b.categoryId,
-														),
+														...scenario1.budgets.map((b) => b.categoryId),
+														...scenario2.budgets.map((b) => b.categoryId),
 													]);
 
 													allCategories.forEach((categoryId) => {
 														const fromAmount = scenario1.budgets
-															.filter(
-																(b) => b.categoryId === categoryId,
-															)
+															.filter((b) => b.categoryId === categoryId)
 															.reduce((sum, b) => sum + b.amount, 0);
 														const toAmount = scenario2.budgets
-															.filter(
-																(b) => b.categoryId === categoryId,
-															)
+															.filter((b) => b.categoryId === categoryId)
 															.reduce((sum, b) => sum + b.amount, 0);
 
 														if (fromAmount !== toAmount) {
@@ -593,54 +508,39 @@ export default function ScenarioComparePage() {
 													});
 
 													return Array.from(categoryChanges.entries())
-														.sort(
-															([, a], [, b]) =>
-																Math.abs(b.change) -
-																Math.abs(a.change),
-														)
+														.sort(([, a], [, b]) => Math.abs(b.change) - Math.abs(a.change))
 														.map(([categoryId, change]) => {
-															const categoryName =
-																categoryNameById.get(categoryId) ||
-																'Unknown';
+															const categoryName = categoryNameById.get(categoryId) || 'Unknown';
 															const isIncrease = change.change > 0;
 
 															return (
 																<div
 																	key={categoryId}
-																	className='flex justify-between items-center p-3 bg-gray-50 rounded'>
+																	className='flex justify-between items-center p-3 bg-gray-50 rounded'
+																>
 																	<div>
-																		<p className='font-medium'>
-																			{categoryName}
-																		</p>
+																		<p className='font-medium'>{categoryName}</p>
 																		<p className='text-sm text-muted-foreground'>
-																			{change.from.toLocaleString(
-																				'nb-NO',
-																				{
-																					style: 'currency',
-																					currency: 'NOK',
-																				},
-																			)}{' '}
+																			{change.from.toLocaleString('nb-NO', {
+																				style: 'currency',
+																				currency: 'NOK',
+																			})}{' '}
 																			→{' '}
-																			{change.to.toLocaleString(
-																				'nb-NO',
-																				{
-																					style: 'currency',
-																					currency: 'NOK',
-																				},
-																			)}
+																			{change.to.toLocaleString('nb-NO', {
+																				style: 'currency',
+																				currency: 'NOK',
+																			})}
 																		</p>
 																	</div>
 																	<div className='text-right'>
 																		<p
-																			className={`font-medium ${isIncrease ? 'text-green-600' : 'text-red-600'}`}>
+																			className={`font-medium ${isIncrease ? 'text-green-600' : 'text-red-600'}`}
+																		>
 																			{isIncrease ? '+' : ''}
-																			{change.change.toLocaleString(
-																				'nb-NO',
-																				{
-																					style: 'currency',
-																					currency: 'NOK',
-																				},
-																			)}
+																			{change.change.toLocaleString('nb-NO', {
+																				style: 'currency',
+																				currency: 'NOK',
+																			})}
 																		</p>
 																		<p className='text-sm text-muted-foreground'>
 																			{change.from > 0
@@ -668,9 +568,7 @@ export default function ScenarioComparePage() {
 									<Calendar className='w-5 h-5' />
 									Scenario-Based Projections
 								</CardTitle>
-								<CardDescription>
-									Project financial outcomes based on each scenario
-								</CardDescription>
+								<CardDescription>Project financial outcomes based on each scenario</CardDescription>
 							</CardHeader>
 							<CardContent>
 								<div className='space-y-6'>
@@ -684,53 +582,36 @@ export default function ScenarioComparePage() {
 												<div className='space-y-4'>
 													<div className='grid grid-cols-2 gap-4'>
 														<div>
-															<p className='text-sm text-muted-foreground'>
-																3-Month Projection
-															</p>
+															<p className='text-sm text-muted-foreground'>3-Month Projection</p>
 															<p className='text-xl font-bold'>
-																{(
-																	scenario.totalBudgeted * 0.25
-																).toLocaleString('nb-NO', {
+																{(scenario.totalBudgeted * 0.25).toLocaleString('nb-NO', {
 																	style: 'currency',
 																	currency: 'NOK',
 																})}
 															</p>
 														</div>
 														<div>
-															<p className='text-sm text-muted-foreground'>
-																6-Month Projection
-															</p>
+															<p className='text-sm text-muted-foreground'>6-Month Projection</p>
 															<p className='text-xl font-bold'>
-																{(
-																	scenario.totalBudgeted * 0.5
-																).toLocaleString('nb-NO', {
+																{(scenario.totalBudgeted * 0.5).toLocaleString('nb-NO', {
 																	style: 'currency',
 																	currency: 'NOK',
 																})}
 															</p>
 														</div>
 														<div>
-															<p className='text-sm text-muted-foreground'>
-																Annual Projection
-															</p>
+															<p className='text-sm text-muted-foreground'>Annual Projection</p>
 															<p className='text-xl font-bold'>
-																{scenario.totalBudgeted.toLocaleString(
-																	'nb-NO',
-																	{
-																		style: 'currency',
-																		currency: 'NOK',
-																	},
-																)}
+																{scenario.totalBudgeted.toLocaleString('nb-NO', {
+																	style: 'currency',
+																	currency: 'NOK',
+																})}
 															</p>
 														</div>
 														<div>
-															<p className='text-sm text-muted-foreground'>
-																Avg Monthly
-															</p>
+															<p className='text-sm text-muted-foreground'>Avg Monthly</p>
 															<p className='text-xl font-bold'>
-																{(
-																	scenario.totalBudgeted / 12
-																).toLocaleString('nb-NO', {
+																{(scenario.totalBudgeted / 12).toLocaleString('nb-NO', {
 																	style: 'currency',
 																	currency: 'NOK',
 																})}
@@ -739,44 +620,25 @@ export default function ScenarioComparePage() {
 													</div>
 
 													<div className='space-y-2'>
-														<h4 className='font-medium'>
-															Budget Distribution
-														</h4>
-														{scenario.budgets
-															.slice(0, 5)
-															.map((budget) => {
-																const percentage =
-																	scenario.totalBudgeted > 0
-																		? (budget.amount /
-																				scenario.totalBudgeted) *
-																			100
-																		: 0;
-																return (
-																	<div
-																		key={budget.id}
-																		className='space-y-1'>
-																		<div className='flex justify-between text-sm'>
-																			<span>
-																				{budget.name}
-																			</span>
-																			<span>
-																				{percentage.toFixed(
-																					1,
-																				)}
-																				%
-																			</span>
-																		</div>
-																		<Progress
-																			value={percentage}
-																			className='h-1'
-																		/>
+														<h4 className='font-medium'>Budget Distribution</h4>
+														{scenario.budgets.slice(0, 5).map((budget) => {
+															const percentage =
+																scenario.totalBudgeted > 0
+																	? (budget.amount / scenario.totalBudgeted) * 100
+																	: 0;
+															return (
+																<div key={budget.id} className='space-y-1'>
+																	<div className='flex justify-between text-sm'>
+																		<span>{budget.name}</span>
+																		<span>{percentage.toFixed(1)}%</span>
 																	</div>
-																);
-															})}
+																	<Progress value={percentage} className='h-1' />
+																</div>
+															);
+														})}
 														{scenario.budgets.length > 5 && (
 															<p className='text-sm text-muted-foreground'>
-																+{scenario.budgets.length - 5} more
-																budgets
+																+{scenario.budgets.length - 5} more budgets
 															</p>
 														)}
 													</div>
@@ -797,8 +659,7 @@ export default function ScenarioComparePage() {
 						<DollarSign className='w-12 h-12 text-muted-foreground mb-4' />
 						<h3 className='text-lg font-semibold mb-2'>Select Two Scenarios</h3>
 						<p className='text-muted-foreground text-center'>
-							Choose two scenarios from the dropdowns above to see a detailed
-							comparison.
+							Choose two scenarios from the dropdowns above to see a detailed comparison.
 						</p>
 					</CardContent>
 				</Card>
