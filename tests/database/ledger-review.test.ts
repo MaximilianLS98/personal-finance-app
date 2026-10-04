@@ -24,8 +24,17 @@ function transaction(
 	description = 'SYNTHETIC SHOP',
 ) {
 	db.query(
-		'INSERT INTO transactions(id,date,description,amount,type,category_id,currency) VALUES(?,?,?,?,?,?,?)',
-	).run(id, date, description, amount, amount > 0 ? 'income' : 'expense', category, currency);
+		'INSERT INTO transactions(id,date,description,amount,type,category_id,currency,source_key) VALUES(?,?,?,?,?,?,?,?)',
+	).run(
+		id,
+		date,
+		description,
+		amount,
+		amount > 0 ? 'income' : 'expense',
+		category,
+		currency,
+		'synthetic:' + id,
+	);
 }
 describe('split purchases and refund ledger', () => {
 	it('allocates a purchase exactly and apportions refund expenses rather than income', async () => {

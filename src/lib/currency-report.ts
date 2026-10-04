@@ -3,6 +3,7 @@ import { currencyCode, money } from './money';
 export function currencySummaries(
 	transactions: Transaction[],
 ): (FinancialSummary & { currency: string })[] {
+	const ids = new Map<string, Set<string>>();
 	const groups = new Map<string, FinancialSummary & { currency: string }>();
 	for (const t of transactions) {
 		const currency = currencyCode(t.currency);
@@ -15,7 +16,10 @@ export function currencySummaries(
 		};
 		if (t.type === 'income') g.totalIncome += t.amount;
 		if (t.type === 'expense') g.totalExpenses -= t.amount;
-		g.transactionCount++;
+		const seen = ids.get(currency) || new Set<string>();
+		seen.add(t.id);
+		ids.set(currency, seen);
+		g.transactionCount = seen.size;
 		groups.set(currency, g);
 	}
 	return [...groups.values()]
