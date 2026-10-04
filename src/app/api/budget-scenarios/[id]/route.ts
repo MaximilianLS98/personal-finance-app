@@ -5,9 +5,8 @@
  * DELETE /api/budget-scenarios/[id] - Delete/archive scenario
  */
 
-import { NextRequest, NextResponse } from 'next/server';
 import { createTransactionRepository } from '@/lib/database/repository';
-import { BudgetService } from '@/lib/budget-service';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * GET /api/budget-scenarios/[id]

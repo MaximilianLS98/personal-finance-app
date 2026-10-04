@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { createTransactionRepository } from '@/lib/database';
 import { SubscriptionBudgetIntegrationService } from '@/lib/subscription-budget-integration';
 import { ErrorResponse } from '@/lib/types';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * GET /api/subscriptions - Retrieve all subscriptions with optional filtering
@@ -99,13 +99,7 @@ export async function POST(request: NextRequest) {
 		const body = await request.json();
 
 		// Validate required fields
-		const requiredFields = [
-			'name',
-			'amount',
-			'billingFrequency',
-			'nextPaymentDate',
-			'categoryId',
-		];
+		const requiredFields = ['name', 'amount', 'billingFrequency', 'nextPaymentDate', 'categoryId'];
 		for (const field of requiredFields) {
 			if (!body[field]) {
 				return NextResponse.json(

@@ -4,20 +4,19 @@
  * POST /api/budget-scenarios - Create new budget scenario
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createTransactionRepository } from '@/lib/database/repository';
 import { BudgetService } from '@/lib/budget-service';
+import { createTransactionRepository } from '@/lib/database/repository';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * GET /api/budget-scenarios
  * List all budget scenarios with their budgets
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
 	try {
 		// Initialize repository and service
 		const repository = createTransactionRepository();
 		await repository.initialize();
-		const budgetService = new BudgetService(repository);
 
 		// Get all scenarios
 		const scenarios = await repository.findAllBudgetScenarios();
@@ -36,7 +35,7 @@ export async function GET(request: NextRequest) {
 				error: 'Failed to fetch budget scenarios',
 				message: error instanceof Error ? error.message : 'Unknown error',
 			},
-			{ status: 500 }
+			{ status: 500 },
 		);
 	}
 }
@@ -49,7 +48,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
 	try {
 		const body = await request.json();
-		
+
 		// Validate required fields
 		if (!body.name) {
 			return NextResponse.json(
@@ -58,7 +57,7 @@ export async function POST(request: NextRequest) {
 					error: 'Missing required fields',
 					message: 'Field "name" is required',
 				},
-				{ status: 400 }
+				{ status: 400 },
 			);
 		}
 
@@ -71,7 +70,7 @@ export async function POST(request: NextRequest) {
 		const scenario = await budgetService.createBudgetScenario(
 			body.name,
 			body.description,
-			body.copyFromScenarioId
+			body.copyFromScenarioId,
 		);
 
 		await repository.close();
@@ -88,7 +87,7 @@ export async function POST(request: NextRequest) {
 				error: 'Failed to create budget scenario',
 				message: error instanceof Error ? error.message : 'Unknown error',
 			},
-			{ status: 500 }
+			{ status: 500 },
 		);
 	}
 }

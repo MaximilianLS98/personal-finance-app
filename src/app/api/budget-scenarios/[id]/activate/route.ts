@@ -3,18 +3,15 @@
  * PUT /api/budget-scenarios/[id]/activate - Activate a budget scenario
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createTransactionRepository } from '@/lib/database/repository';
 import { BudgetService } from '@/lib/budget-service';
+import { createTransactionRepository } from '@/lib/database/repository';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * PUT /api/budget-scenarios/[id]/activate
  * Activate a budget scenario (deactivates all others)
  */
-export async function PUT(
-	request: NextRequest,
-	{ params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
 	try {
 		const { id } = await params;
 
@@ -40,7 +37,7 @@ export async function PUT(
 				error: 'Failed to activate budget scenario',
 				message: error instanceof Error ? error.message : 'Unknown error',
 			},
-			{ status: 500 }
+			{ status: 500 },
 		);
 	}
 }

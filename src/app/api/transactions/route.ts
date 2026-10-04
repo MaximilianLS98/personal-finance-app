@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { createTransactionRepository } from '@/lib/database';
-import { ErrorResponse } from '@/lib/types';
 import type { PaginationOptions } from '@/lib/database/types';
+import { ErrorResponse } from '@/lib/types';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * GET /api/transactions - Retrieve transactions with optional pagination and filtering
@@ -43,9 +43,33 @@ export async function GET(request: NextRequest) {
 			searchTerm: searchParams.get('search') || undefined,
 		};
 
+		if (
+			!Number.isInteger(options.page) ||
+			options.page < 1 ||
+			!Number.isInteger(options.limit) ||
+			options.limit < 1 ||
+			options.limit > 1000 ||
+			!['ASC', 'DESC'].includes(options.sortOrder!) ||
+			!['all', 'income', 'expense', 'transfer'].includes(options.transactionType!)
+		) {
+			return NextResponse.json(
+				{ error: 'INVALID_FILTER', message: 'Invalid pagination, sort order, or transaction type' },
+				{ status: 400 },
+			);
+		}
 		// Parse date range
 		const fromParam = searchParams.get('from');
 		const toParam = searchParams.get('to');
+		if (
+			(fromParam && !Number.isFinite(Date.parse(fromParam))) ||
+			(toParam && !Number.isFinite(Date.parse(toParam))) ||
+			(fromParam && toParam && new Date(fromParam) > new Date(toParam))
+		) {
+			return NextResponse.json(
+				{ error: 'INVALID_FILTER', message: 'Invalid date range' },
+				{ status: 400 },
+			);
+		}
 		if (fromParam || toParam) {
 			options.dateRange = {
 				from: fromParam ? new Date(fromParam) : undefined,

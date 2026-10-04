@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { createTransactionRepository } from '@/lib/database';
 import { SubscriptionBudgetIntegrationService } from '@/lib/subscription-budget-integration';
 import { ErrorResponse } from '@/lib/types';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * GET /api/budgets/suggestions/subscription-aware - Get subscription-aware budget suggestions
@@ -67,9 +67,7 @@ export async function GET(request: NextRequest) {
 			historicalMonths,
 		);
 		const historicalSpending =
-			period === 'yearly'
-				? spendingAnalysis.averageMonthly * 12
-				: spendingAnalysis.averageMonthly;
+			period === 'yearly' ? spendingAnalysis.averageMonthly * 12 : spendingAnalysis.averageMonthly;
 
 		// Generate subscription-aware suggestions
 		const subscriptionIntegration = new SubscriptionBudgetIntegrationService(repository);
@@ -117,8 +115,7 @@ export async function GET(request: NextRequest) {
 		return NextResponse.json(
 			{
 				error: 'INTERNAL_SERVER_ERROR',
-				message:
-					'An unexpected error occurred while generating subscription-aware suggestions',
+				message: 'An unexpected error occurred while generating subscription-aware suggestions',
 				details: error instanceof Error ? error.message : 'Unknown error',
 			} as ErrorResponse,
 			{ status: 500 },

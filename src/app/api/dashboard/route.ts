@@ -3,47 +3,23 @@
  * Provides chart data for the dashboard including expense/income over time and category breakdown
  */
 
-import { NextRequest, NextResponse } from 'next/server';
 import { createTransactionRepository } from '@/lib/database';
-import {
-	format,
-	startOfDay,
-	endOfDay,
-	startOfWeek,
-	endOfWeek,
-	startOfMonth,
-	addDays,
-	addWeeks,
-	addMonths,
-	isAfter,
-} from 'date-fns';
 import type { ErrorResponse } from '@/lib/types';
+import {
+	addDays,
+	addMonths,
+	addWeeks,
+	endOfDay,
+	endOfWeek,
+	format,
+	isAfter,
+	startOfDay,
+	startOfMonth,
+	startOfWeek,
+} from 'date-fns';
+import { NextRequest, NextResponse } from 'next/server';
 
-interface DashboardData {
-	expenseIncomeOverTime: Array<{
-		date: string;
-		dateKeyIso: string; // ISO-like key for interval start (yyyy-MM-dd)
-		income: number;
-		expenses: number;
-		net: number;
-	}>;
-	categoryBreakdown: Array<{
-		categoryId: string;
-		categoryName: string;
-		categoryColor: string;
-		amount: number;
-		count: number;
-	}>;
-	topCategoryAverages: Array<{
-		categoryId: string;
-		categoryName: string;
-		categoryColor: string;
-		totalAmount: number;
-		averagePerInterval: number;
-		intervalCount: number;
-	}>;
-	oldestDataDate?: string;
-}
+import type { DashboardData } from '@/lib/dashboard-types';
 
 /**
  * GET /api/dashboard - Get dashboard chart data
@@ -60,6 +36,20 @@ export async function GET(
 
 		let fromDate: Date | undefined;
 		let toDate: Date | undefined;
+		if (
+			!['day', 'week', 'month'].includes(intervalParam) ||
+			(fromParam && !Number.isFinite(Date.parse(fromParam))) ||
+			(toParam && !Number.isFinite(Date.parse(toParam))) ||
+			(fromParam && toParam && new Date(fromParam) > new Date(toParam))
+		) {
+			return NextResponse.json(
+				{
+					error: 'INVALID_FILTER',
+					message: 'Provide valid dates and a day, week, or month interval',
+				},
+				{ status: 400 },
+			);
+		}
 		const interval = intervalParam as 'day' | 'week' | 'month';
 
 		// Parse date parameters
@@ -152,7 +142,7 @@ export async function GET(
 		}> = [];
 
 		if (fromDate && toDate && intervalData.size > 0) {
-			let currentDate = new Date(fromDate);
+			let currentDate = new Date(getIntervalKey(fromDate, interval));
 			const endDate = new Date(toDate);
 
 			while (!isAfter(currentDate, endDate)) {
@@ -182,12 +172,10 @@ export async function GET(
 			}
 		} else {
 			// Fallback for when no date range is specified - sort by actual date, not display string
-			const sortedEntries = Array.from(intervalData.entries()).sort(
-				([dateKeyA], [dateKeyB]) => {
-					// Sort by the actual date key (yyyy-mm-dd format) not the display date
-					return dateKeyA.localeCompare(dateKeyB);
-				},
-			);
+			const sortedEntries = Array.from(intervalData.entries()).sort(([dateKeyA], [dateKeyB]) => {
+				// Sort by the actual date key (yyyy-mm-dd format) not the display date
+				return dateKeyA.localeCompare(dateKeyB);
+			});
 
 			sortedEntries.forEach(([dateKey, data]) => {
 				expenseIncomeOverTime.push({
@@ -234,7 +222,7 @@ export async function GET(
 			if (fromDate && toDate) {
 				const startDate = new Date(fromDate);
 				const endDate = new Date(toDate);
-				let currentDate = new Date(startDate);
+				let currentDate = new Date(getIntervalKey(startDate, interval));
 				intervalCount = 0;
 
 				while (!isAfter(currentDate, endDate)) {

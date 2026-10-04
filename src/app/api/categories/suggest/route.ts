@@ -3,15 +3,17 @@
  * Provides intelligent category suggestions for transaction descriptions
  */
 
-import { NextRequest, NextResponse } from 'next/server';
 import { getCategoryEngine } from '@/lib/categorization-engine';
 import type { CategorySuggestion, ErrorResponse } from '@/lib/types';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * POST /api/categories/suggest - Get category suggestion for a description
  * Body: { description: string }
  */
-export async function POST(request: NextRequest): Promise<NextResponse<CategorySuggestion | null | ErrorResponse>> {
+export async function POST(
+	request: NextRequest,
+): Promise<NextResponse<CategorySuggestion | null | ErrorResponse>> {
 	try {
 		const body = await request.json();
 		const { description } = body;
@@ -22,7 +24,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CategoryS
 					error: 'INVALID_INPUT',
 					message: 'Description is required and must be a string',
 				} as ErrorResponse,
-				{ status: 400 }
+				{ status: 400 },
 			);
 		}
 
@@ -38,7 +40,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<CategoryS
 				message: 'Failed to generate category suggestion',
 				details: error instanceof Error ? error.message : 'Unknown error',
 			} as ErrorResponse,
-			{ status: 500 }
+			{ status: 500 },
 		);
 	}
 }

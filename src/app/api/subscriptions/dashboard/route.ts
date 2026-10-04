@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { createTransactionRepository } from '@/lib/database';
 import { ErrorResponse } from '@/lib/types';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * GET /api/subscriptions/dashboard - Get subscription dashboard summary data
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
 	const repository = createTransactionRepository();
 
 	try {
@@ -28,9 +28,7 @@ export async function GET(request: NextRequest) {
 		const categories = await repository.getCategories();
 		const categoryBreakdown = await Promise.all(
 			categories.map(async (category) => {
-				const categorySubscriptions = await repository.findSubscriptionsByCategory(
-					category.id,
-				);
+				const categorySubscriptions = await repository.findSubscriptionsByCategory(category.id);
 				const activeCount = categorySubscriptions.filter((sub) => sub.isActive).length;
 
 				// Calculate monthly cost for this category
@@ -82,9 +80,7 @@ export async function GET(request: NextRequest) {
 		const thirtyDaysAgo = new Date();
 		thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-		const recentSubscriptions = activeSubscriptions.filter(
-			(sub) => sub.createdAt >= thirtyDaysAgo,
-		);
+		const recentSubscriptions = activeSubscriptions.filter((sub) => sub.createdAt >= thirtyDaysAgo);
 
 		// Calculate average subscription cost
 		const averageMonthlyCost =
@@ -147,8 +143,7 @@ export async function GET(request: NextRequest) {
 										id: highestCostSubscription.subscription.id,
 										name: highestCostSubscription.subscription.name,
 										amount: highestCostSubscription.subscription.amount,
-										billingFrequency:
-											highestCostSubscription.subscription.billingFrequency,
+										billingFrequency: highestCostSubscription.subscription.billingFrequency,
 									},
 									monthlyCost: highestCostSubscription.monthlyCost,
 								}
@@ -159,8 +154,7 @@ export async function GET(request: NextRequest) {
 										id: lowestCostSubscription.subscription.id,
 										name: lowestCostSubscription.subscription.name,
 										amount: lowestCostSubscription.subscription.amount,
-										billingFrequency:
-											lowestCostSubscription.subscription.billingFrequency,
+										billingFrequency: lowestCostSubscription.subscription.billingFrequency,
 									},
 									monthlyCost: lowestCostSubscription.monthlyCost,
 								}
@@ -174,10 +168,7 @@ export async function GET(request: NextRequest) {
 						billingFrequency: sub.billingFrequency,
 						lastUsedDate: sub.lastUsedDate,
 						daysSinceLastUse: sub.lastUsedDate
-							? Math.floor(
-									(Date.now() - sub.lastUsedDate.getTime()) /
-										(1000 * 60 * 60 * 24),
-								)
+							? Math.floor((Date.now() - sub.lastUsedDate.getTime()) / (1000 * 60 * 60 * 24))
 							: null,
 					})),
 				},

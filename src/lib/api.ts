@@ -1,56 +1,52 @@
-export type JsonOkResponse<T> = { success?: boolean; data?: T } & Record<string, unknown>;
-
 export class ApiError extends Error {
-	status: number;
-	details?: unknown;
-	constructor(message: string, status: number, details?: unknown) {
+	constructor(
+		message: string,
+		public readonly status: number,
+		public readonly details?: unknown,
+	) {
 		super(message);
 		this.name = 'ApiError';
-		this.status = status;
-		this.details = details;
 	}
 }
 
-const parseJson = async <T>(res: Response): Promise<T> => {
-	const text = await res.text();
-	try {
-		return JSON.parse(text) as T;
-	} catch {
-		// Non-JSON body
-		return text as unknown as T;
-	}
-};
-
-export const jsonFetch = async <T>(input: RequestInfo, init?: RequestInit): Promise<T> => {
+export async function jsonFetch<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
 	const res = await fetch(input, init);
-	const body = await parseJson<T>(res);
-
-	if (!res.ok) {
-		const message = (body as any)?.message || (body as any)?.error || res.statusText;
-		throw new ApiError(String(message), res.status, body);
+	const text = await res.text();
+	let body: unknown;
+	try {
+		body = text ? JSON.parse(text) : undefined;
+	} catch {
+		if (res.ok)
+			throw new ApiError('The server returned an invalid JSON response', res.status, text);
+		body = text;
 	}
-
-	return body;
-};
+	if (!res.ok) {
+		const error = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+		throw new ApiError(
+			String(error.message || error.error || res.statusText || 'Request failed'),
+			res.status,
+			body,
+		);
+	}
+	return body as T;
+}
 
 export const getJson = <T>(url: string, init?: RequestInit) =>
 	jsonFetch<T>(url, { ...init, method: 'GET' });
 
+function sendJson<T>(method: 'POST' | 'PUT', url: string, payload: unknown, init?: RequestInit) {
+	const headers = new Headers(init?.headers);
+	headers.set('Content-Type', 'application/json');
+	return jsonFetch<T>(url, {
+		...init,
+		method,
+		headers,
+		body: payload === undefined ? undefined : JSON.stringify(payload),
+	});
+}
 export const postJson = <T, P = unknown>(url: string, payload?: P, init?: RequestInit) =>
-	jsonFetch<T>(url, {
-		...init,
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
-		body: payload !== undefined ? JSON.stringify(payload) : undefined,
-	});
-
+	sendJson<T>('POST', url, payload, init);
 export const putJson = <T, P = unknown>(url: string, payload?: P, init?: RequestInit) =>
-	jsonFetch<T>(url, {
-		...init,
-		method: 'PUT',
-		headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
-		body: payload !== undefined ? JSON.stringify(payload) : undefined,
-	});
-
+	sendJson<T>('PUT', url, payload, init);
 export const deleteJson = <T>(url: string, init?: RequestInit) =>
 	jsonFetch<T>(url, { ...init, method: 'DELETE' });

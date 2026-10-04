@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createTransactionRepository } from '@/lib/database';
 import {
 	BulkTransactionProcessor,
 	type BulkUpdateOperation,
 } from '@/lib/bulk-transaction-processor';
+import { createTransactionRepository } from '@/lib/database';
 import { ErrorResponse } from '@/lib/types';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * POST /api/transactions/bulk - Handle bulk transaction operations
@@ -50,8 +50,7 @@ export async function POST(request: NextRequest) {
 						return NextResponse.json(
 							{
 								error: 'INVALID_UPDATE_OPERATION',
-								message:
-									'Each update operation must have transactionId and updates',
+								message: 'Each update operation must have transactionId and updates',
 							} as ErrorResponse,
 							{ status: 400 },
 						);

@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { createTransactionRepository } from '@/lib/database';
 import { SubscriptionBudgetIntegrationService } from '@/lib/subscription-budget-integration';
 import { ErrorResponse } from '@/lib/types';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * POST /api/subscriptions/impact-analysis - Analyze subscription change impact on budgets

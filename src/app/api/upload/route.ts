@@ -1,22 +1,9 @@
-import { parseCSV, validateCSVContent } from '@/lib/csv-parser';
-import { ErrorResponse } from '@/lib/types';
-import { createTransactionRepository } from '@/lib/database';
 import { BudgetTransactionIntegrationService } from '@/lib/budget-transaction-integration';
+import { parseCSV, validateCSVContent } from '@/lib/csv-parser';
+import { createTransactionRepository } from '@/lib/database';
 import { createSubscriptionService } from '@/lib/subscription-service';
-
-function json(data: any, init?: { status?: number }) {
-	try {
-		// eslint-disable-next-line @typescript-eslint/no-var-requires
-		const { NextResponse } = require('next/server');
-		return NextResponse.json(data, init);
-	} catch {
-		return {
-			json: async () => data,
-			status: init?.status ?? 200,
-			ok: (init?.status ?? 200) < 400,
-		};
-	}
-}
+import { ErrorResponse } from '@/lib/types';
+import { NextResponse } from 'next/server';
 
 /**
  * Maximum file size for CSV uploads (5MB)
@@ -36,7 +23,7 @@ const ALLOWED_MIME_TYPES = [
 /**
  * POST /api/upload - Handle CSV file upload and processing
  */
-export async function POST(request: any) {
+export async function POST(request: Request) {
 	try {
 		// Parse form data
 		const formData = await request.formData();
@@ -44,7 +31,7 @@ export async function POST(request: any) {
 
 		// Validate file presence
 		if (!file) {
-			return json(
+			return NextResponse.json(
 				{
 					error: 'MISSING_FILE',
 					message: 'No file provided in the request',
@@ -55,7 +42,7 @@ export async function POST(request: any) {
 
 		// Validate file size
 		if (file.size > MAX_FILE_SIZE) {
-			return json(
+			return NextResponse.json(
 				{
 					error: 'FILE_TOO_LARGE',
 					message: `File size exceeds maximum limit of ${MAX_FILE_SIZE / (1024 * 1024)}MB`,
@@ -67,7 +54,7 @@ export async function POST(request: any) {
 
 		// Validate file type
 		if (!ALLOWED_MIME_TYPES.includes(file.type) && !file.name?.toLowerCase().endsWith('.csv')) {
-			return json(
+			return NextResponse.json(
 				{
 					error: 'INVALID_FILE_TYPE',
 					message: 'File must be a CSV file',
@@ -82,7 +69,7 @@ export async function POST(request: any) {
 		try {
 			csvContent = await file.text();
 		} catch (error) {
-			return json(
+			return NextResponse.json(
 				{
 					error: 'FILE_READ_ERROR',
 					message: 'Failed to read file content',
@@ -95,7 +82,7 @@ export async function POST(request: any) {
 		// Validate CSV content
 		const contentValidation = validateCSVContent(csvContent);
 		if (!contentValidation.isValid) {
-			return json(
+			return NextResponse.json(
 				{
 					error: 'INVALID_CSV_CONTENT',
 					message: contentValidation.error || 'Invalid CSV content',
@@ -109,7 +96,7 @@ export async function POST(request: any) {
 
 		// Check if parsing was successful
 		if (parseResult.errors.length > 0 && parseResult.transactions.length === 0) {
-			return json(
+			return NextResponse.json(
 				{
 					error: 'CSV_PARSE_ERROR',
 					message: 'Failed to parse CSV file',
@@ -125,9 +112,8 @@ export async function POST(request: any) {
 			await repository.initialize();
 
 			// Create transactions without ID field for database insertion
-			// eslint-disable-next-line @typescript-eslint/no-unused-vars
 			const transactionsForDb = parseResult.transactions.map(
-				({ id, ...transaction }) => transaction,
+				({ id: _id, ...transaction }) => transaction,
 			);
 			const dbResult = await repository.createMany(transactionsForDb);
 
@@ -155,14 +141,10 @@ export async function POST(request: any) {
 					const allTransactions = await repository.findByDateRange(startDate, endDate);
 
 					// Detect subscriptions from all transactions
-					const detectionResult =
-						await subscriptionService.detectSubscriptions(allTransactions);
+					const detectionResult = await subscriptionService.detectSubscriptions(allTransactions);
 
 					// Only return detection results if we found candidates or matches
-					if (
-						detectionResult.candidates.length > 0 ||
-						detectionResult.matches.length > 0
-					) {
+					if (detectionResult.candidates.length > 0 || detectionResult.matches.length > 0) {
 						subscriptionDetection = {
 							candidates: detectionResult.candidates,
 							matches: detectionResult.matches,
@@ -177,7 +159,7 @@ export async function POST(request: any) {
 			}
 
 			// Return successful response with database result and subscription detection
-			return json(
+			return NextResponse.json(
 				{
 					success: true,
 					data: {
@@ -200,7 +182,7 @@ export async function POST(request: any) {
 		} catch (dbError) {
 			console.error('Database error during upload:', dbError);
 
-			return json(
+			return NextResponse.json(
 				{
 					error: 'DATABASE_ERROR',
 					message: 'Failed to store transactions in database',
@@ -214,7 +196,7 @@ export async function POST(request: any) {
 	} catch (error) {
 		console.error('Upload API error:', error);
 
-		return json(
+		return NextResponse.json(
 			{
 				error: 'INTERNAL_SERVER_ERROR',
 				message: 'An unexpected error occurred while processing the file',

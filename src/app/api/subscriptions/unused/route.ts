@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { createTransactionRepository } from '@/lib/database';
 import { ErrorResponse } from '@/lib/types';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * GET /api/subscriptions/unused - Get potentially unused or underutilized subscriptions
@@ -44,9 +44,6 @@ export async function GET(request: NextRequest) {
 		// Get potentially unused subscriptions
 		const unusedSubscriptions = await repository.findUnusedSubscriptions(daysSinceLastUse);
 
-		// Get all active subscriptions to analyze usage patterns
-		const allActiveSubscriptions = await repository.findActiveSubscriptions();
-
 		// Enhance with additional analysis
 		const enhancedUnusedSubscriptions = unusedSubscriptions.map((subscription) => {
 			// Calculate monthly equivalent cost
@@ -71,9 +68,7 @@ export async function GET(request: NextRequest) {
 
 			// Calculate days since last use
 			const daysSinceLastUsed = subscription.lastUsedDate
-				? Math.floor(
-						(Date.now() - subscription.lastUsedDate.getTime()) / (1000 * 60 * 60 * 24),
-					)
+				? Math.floor((Date.now() - subscription.lastUsedDate.getTime()) / (1000 * 60 * 60 * 24))
 				: null;
 
 			// Calculate subscription age
@@ -176,9 +171,7 @@ export async function GET(request: NextRequest) {
 		const wasteCategories = {
 			critical: filteredSubscriptions.filter((sub) => sub.wasteScore >= 8), // Very wasteful
 			high: filteredSubscriptions.filter((sub) => sub.wasteScore >= 6 && sub.wasteScore < 8),
-			medium: filteredSubscriptions.filter(
-				(sub) => sub.wasteScore >= 4 && sub.wasteScore < 6,
-			),
+			medium: filteredSubscriptions.filter((sub) => sub.wasteScore >= 4 && sub.wasteScore < 6),
 			low: filteredSubscriptions.filter((sub) => sub.wasteScore < 4),
 		};
 
@@ -273,8 +266,7 @@ export async function GET(request: NextRequest) {
 							? {
 									name: mostWasteful.name,
 									annualSavings: mostWasteful.annualCost,
-									recommendation:
-										'Cancel this subscription to save the most money',
+									recommendation: 'Cancel this subscription to save the most money',
 								}
 							: null,
 						quickWins: wasteCategories.critical
