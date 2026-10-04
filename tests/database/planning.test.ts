@@ -113,6 +113,25 @@ describe('budget cycles and truthful forecasts', () => {
 		expect(result.discretionaryRemaining).toBe(610);
 		expect(result.projectedSpent).toBe(480);
 	});
+
+	it('subtracts linked subscription refunds from paid bills, not from variable spending', () => {
+		// Match the companion ledger contract without requiring its migration in this worktree.
+		db.exec(`CREATE TABLE refund_links(refund_id TEXT PRIMARY KEY,purchase_id TEXT);
+   CREATE VIEW effective_transactions AS
+   SELECT id,date,description,amount,type,currency,category_id FROM transactions WHERE id NOT IN(SELECT refund_id FROM refund_links)
+   UNION ALL SELECT t.id,t.date,t.description,t.amount,'expense',t.currency,p.category_id FROM refund_links r JOIN transactions t ON t.id=r.refund_id JOIN transactions p ON p.id=r.purchase_id;`);
+		subscription('service', 100, '2026-02-05');
+		transaction('bill', '2026-02-05', -100, 'NOK', 'service');
+		transaction('food', '2026-02-06', -50);
+		transaction('receipt', '2026-02-08', 100, 'NOK', null, 'income');
+		db.exec("INSERT INTO refund_links VALUES('receipt','bill')");
+		const result = budgetForecast(db, budget, new Date('2026-02-10'));
+		expect(result.currentSpent).toBe(50);
+		expect(result.subscriptionPaid).toBe(0);
+		expect(result.variableSpent).toBe(50);
+		expect(result.projectedSpent).toBe(140);
+	});
+
 	it('keeps overdue unpaid bills committed and counts annual payments on their actual due date', () => {
 		subscription('overdue', 100, '2026-02-02');
 		subscription('annual', 1200, '2026-02-15', 'annually');

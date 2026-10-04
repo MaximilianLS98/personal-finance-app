@@ -162,10 +162,16 @@ export function budgetForecast(db: Database, budget: Budget, at = new Date()): B
 	const currentSpent = period.spent;
 	const start = new Date(period.start),
 		end = new Date(period.end);
+	const source = spendingSource(db);
+	// A refund inherits the original purchase's subscription ownership.
+	const subscriptionOwner =
+		source === 'effective_transactions'
+			? `(t.subscription_id IS NOT NULL OR EXISTS(SELECT 1 FROM refund_links r JOIN transactions p ON p.id=r.purchase_id WHERE r.refund_id=t.id AND p.subscription_id IS NOT NULL))`
+			: 't.subscription_id IS NOT NULL';
 	const paid = (
 		db
 			.query(
-				`SELECT COALESCE(SUM(-e.amount),0) AS total FROM ${spendingSource(db)} e JOIN transactions t ON t.id=e.id WHERE e.type='expense' AND e.category_id=? AND UPPER(COALESCE(NULLIF(TRIM(e.currency),''),'UNKNOWN'))=? AND t.subscription_id IS NOT NULL AND substr(e.date,1,10)>=? AND substr(e.date,1,10)<=?`,
+				`SELECT COALESCE(SUM(-e.amount),0) AS total FROM ${source} e JOIN transactions t ON t.id=e.id WHERE e.type='expense' AND e.category_id=? AND UPPER(COALESCE(NULLIF(TRIM(e.currency),''),'UNKNOWN'))=? AND ${subscriptionOwner} AND substr(e.date,1,10)>=? AND substr(e.date,1,10)<=?`,
 			)
 			.get(
 				budget.categoryId,
