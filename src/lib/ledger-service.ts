@@ -263,6 +263,10 @@ export function matchTransfer(db: Database, outgoingId: string, incomingId: stri
 				.get(outgoingId, incomingId, outgoingId, incomingId)
 		)
 			throw new Error('A transaction is already matched');
+		db.query("UPDATE transactions SET type='transfer' WHERE id IN (?,?)").run(
+			outgoingId,
+			incomingId,
+		);
 		const id = randomUUID();
 		db.query('INSERT INTO transfer_matches VALUES (?,?,?,?,?)').run(
 			id,
@@ -287,8 +291,6 @@ export function unmatchTransfer(db: Database, id: string) {
 			incoming_type: string;
 		} | null;
 		if (!p) throw new Error('Transfer not found');
-		db.query('UPDATE transactions SET type=? WHERE id=?').run(p.outgoing_type, p.outgoing_id);
-		db.query('UPDATE transactions SET type=? WHERE id=?').run(p.incoming_type, p.incoming_id);
 		db.query('DELETE FROM transfer_matches WHERE id=?').run(id);
 	})();
 }

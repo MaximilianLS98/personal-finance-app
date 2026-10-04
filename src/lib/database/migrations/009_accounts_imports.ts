@@ -30,6 +30,14 @@ export const migration009: Migration = {
 				outgoing_type TEXT NOT NULL, incoming_type TEXT NOT NULL,
 				CHECK(outgoing_id != incoming_id)
 			);
+			CREATE TRIGGER restore_transfer_types AFTER DELETE ON transfer_matches BEGIN
+				UPDATE transactions SET type=OLD.outgoing_type WHERE id=OLD.outgoing_id;
+				UPDATE transactions SET type=OLD.incoming_type WHERE id=OLD.incoming_id;
+			END;
+			CREATE TRIGGER protect_matched_transfer BEFORE UPDATE OF amount,type,date,currency,account_id ON transactions
+			WHEN EXISTS(SELECT 1 FROM transfer_matches WHERE outgoing_id=OLD.id OR incoming_id=OLD.id)
+			AND (NEW.amount IS NOT OLD.amount OR NEW.type IS NOT OLD.type OR NEW.date IS NOT OLD.date OR NEW.currency IS NOT OLD.currency OR NEW.account_id IS NOT OLD.account_id)
+			BEGIN SELECT RAISE(ABORT, 'Unmatch this transfer before changing its amount, date, currency, account or type'); END;
 			INSERT INTO schema_metadata(version) VALUES (9);
 		`);
 	},
