@@ -23,6 +23,10 @@ There is no bank synchronization, authentication, multi-user support, or hosted 
 
 Rejected CSV rows are not silently imported. Resolve the source data or mapping and preview again, or explicitly choose to import the valid rows while skipping errors. Keep unresolved rows pending for review; the app does not invent dates, amounts, or descriptions to fill them in. Duplicate detection is a review aid: legitimate repeated purchases can be retained explicitly.
 
+### Revolut statements
+
+In **Statements**, preview the Revolut CSV, select the matching currency/account, and choose one product (Current, Savings, or Pocket) per account. Only completed movements are imported; other states appear as explicit exclusions. Nonzero fees require a choice about whether Amount already includes Fee, followed by a fresh preview. See [Revolut import details](docs/revolut-import.md) for timestamps, balance reconciliation, and duplicate handling.
+
 ## Run locally
 
 Use **Bun** (validated with 1.3.9). The backend uses `bun:sqlite`, so Node alone cannot run the server.

@@ -70,3 +70,11 @@ Review and merge the PRs from bottom to top:
 4. [Planning and goals #4](https://github.com/MaximilianLS98/personal-finance-app/pull/4)
 5. [Subscriptions and calendar #5](https://github.com/MaximilianLS98/personal-finance-app/pull/5)
 6. [Backup, restore, and integrated acceptance #6](https://github.com/MaximilianLS98/personal-finance-app/pull/6)
+
+## Follow-up verification — 2026-10-05
+
+[Subscription detection #7](https://github.com/MaximilianLS98/personal-finance-app/pull/7) retains historical recurring payments, shows their last payment and recency, defaults older candidates to inactive history, and exposes explicit review of existing subscription matches. Confirmation validates linkage/currency and saves batches atomically. The private bank statement's four SATS payments are detected together as monthly history; the file remains local.
+
+[Revolut imports #8](https://github.com/MaximilianLS98/personal-finance-app/pull/8) recognizes completed movements, requires product selection for mixed Current/Savings/Pocket statements, excludes reverted/pending states, and requests an explicit interpretation for nonzero fees. The private sample has 523 rows: 521 completed movements (223 Current, 213 Savings, 85 Pocket) and two reverted entries. All 518 adjacent balance changes and independent decimal totals match. Repeat import creates no duplicates; undo restores opening balances. See [Revolut import behavior](revolut-import.md).
+
+The combined follow-up stack passes typecheck, lint, 176 Jest tests, 143 SQLite/API tests, production build, formatting, and diff checks. Browser verification exercised historical and active confirmation, linking existing payments, Revolut product/fee selection, state exclusions, and mobile layout. Synthetic import undo was verified through the API. Both original statement import and SATS regressions were rerun after Revolut integration. No private statement content is committed.

@@ -14,6 +14,8 @@ export interface Account {
 	balance: number;
 }
 export interface ImportOptions {
+	revolutProduct?: string;
+	revolutFeeMode?: ParseOptions['revolutFeeMode'];
 	accountId: string;
 	acceptErrors?: boolean;
 	currency?: string;
@@ -42,6 +44,19 @@ function validateImportOptions(value: unknown): asserts value is ImportOptions {
 	const options = value as Record<string, unknown>;
 	if (typeof options.accountId !== 'string' || !options.accountId)
 		throw new Error('Select an existing account');
+	if (
+		options.revolutFeeMode !== undefined &&
+		(typeof options.revolutFeeMode !== 'string' ||
+			!['deduct', 'included'].includes(options.revolutFeeMode))
+	)
+		throw new Error('Choose valid Revolut fee handling');
+	if (
+		options.revolutProduct !== undefined &&
+		(typeof options.revolutProduct !== 'string' ||
+			!options.revolutProduct.trim() ||
+			options.revolutProduct.length > 100)
+	)
+		throw new Error('Choose a valid Revolut product');
 	if (options.acceptErrors !== undefined && typeof options.acceptErrors !== 'boolean')
 		throw new Error('Error confirmation must be a boolean');
 	if (options.currency !== undefined && !validCurrency(options.currency))
@@ -105,20 +120,33 @@ function importRows(db: Database, content: string, options: ImportOptions) {
 	validateImportOptions(options);
 	const account = listAccounts(db).find((a) => a.id === options.accountId);
 	if (!account) throw new Error('Select an existing account before importing');
-	const parsed = parseCSV(content, { columns: options.columns });
+	const parsed = parseCSV(content, {
+		columns: options.columns,
+		revolutProduct: options.revolutProduct,
+		revolutFeeMode: options.revolutFeeMode,
+	});
 	const occurrences = new Map<string, number>();
 	const headers =
 		Papa.parse<string[]>(content.replace(/^\uFEFF/, ''), { preview: 1 }).data[0] || [];
-	const rows = parsed.transactions.map((t, index) => {
+	const rows = (parsed.requiresProductSelection ? [] : parsed.transactions).map((t, index) => {
 		const currency = t.currency || options.currency || account.currency;
 		if (currency !== account.currency)
 			throw new Error('Statement currency must match the selected account currency');
 		const identity = JSON.stringify([
 			account.id,
 			currency,
-			t.date.toISOString().slice(0, 10),
+			parsed.format === 'revolut' ? t.date.toISOString() : t.date.toISOString().slice(0, 10),
+			...(parsed.format === 'revolut'
+				? [
+						parsed.sourceMetadata?.[index].product,
+						parsed.sourceMetadata?.[index].startedDate,
+						parsed.sourceMetadata?.[index].type,
+					]
+				: []),
 			t.description,
-			t.amount,
+			...(parsed.format === 'revolut'
+				? [parsed.sourceMetadata?.[index].originalAmount, parsed.sourceMetadata?.[index].fee]
+				: [t.amount]),
 		]);
 		const occurrence = (occurrences.get(identity) || 0) + 1;
 		occurrences.set(identity, occurrence);
@@ -144,6 +172,7 @@ function importRows(db: Database, content: string, options: ImportOptions) {
 		// Description-only transfer guesses are presented as ordinary cash flows until both sides are matched.
 		return {
 			rowNumber: parsed.sourceRowNumbers[index],
+			source: parsed.sourceMetadata?.[index],
 			key,
 			duplicate: !!exact || occurrence <= legacy.n,
 			duplicateReason: exact
@@ -159,6 +188,10 @@ function importRows(db: Database, content: string, options: ImportOptions) {
 		};
 	});
 	return {
+		format: parsed.format,
+		products: parsed.products,
+		requiresProductSelection: parsed.requiresProductSelection,
+		skippedRows: parsed.skippedRows ?? [],
 		rows,
 		headers,
 		columns: parsed.columns,
@@ -179,6 +212,8 @@ export function commitImport(
 ) {
 	return db.transaction(() => {
 		const preview = importRows(db, content, options);
+		if (preview.requiresProductSelection)
+			throw new Error('Choose one Revolut product for the selected account before importing');
 		if (preview.errors.length && !options.acceptErrors)
 			throw new Error('Review rejected rows and confirm importing valid rows');
 		if (!preview.rows.length) throw new Error(preview.errors[0] || 'No valid transactions');
@@ -200,8 +235,11 @@ export function commitImport(
 			options.accountId,
 			now,
 			selected.length,
-			preview.rows.length - selected.length,
-			JSON.stringify(preview.errors),
+			preview.rows.length - selected.length + preview.skippedRows.length,
+			JSON.stringify([
+				...preview.errors,
+				...preview.skippedRows.map((row) => `Row ${row.rowNumber}: ${row.reason}`),
+			]),
 		);
 		const insert = db.query(
 			'INSERT INTO transactions(id,date,description,amount,type,currency,account_id,import_id,source_key,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
@@ -225,7 +263,7 @@ export function commitImport(
 		return {
 			id,
 			created: selected.length,
-			skipped: preview.rows.length - selected.length,
+			skipped: preview.rows.length - selected.length + preview.skippedRows.length,
 			errors: preview.errors,
 		};
 	})();
