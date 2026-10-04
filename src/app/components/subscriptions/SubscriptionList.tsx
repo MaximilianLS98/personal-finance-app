@@ -1,6 +1,21 @@
 'use client';
+import { monthlySubscriptionCost } from '@/lib/subscription-costs';
 
+import {
+	Calendar,
+	DollarSign,
+	Edit,
+	ExternalLink,
+	Filter,
+	Plus,
+	Search,
+	SortAsc,
+	SortDesc,
+	Trash2,
+} from 'lucide-react';
 import React from 'react';
+import { Badge } from '../../../components/ui/badge';
+import { Button } from '../../../components/ui/button';
 import {
 	Card,
 	CardContent,
@@ -8,8 +23,6 @@ import {
 	CardHeader,
 	CardTitle,
 } from '../../../components/ui/card';
-import { Button } from '../../../components/ui/button';
-import { Badge } from '../../../components/ui/badge';
 import { Input } from '../../../components/ui/input';
 import {
 	Select,
@@ -18,21 +31,9 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '../../../components/ui/select';
-import { Subscription, Category } from '../../../lib/types';
 import { formatCurrency } from '../../../lib/financial-calculator';
+import { Category, Subscription } from '../../../lib/types';
 import { useCurrencySettings } from '../../providers';
-import {
-	Search,
-	Filter,
-	Edit,
-	Trash2,
-	ExternalLink,
-	Calendar,
-	DollarSign,
-	SortAsc,
-	SortDesc,
-	Plus,
-} from 'lucide-react';
 
 interface SubscriptionListProps {
 	/** Array of subscriptions to display */
@@ -136,21 +137,7 @@ export function SubscriptionList({
 
 	// Helper function to get monthly amount
 	const getMonthlyAmount = (subscription: Subscription) => {
-		switch (subscription.billingFrequency) {
-			case 'monthly':
-				return subscription.amount;
-			case 'quarterly':
-				return subscription.amount / 3;
-			case 'annually':
-				return subscription.amount / 12;
-			case 'custom':
-				if (subscription.customFrequencyDays) {
-					return (subscription.amount * 30.44) / subscription.customFrequencyDays;
-				}
-				return subscription.amount;
-			default:
-				return subscription.amount;
-		}
+		return monthlySubscriptionCost(subscription);
 	};
 
 	// Handle sort change
@@ -209,8 +196,8 @@ export function SubscriptionList({
 							Subscription Management
 						</CardTitle>
 						<CardDescription>
-							{filteredAndSortedSubscriptions.length} of {subscriptions.length}{' '}
-							subscription{subscriptions.length !== 1 ? 's' : ''}
+							{filteredAndSortedSubscriptions.length} of {subscriptions.length} subscription
+							{subscriptions.length !== 1 ? 's' : ''}
 						</CardDescription>
 					</div>
 					{onAdd && (
@@ -252,7 +239,8 @@ export function SubscriptionList({
 					<Button
 						variant={showInactive ? 'default' : 'outline'}
 						onClick={() => setShowInactive(!showInactive)}
-						className='w-full sm:w-auto'>
+						className='w-full sm:w-auto'
+					>
 						{showInactive ? 'Hide Inactive' : 'Show Inactive'}
 					</Button>
 				</div>
@@ -271,7 +259,8 @@ export function SubscriptionList({
 							variant={sortField === field ? 'default' : 'outline'}
 							size='sm'
 							onClick={() => handleSort(field)}
-							className='flex items-center gap-1'>
+							className='flex items-center gap-1'
+						>
 							{label}
 							{sortField === field &&
 								(sortOrder === 'asc' ? (
@@ -291,9 +280,7 @@ export function SubscriptionList({
 						{searchTerm || selectedCategory !== 'all' ? (
 							<p className='text-sm mt-2'>Try adjusting your filters</p>
 						) : (
-							<p className='text-sm mt-2'>
-								Add your first subscription to get started
-							</p>
+							<p className='text-sm mt-2'>Add your first subscription to get started</p>
 						)}
 					</div>
 				) : (
@@ -361,7 +348,8 @@ function SubscriptionItem({
 			return (
 				<Badge
 					variant='secondary'
-					className='text-xs bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'>
+					className='text-xs bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+				>
 					Due Soon
 				</Badge>
 			);
@@ -371,13 +359,15 @@ function SubscriptionItem({
 
 	return (
 		<div
-			className={`flex items-center justify-between p-4 rounded-lg border ${subscription.isActive ? 'bg-card' : 'bg-muted/50'} hover:bg-muted/50 transition-colors`}>
+			className={`flex items-center justify-between p-4 rounded-lg border ${subscription.isActive ? 'bg-card' : 'bg-muted/50'} hover:bg-muted/50 transition-colors`}
+		>
 			<div className='flex items-center gap-4 flex-1 min-w-0'>
 				{/* Category indicator */}
 				{category && (
 					<div
 						className='h-10 w-10 rounded-full flex items-center justify-center text-white text-sm font-medium flex-shrink-0'
-						style={{ backgroundColor: category.color }}>
+						style={{ backgroundColor: category.color }}
+					>
 						{category.icon ? (
 							<span className='text-xs'>{category.icon}</span>
 						) : (
@@ -406,8 +396,7 @@ function SubscriptionItem({
 						</span>
 						<span className='flex items-center gap-1'>
 							<Calendar className='h-3 w-3' />
-							Next:{' '}
-							{new Date(subscription.nextPaymentDate).toLocaleDateString(locale)}
+							Next: {new Date(subscription.nextPaymentDate).toLocaleDateString(locale)}
 						</span>
 						{category && <span>{category.name}</span>}
 					</div>
@@ -427,7 +416,8 @@ function SubscriptionItem({
 						variant='ghost'
 						size='sm'
 						onClick={() => window.open(subscription.website, '_blank')}
-						className='h-8 w-8 p-0'>
+						className='h-8 w-8 p-0'
+					>
 						<ExternalLink className='h-4 w-4' />
 					</Button>
 				)}
@@ -437,7 +427,8 @@ function SubscriptionItem({
 						variant='ghost'
 						size='sm'
 						onClick={() => onEdit(subscription)}
-						className='h-8 w-8 p-0'>
+						className='h-8 w-8 p-0'
+					>
 						<Edit className='h-4 w-4' />
 					</Button>
 				)}
@@ -447,7 +438,8 @@ function SubscriptionItem({
 						variant='ghost'
 						size='sm'
 						onClick={() => onDelete(subscription)}
-						className='h-8 w-8 p-0 text-destructive hover:text-destructive'>
+						className='h-8 w-8 p-0 text-destructive hover:text-destructive'
+					>
 						<Trash2 className='h-4 w-4' />
 					</Button>
 				)}

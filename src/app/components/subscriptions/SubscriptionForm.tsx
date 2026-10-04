@@ -1,6 +1,10 @@
 'use client';
 
+import { format } from 'date-fns';
+import { AlertCircle, Calendar as CalendarIcon, DollarSign, Globe, Save, X } from 'lucide-react';
 import React from 'react';
+import { Button } from '../../../components/ui/button';
+import { Calendar } from '../../../components/ui/calendar';
 import {
 	Card,
 	CardContent,
@@ -8,10 +12,9 @@ import {
 	CardHeader,
 	CardTitle,
 } from '../../../components/ui/card';
-import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
 import { Label } from '../../../components/ui/label';
-import { Textarea } from '../../../components/ui/textarea';
+import { Popover, PopoverContent, PopoverTrigger } from '../../../components/ui/popover';
 import {
 	Select,
 	SelectContent,
@@ -20,12 +23,9 @@ import {
 	SelectValue,
 } from '../../../components/ui/select';
 import { Switch } from '../../../components/ui/switch';
-import { Calendar } from '../../../components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '../../../components/ui/popover';
-import { Subscription, Category } from '../../../lib/types';
+import { Textarea } from '../../../components/ui/textarea';
+import { Category, Subscription } from '../../../lib/types';
 import { useCurrencySettings } from '../../providers';
-import { Save, X, Calendar as CalendarIcon, DollarSign, Globe, AlertCircle } from 'lucide-react';
-import { format } from 'date-fns';
 
 interface SubscriptionFormProps {
 	/** Subscription to edit (undefined for new subscription) */
@@ -150,7 +150,10 @@ export function SubscriptionForm({
 	};
 
 	// Handle input changes
-	const handleInputChange = (field: keyof SubscriptionFormData, value: any) => {
+	const handleInputChange = <K extends keyof SubscriptionFormData>(
+		field: K,
+		value: SubscriptionFormData[K],
+	) => {
 		setFormData((prev) => ({ ...prev, [field]: value }));
 
 		// Clear error for this field
@@ -158,9 +161,6 @@ export function SubscriptionForm({
 			setErrors((prev) => ({ ...prev, [field]: '' }));
 		}
 	};
-
-	// Get selected category
-	const selectedCategory = categories.find((cat) => cat.id === formData.categoryId);
 
 	return (
 		<Card>
@@ -170,9 +170,7 @@ export function SubscriptionForm({
 					{subscription ? 'Edit Subscription' : 'Add New Subscription'}
 				</CardTitle>
 				<CardDescription>
-					{subscription
-						? 'Update subscription details'
-						: 'Enter details for your new subscription'}
+					{subscription ? 'Update subscription details' : 'Enter details for your new subscription'}
 				</CardDescription>
 			</CardHeader>
 			<CardContent>
@@ -203,11 +201,9 @@ export function SubscriptionForm({
 								<Label htmlFor='category'>Category *</Label>
 								<Select
 									value={formData.categoryId}
-									onValueChange={(value) =>
-										handleInputChange('categoryId', value)
-									}>
-									<SelectTrigger
-										className={errors.categoryId ? 'border-destructive' : ''}>
+									onValueChange={(value) => handleInputChange('categoryId', value)}
+								>
+									<SelectTrigger className={errors.categoryId ? 'border-destructive' : ''}>
 										<SelectValue placeholder='Select category' />
 									</SelectTrigger>
 									<SelectContent>
@@ -257,9 +253,7 @@ export function SubscriptionForm({
 									step='0.01'
 									min='0'
 									value={formData.amount}
-									onChange={(e) =>
-										handleInputChange('amount', parseFloat(e.target.value) || 0)
-									}
+									onChange={(e) => handleInputChange('amount', parseFloat(e.target.value) || 0)}
 									placeholder='0.00'
 									className={errors.amount ? 'border-destructive' : ''}
 								/>
@@ -275,7 +269,8 @@ export function SubscriptionForm({
 								<Label htmlFor='currency'>Currency</Label>
 								<Select
 									value={formData.currency}
-									onValueChange={(value) => handleInputChange('currency', value)}>
+									onValueChange={(value) => handleInputChange('currency', value)}
+								>
 									<SelectTrigger>
 										<SelectValue />
 									</SelectTrigger>
@@ -292,9 +287,13 @@ export function SubscriptionForm({
 								<Label htmlFor='frequency'>Billing Frequency *</Label>
 								<Select
 									value={formData.billingFrequency}
-									onValueChange={(value: any) =>
-										handleInputChange('billingFrequency', value)
-									}>
+									onValueChange={(value) =>
+										handleInputChange(
+											'billingFrequency',
+											value as SubscriptionFormData['billingFrequency'],
+										)
+									}
+								>
 									<SelectTrigger>
 										<SelectValue />
 									</SelectTrigger>
@@ -317,15 +316,10 @@ export function SubscriptionForm({
 									min='1'
 									value={formData.customFrequencyDays || ''}
 									onChange={(e) =>
-										handleInputChange(
-											'customFrequencyDays',
-											parseInt(e.target.value) || undefined,
-										)
+										handleInputChange('customFrequencyDays', parseInt(e.target.value) || undefined)
 									}
 									placeholder='e.g., 30 for every 30 days'
-									className={
-										errors.customFrequencyDays ? 'border-destructive' : ''
-									}
+									className={errors.customFrequencyDays ? 'border-destructive' : ''}
 								/>
 								{errors.customFrequencyDays && (
 									<p className='text-sm text-destructive flex items-center gap-1'>
@@ -340,9 +334,7 @@ export function SubscriptionForm({
 							<Label>Next Payment Date *</Label>
 							<Popover open={showCalendar} onOpenChange={setShowCalendar}>
 								<PopoverTrigger asChild>
-									<Button
-										variant='outline'
-										className='w-full justify-start text-left font-normal'>
+									<Button variant='outline' className='w-full justify-start text-left font-normal'>
 										<CalendarIcon className='mr-2 h-4 w-4' />
 										{formData.nextPaymentDate
 											? format(formData.nextPaymentDate, 'PPP')
@@ -378,9 +370,7 @@ export function SubscriptionForm({
 									<Input
 										id='website'
 										value={formData.website}
-										onChange={(e) =>
-											handleInputChange('website', e.target.value)
-										}
+										onChange={(e) => handleInputChange('website', e.target.value)}
 										placeholder='https://example.com'
 										className={`pl-10 ${errors.website ? 'border-destructive' : ''}`}
 									/>
@@ -400,9 +390,7 @@ export function SubscriptionForm({
 									<Input
 										id='cancellationUrl'
 										value={formData.cancellationUrl}
-										onChange={(e) =>
-											handleInputChange('cancellationUrl', e.target.value)
-										}
+										onChange={(e) => handleInputChange('cancellationUrl', e.target.value)}
 										placeholder='https://example.com/cancel'
 										className={`pl-10 ${errors.cancellationUrl ? 'border-destructive' : ''}`}
 									/>
@@ -421,11 +409,9 @@ export function SubscriptionForm({
 							<Select
 								value={formData.usageRating?.toString() || 'none'}
 								onValueChange={(value) =>
-									handleInputChange(
-										'usageRating',
-										value === 'none' ? undefined : parseInt(value),
-									)
-								}>
+									handleInputChange('usageRating', value === 'none' ? undefined : parseInt(value))
+								}
+							>
 								<SelectTrigger>
 									<SelectValue placeholder='Rate this subscription' />
 								</SelectTrigger>
@@ -461,9 +447,7 @@ export function SubscriptionForm({
 							<Switch
 								id='isActive'
 								checked={formData.isActive}
-								onCheckedChange={(checked) =>
-									handleInputChange('isActive', checked)
-								}
+								onCheckedChange={(checked) => handleInputChange('isActive', checked)}
 							/>
 							<Label htmlFor='isActive'>Active subscription</Label>
 						</div>

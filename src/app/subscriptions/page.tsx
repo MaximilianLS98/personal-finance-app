@@ -1,12 +1,11 @@
 'use client';
 
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { SubscriptionOverview, UpcomingPayments } from '@/app/components/subscriptions';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, Plus, Settings, TrendingUp, Search } from 'lucide-react';
+import { AlertCircle, Plus, Search, Settings, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 
 /**
@@ -39,9 +38,7 @@ export default function SubscriptionsPage() {
 			<div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
 				<div>
 					<h2 className='text-2xl font-semibold mb-2'>Subscription Tracker</h2>
-					<p className='text-muted-foreground'>
-						Manage and monitor your recurring subscriptions
-					</p>
+					<p className='text-muted-foreground'>Manage and monitor your recurring subscriptions</p>
 				</div>
 				<div className='flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end'>
 					<Button asChild variant='outline'>
@@ -130,8 +127,8 @@ export default function SubscriptionsPage() {
 							<div>
 								<h3 className='text-lg font-semibold'>No subscriptions yet</h3>
 								<p className='text-muted-foreground'>
-									Get started by adding your first subscription or detecting them
-									from your transaction data.
+									Get started by adding your first subscription or detecting them from your
+									transaction data.
 								</p>
 							</div>
 							<div className='flex gap-2 justify-center'>
@@ -139,9 +136,7 @@ export default function SubscriptionsPage() {
 									<Link href='/subscriptions/new'>Add Subscription</Link>
 								</Button>
 								<Button asChild variant='outline'>
-									<Link href='/subscriptions/detect'>
-										Detect from Transactions
-									</Link>
+									<Link href='/subscriptions/detect'>Detect from Transactions</Link>
 								</Button>
 							</div>
 						</div>

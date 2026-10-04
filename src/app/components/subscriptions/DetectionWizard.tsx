@@ -1,6 +1,19 @@
 'use client';
+import type { SubscriptionCandidate as ApiCandidate } from '@/lib/subscription-pattern-engine';
 
+import {
+	AlertTriangle,
+	Calendar,
+	CheckCircle,
+	DollarSign,
+	Loader2,
+	Search,
+	TrendingUp,
+	Wand2,
+} from 'lucide-react';
 import React from 'react';
+import { Badge } from '../../../components/ui/badge';
+import { Button } from '../../../components/ui/button';
 import {
 	Card,
 	CardContent,
@@ -8,28 +21,15 @@ import {
 	CardHeader,
 	CardTitle,
 } from '../../../components/ui/card';
-import { Button } from '../../../components/ui/button';
-import { Badge } from '../../../components/ui/badge';
-import { Progress } from '../../../components/ui/progress';
 import { Checkbox } from '../../../components/ui/checkbox';
-import { Transaction, Category } from '../../../lib/types';
+import { Progress } from '../../../components/ui/progress';
 import { formatCurrency } from '../../../lib/financial-calculator';
+import { Category, Transaction } from '../../../lib/types';
 import { useCurrencySettings } from '../../providers';
-import {
-	Search,
-	CheckCircle,
-	XCircle,
-	AlertTriangle,
-	Calendar,
-	DollarSign,
-	TrendingUp,
-	Loader2,
-	Wand2,
-} from 'lucide-react';
 
 interface DetectionWizardProps {
 	/** Detection results from API */
-	detectionResults?: any;
+	detectionResults?: { data: { candidates: ApiCandidate[] } };
 	/** Array of transactions to analyze */
 	transactions?: Transaction[];
 	/** Array of categories for assignment */
@@ -93,41 +93,37 @@ export function DetectionWizard({
 	// Convert detection results to candidates when available
 	React.useEffect(() => {
 		if (detectionResults?.data?.candidates) {
-			const convertedCandidates: SubscriptionCandidate[] =
-				detectionResults.data.candidates.map((candidate: any, index: number) => ({
-					id: candidate.id || `candidate-${index}`,
+			const convertedCandidates: SubscriptionCandidate[] = detectionResults.data.candidates.map(
+				(candidate, index) => ({
+					id: `candidate-${index}`,
 					name: candidate.name || 'Unknown Subscription',
-					description: candidate.description || candidate.name || '',
+					description: candidate.name,
 					amount: candidate.amount || 0,
-					frequency: candidate.billingFrequency || candidate.frequency || 'monthly',
+					frequency: candidate.billingFrequency,
 					confidence: candidate.confidence || 0.5,
-					transactionCount:
-						candidate.matchingTransactions?.length || candidate.transactionCount || 0,
+					transactionCount: candidate.matchingTransactions.length,
 					firstTransaction:
 						candidate.matchingTransactions?.length > 0
 							? new Date(
 									Math.min(
-										...candidate.matchingTransactions.map((t: any) =>
-											new Date(t.date).getTime(),
-										),
+										...candidate.matchingTransactions.map((t) => new Date(t.date).getTime()),
 									),
 								)
-							: new Date(candidate.firstTransaction || Date.now()),
+							: new Date(Date.now()),
 					lastTransaction:
 						candidate.matchingTransactions?.length > 0
 							? new Date(
 									Math.max(
-										...candidate.matchingTransactions.map((t: any) =>
-											new Date(t.date).getTime(),
-										),
+										...candidate.matchingTransactions.map((t) => new Date(t.date).getTime()),
 									),
 								)
-							: new Date(candidate.lastTransaction || Date.now()),
-					nextPaymentDate: new Date(candidate.nextPaymentDate || Date.now()),
-					suggestedCategoryId: candidate.categoryId || candidate.suggestedCategoryId,
-					transactions: candidate.matchingTransactions || candidate.transactions || [],
+							: new Date(Date.now()),
+					nextPaymentDate: new Date(Date.now()),
+					suggestedCategoryId: candidate.categoryId,
+					transactions: candidate.matchingTransactions,
 					selected: candidate.confidence >= 0.8, // Auto-select high confidence candidates
-				}));
+				}),
+			);
 			setCandidates(convertedCandidates);
 		}
 	}, [detectionResults]);
@@ -136,9 +132,7 @@ export function DetectionWizard({
 	const toggleCandidate = (candidateId: string) => {
 		setCandidates((prev) =>
 			prev.map((candidate) =>
-				candidate.id === candidateId
-					? { ...candidate, selected: !candidate.selected }
-					: candidate,
+				candidate.id === candidateId ? { ...candidate, selected: !candidate.selected } : candidate,
 			),
 		);
 	};
@@ -251,19 +245,19 @@ interface StartStepProps {
 	isLoading: boolean;
 }
 
-function StartStep({ transactionCount, onCancel, isLoading }: StartStepProps) {
+function StartStep({ transactionCount, onCancel }: StartStepProps) {
 	return (
 		<div className='space-y-6'>
 			<div className='text-center'>
 				<Search className='h-16 w-16 mx-auto mb-4 text-muted-foreground' />
 				<h3 className='text-lg font-medium mb-2'>Ready to Detect Subscriptions</h3>
 				<p className='text-muted-foreground'>
-					We'll analyze {transactionCount} transactions to find recurring payment patterns
+					We&apos;ll analyze {transactionCount} transactions to find recurring payment patterns
 				</p>
 			</div>
 
 			<div className='bg-muted/50 rounded-lg p-4'>
-				<h4 className='font-medium mb-2'>What we'll look for:</h4>
+				<h4 className='font-medium mb-2'>What we&apos;ll look for:</h4>
 				<ul className='text-sm text-muted-foreground space-y-1'>
 					<li>• Recurring payments with similar amounts</li>
 					<li>• Regular payment intervals (monthly, quarterly, annually)</li>
@@ -401,7 +395,8 @@ function CandidateItem({ candidate, categories, currency, locale, onToggle }: Ca
 			return (
 				<Badge
 					variant='default'
-					className='text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'>
+					className='text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+				>
 					High Confidence
 				</Badge>
 			);
@@ -422,7 +417,8 @@ function CandidateItem({ candidate, categories, currency, locale, onToggle }: Ca
 
 	return (
 		<div
-			className={`flex items-center gap-4 p-4 rounded-lg border ${candidate.selected ? 'border-primary bg-primary/5' : 'border-border'} hover:bg-muted/50 transition-colors`}>
+			className={`flex items-center gap-4 p-4 rounded-lg border ${candidate.selected ? 'border-primary bg-primary/5' : 'border-border'} hover:bg-muted/50 transition-colors`}
+		>
 			<Checkbox checked={candidate.selected} onCheckedChange={onToggle} />
 
 			<div className='flex-1 min-w-0'>
@@ -453,10 +449,7 @@ function CandidateItem({ candidate, categories, currency, locale, onToggle }: Ca
 						<>
 							<span className='text-muted-foreground'>•</span>
 							<div className='flex items-center gap-1'>
-								<div
-									className='h-2 w-2 rounded-full'
-									style={{ backgroundColor: category.color }}
-								/>
+								<div className='h-2 w-2 rounded-full' style={{ backgroundColor: category.color }} />
 								<span>{category.name}</span>
 							</div>
 						</>
@@ -486,8 +479,8 @@ function CompleteStep({ confirmedCount, onClose }: CompleteStepProps) {
 
 			<div className='bg-green-50 dark:bg-green-950 rounded-lg p-4'>
 				<p className='text-sm text-green-800 dark:text-green-200'>
-					Your subscriptions are now being tracked. You can view them in the subscription
-					dashboard and receive notifications for upcoming payments.
+					Your subscriptions are now being tracked. You can view them in the subscription dashboard
+					and receive notifications for upcoming payments.
 				</p>
 			</div>
 

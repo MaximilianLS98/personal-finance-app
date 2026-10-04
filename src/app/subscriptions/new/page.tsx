@@ -1,11 +1,12 @@
 'use client';
+import { invalidateFinanceQueries } from '@/lib/query-keys';
+import type { SubscriptionFormData } from '@/app/components/subscriptions/SubscriptionForm';
 
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { SubscriptionForm } from '@/app/components/subscriptions';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, ArrowLeft, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -39,7 +40,7 @@ export default function NewSubscriptionPage() {
 
 	// Create subscription mutation
 	const createSubscriptionMutation = useMutation({
-		mutationFn: async (subscriptionData: any) => {
+		mutationFn: async (subscriptionData: SubscriptionFormData) => {
 			const response = await fetch('/api/subscriptions', {
 				method: 'POST',
 				headers: {
@@ -55,9 +56,10 @@ export default function NewSubscriptionPage() {
 
 			return response.json();
 		},
-		onSuccess: (data) => {
+		onSuccess: (result) => {
+			const data = result.data;
 			// Invalidate and refetch subscriptions
-			queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+			void invalidateFinanceQueries(queryClient);
 			setSuccessMessage(`Subscription "${data.name}" created successfully!`);
 
 			// Redirect to subscription details after a short delay
@@ -67,7 +69,7 @@ export default function NewSubscriptionPage() {
 		},
 	});
 
-	const handleSubmit = (formData: any) => {
+	const handleSubmit = (formData: SubscriptionFormData) => {
 		createSubscriptionMutation.mutate(formData);
 	};
 
@@ -123,11 +125,9 @@ export default function NewSubscriptionPage() {
 				<CardContent>
 					<SubscriptionForm
 						categories={categories}
-						isLoading={categoriesLoading}
+						isLoading={categoriesLoading || createSubscriptionMutation.isPending}
 						onSubmit={handleSubmit}
 						onCancel={handleCancel}
-						isSubmitting={createSubscriptionMutation.isPending}
-						submitButtonText='Create Subscription'
 					/>
 				</CardContent>
 			</Card>
@@ -136,9 +136,7 @@ export default function NewSubscriptionPage() {
 			<Card className='border-dashed'>
 				<CardContent className='pt-6'>
 					<div className='text-sm text-muted-foreground space-y-2'>
-						<h4 className='font-medium text-foreground'>
-							Tips for adding subscriptions:
-						</h4>
+						<h4 className='font-medium text-foreground'>Tips for adding subscriptions:</h4>
 						<ul className='list-disc list-inside space-y-1'>
 							<li>Use the exact name as it appears on your bank statement</li>
 							<li>Set the next payment date to when you expect the next charge</li>

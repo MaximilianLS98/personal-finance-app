@@ -1,36 +1,36 @@
 'use client';
+import type { Subscription } from '@/lib/types';
 
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { useCurrencySettings } from '@/app/providers';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatCurrency } from '@/lib/financial-calculator';
 import { useQuery } from '@tanstack/react-query';
 import {
 	AlertCircle,
-	ArrowLeft,
-	TrendingUp,
-	TrendingDown,
 	AlertTriangle,
+	ArrowLeft,
+	Calendar,
 	CheckCircle,
 	DollarSign,
-	Calendar,
-	Target,
 	Lightbulb,
+	Target,
+	TrendingDown,
+	TrendingUp,
 } from 'lucide-react';
 import Link from 'next/link';
-import { formatCurrency } from '@/lib/financial-calculator';
-import { useCurrencySettings } from '@/app/providers';
 
 interface InsightData {
 	totalMonthlyCost: number;
 	totalAnnualCost: number;
 	subscriptionCount: number;
 	averageMonthlyCost: number;
-	highestCostSubscription: any;
-	lowestCostSubscription: any;
-	upcomingRenewals: any[];
-	unusedSubscriptions: any[];
+	highestCostSubscription: { id: string; name: string; amount: number } | null;
+	lowestCostSubscription: { id: string; name: string; amount: number } | null;
+	upcomingRenewals: Subscription[];
+	unusedSubscriptions: Subscription[];
 	categoryBreakdown: Array<{
 		category: string;
 		count: number;
@@ -71,17 +71,37 @@ export default function InsightsPage() {
 			if (!response.ok) {
 				throw new Error('Failed to fetch subscription insights');
 			}
-			const result = await response.json();
+			const result = (await response.json()) as {
+				success: boolean;
+				data: {
+					summary: {
+						totalMonthlyCost: number;
+						totalAnnualCost: number;
+						totalSubscriptions: number;
+						averageMonthlyCost: number;
+					};
+					costBreakdown?: {
+						topSubscriptions: { id: string; name: string; monthlyAmount: number }[];
+					};
+					upcomingPayments?: Subscription[];
+					unusedSubscriptions?: Subscription[];
+					categoryAnalysis?: {
+						category: { name: string };
+						subscriptionCount: number;
+						totalMonthlyCost: number;
+					}[];
+					recommendations?: {
+						type: string;
+						title: string;
+						description: string;
+						impact: 'high' | 'medium' | 'low';
+					}[];
+				};
+			};
 
 			// Transform backend response to frontend interface
 			if (result.success && result.data) {
-				const {
-					summary,
-					categoryAnalysis,
-					recommendations,
-					insights: backendInsights,
-					actionItems,
-				} = result.data;
+				const { summary, categoryAnalysis, recommendations } = result.data;
 
 				// Find highest and lowest cost subscriptions from cost breakdown
 				const topSubs = result.data.costBreakdown?.topSubscriptions || [];
@@ -107,32 +127,17 @@ export default function InsightsPage() {
 								amount: lowestCostSub.monthlyAmount,
 							}
 						: null,
-					// Transform upcoming payments from insights
-					upcomingRenewals:
-						backendInsights
-							?.filter((insight: any) => insight.type === 'payment_alert')
-							.map((insight: any) => ({
-								name: insight.title,
-								nextPaymentDate: new Date(), // Backend doesn't provide specific dates yet
-								amount: insight.value,
-								id: 'upcoming-' + Math.random(), // Temporary ID
-							})) || [],
-					// Transform unused subscriptions from insights
-					unusedSubscriptions:
-						backendInsights
-							?.filter((insight: any) => insight.type === 'usage_optimization')
-							.map((insight: any) => ({
-								name: insight.title,
-								amount: insight.value,
-								lastUsedDate: null, // Backend doesn't provide this yet
-								id: 'unused-' + Math.random(), // Temporary ID
-							})) || [],
+					upcomingRenewals: result.data.upcomingPayments ?? [],
+					unusedSubscriptions: result.data.unusedSubscriptions ?? [],
 					categoryBreakdown:
 						categoryAnalysis?.map((cat) => ({
 							category: cat.category.name,
 							count: cat.subscriptionCount,
 							totalCost: cat.totalMonthlyCost,
-							percentage: (cat.totalMonthlyCost / summary.totalMonthlyCost) * 100,
+							percentage:
+								summary.totalMonthlyCost > 0
+									? (cat.totalMonthlyCost / summary.totalMonthlyCost) * 100
+									: 0,
 						})) || [],
 					recommendations:
 						recommendations?.map((rec) => ({
@@ -180,19 +185,6 @@ export default function InsightsPage() {
 		if (impact === 'high') return 'default';
 		if (impact === 'medium') return 'secondary';
 		return 'outline';
-	};
-
-	const getImpactColor = (impact: string) => {
-		switch (impact) {
-			case 'high':
-				return 'text-red-600 dark:text-red-400';
-			case 'medium':
-				return 'text-yellow-600 dark:text-yellow-400';
-			case 'low':
-				return 'text-green-600 dark:text-green-400';
-			default:
-				return 'text-muted-foreground';
-		}
 	};
 
 	// Loading state
@@ -243,9 +235,7 @@ export default function InsightsPage() {
 				</Button>
 				<div>
 					<h2 className='text-2xl font-semibold mb-2'>Subscription Insights</h2>
-					<p className='text-muted-foreground'>
-						Cost analysis and optimization recommendations
-					</p>
+					<p className='text-muted-foreground'>Cost analysis and optimization recommendations</p>
 				</div>
 			</div>
 
@@ -255,15 +245,9 @@ export default function InsightsPage() {
 					<CardContent className='p-6'>
 						<div className='flex items-center justify-between'>
 							<div>
-								<p className='text-sm font-medium text-muted-foreground'>
-									Monthly Total
-								</p>
+								<p className='text-sm font-medium text-muted-foreground'>Monthly Total</p>
 								<p className='text-2xl font-bold'>
-									{formatCurrency(
-										insights?.totalMonthlyCost || 0,
-										currency,
-										locale,
-									)}
+									{formatCurrency(insights?.totalMonthlyCost || 0, currency, locale)}
 								</p>
 							</div>
 							<DollarSign className='h-8 w-8 text-blue-600' />
@@ -275,15 +259,9 @@ export default function InsightsPage() {
 					<CardContent className='p-6'>
 						<div className='flex items-center justify-between'>
 							<div>
-								<p className='text-sm font-medium text-muted-foreground'>
-									Annual Total
-								</p>
+								<p className='text-sm font-medium text-muted-foreground'>Annual Total</p>
 								<p className='text-2xl font-bold'>
-									{formatCurrency(
-										insights?.totalAnnualCost || 0,
-										currency,
-										locale,
-									)}
+									{formatCurrency(insights?.totalAnnualCost || 0, currency, locale)}
 								</p>
 							</div>
 							<Calendar className='h-8 w-8 text-purple-600' />
@@ -295,12 +273,8 @@ export default function InsightsPage() {
 					<CardContent className='p-6'>
 						<div className='flex items-center justify-between'>
 							<div>
-								<p className='text-sm font-medium text-muted-foreground'>
-									Active Subscriptions
-								</p>
-								<p className='text-2xl font-bold'>
-									{insights?.subscriptionCount || 0}
-								</p>
+								<p className='text-sm font-medium text-muted-foreground'>Active Subscriptions</p>
+								<p className='text-2xl font-bold'>{insights?.subscriptionCount || 0}</p>
 							</div>
 							<CheckCircle className='h-8 w-8 text-green-600' />
 						</div>
@@ -311,15 +285,9 @@ export default function InsightsPage() {
 					<CardContent className='p-6'>
 						<div className='flex items-center justify-between'>
 							<div>
-								<p className='text-sm font-medium text-muted-foreground'>
-									Average Monthly
-								</p>
+								<p className='text-sm font-medium text-muted-foreground'>Average Monthly</p>
 								<p className='text-2xl font-bold'>
-									{formatCurrency(
-										insights?.averageMonthlyCost || 0,
-										currency,
-										locale,
-									)}
+									{formatCurrency(insights?.averageMonthlyCost || 0, currency, locale)}
 								</p>
 							</div>
 							<Target className='h-8 w-8 text-orange-600' />
@@ -348,10 +316,9 @@ export default function InsightsPage() {
 									)}
 									<span
 										className={
-											insights.trends.monthlyGrowth >= 0
-												? 'text-green-600'
-												: 'text-red-600'
-										}>
+											insights.trends.monthlyGrowth >= 0 ? 'text-green-600' : 'text-red-600'
+										}
+									>
 										{insights.trends.monthlyGrowth >= 0 ? '+' : ''}
 										{insights.trends.monthlyGrowth.toFixed(1)}%
 									</span>
@@ -367,10 +334,9 @@ export default function InsightsPage() {
 									)}
 									<span
 										className={
-											insights.trends.yearOverYearChange >= 0
-												? 'text-green-600'
-												: 'text-red-600'
-										}>
+											insights.trends.yearOverYearChange >= 0 ? 'text-green-600' : 'text-red-600'
+										}
+									>
 										{insights.trends.yearOverYearChange >= 0 ? '+' : ''}
 										{insights.trends.yearOverYearChange.toFixed(1)}%
 									</span>
@@ -379,11 +345,7 @@ export default function InsightsPage() {
 							</div>
 							<div className='text-center'>
 								<div className='text-lg font-semibold mb-2'>
-									{formatCurrency(
-										insights.trends.projectedAnnualCost,
-										currency,
-										locale,
-									)}
+									{formatCurrency(insights.trends.projectedAnnualCost, currency, locale)}
 								</div>
 								<p className='text-sm text-muted-foreground'>Projected Annual</p>
 							</div>
@@ -403,7 +365,8 @@ export default function InsightsPage() {
 							{insights.categoryBreakdown.map((category, index) => (
 								<div
 									key={index}
-									className='flex items-center justify-between p-3 border rounded-lg'>
+									className='flex items-center justify-between p-3 border rounded-lg'
+								>
 									<div className='flex-1'>
 										<div className='flex items-center justify-between mb-1'>
 											<span className='font-medium'>{category.category}</span>
@@ -418,14 +381,11 @@ export default function InsightsPage() {
 													className='bg-primary rounded-full h-2 transition-all'
 													style={{
 														width: `${category.percentage}%`,
-													}}></div>
+													}}
+												></div>
 											</div>
 											<span className='text-sm font-medium'>
-												{formatCurrency(
-													category.totalCost,
-													currency,
-													locale,
-												)}
+												{formatCurrency(category.totalCost, currency, locale)}
 											</span>
 											<span className='text-sm text-muted-foreground'>
 												{category.percentage.toFixed(1)}%
@@ -451,9 +411,7 @@ export default function InsightsPage() {
 					<CardContent>
 						<div className='space-y-4'>
 							{insights.recommendations.map((recommendation, index) => (
-								<div
-									key={index}
-									className='flex items-start gap-4 p-4 border rounded-lg'>
+								<div key={index} className='flex items-start gap-4 p-4 border rounded-lg'>
 									<div className='flex-shrink-0 mt-1'>
 										{getRecommendationIcon(recommendation.type)}
 									</div>
@@ -465,7 +423,8 @@ export default function InsightsPage() {
 													recommendation.type,
 													recommendation.impact,
 												)}
-												className='text-xs'>
+												className='text-xs'
+											>
 												{recommendation.impact} impact
 											</Badge>
 										</div>
@@ -474,8 +433,7 @@ export default function InsightsPage() {
 										</p>
 										{recommendation.subscriptionId && (
 											<Button asChild variant='outline' size='sm'>
-												<Link
-													href={`/subscriptions/${recommendation.subscriptionId}`}>
+												<Link href={`/subscriptions/${recommendation.subscriptionId}`}>
 													View Subscription
 												</Link>
 											</Button>
@@ -502,14 +460,13 @@ export default function InsightsPage() {
 							{insights.upcomingRenewals.map((renewal, index) => (
 								<div
 									key={index}
-									className='flex items-center justify-between p-3 border rounded-lg'>
+									className='flex items-center justify-between p-3 border rounded-lg'
+								>
 									<div>
 										<h4 className='font-medium'>{renewal.name}</h4>
 										<p className='text-sm text-muted-foreground'>
-											{new Date(renewal.nextPaymentDate).toLocaleDateString(
-												locale,
-											)}{' '}
-											•{formatCurrency(renewal.amount, currency, locale)}
+											{new Date(renewal.nextPaymentDate).toLocaleDateString(locale)} •
+											{formatCurrency(renewal.amount, currency, locale)}
 										</p>
 									</div>
 									<Button asChild variant='outline' size='sm'>
@@ -536,24 +493,20 @@ export default function InsightsPage() {
 							{insights.unusedSubscriptions.map((subscription, index) => (
 								<div
 									key={index}
-									className='flex items-center justify-between p-3 border border-yellow-200 dark:border-yellow-800 rounded-lg bg-white dark:bg-gray-900'>
+									className='flex items-center justify-between p-3 border border-yellow-200 dark:border-yellow-800 rounded-lg bg-white dark:bg-gray-900'
+								>
 									<div>
 										<h4 className='font-medium'>{subscription.name}</h4>
 										<p className='text-sm text-muted-foreground'>
-											{formatCurrency(subscription.amount, currency, locale)}{' '}
-											• Last used:{' '}
+											{formatCurrency(subscription.amount, currency, locale)} • Last used:{' '}
 											{subscription.lastUsedDate
-												? new Date(
-														subscription.lastUsedDate,
-													).toLocaleDateString(locale)
+												? new Date(subscription.lastUsedDate).toLocaleDateString(locale)
 												: 'Never'}
 										</p>
 									</div>
 									<div className='flex gap-2'>
 										<Button asChild variant='outline' size='sm'>
-											<Link href={`/subscriptions/${subscription.id}`}>
-												Review
-											</Link>
+											<Link href={`/subscriptions/${subscription.id}`}>Review</Link>
 										</Button>
 									</div>
 								</div>

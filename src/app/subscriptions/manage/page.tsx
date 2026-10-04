@@ -1,9 +1,11 @@
 'use client';
+import { invalidateFinanceQueries } from '@/lib/query-keys';
+import type { Subscription } from '@/lib/types';
 
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { SubscriptionList } from '@/app/components/subscriptions';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
 	Dialog,
 	DialogContent,
@@ -12,11 +14,11 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from '@/components/ui/dialog';
-import { SubscriptionList } from '@/app/components/subscriptions';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Plus, ArrowLeft, Trash2 } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertCircle, ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import React from 'react';
 
 /**
  * Subscription management page
@@ -25,7 +27,7 @@ import { useRouter } from 'next/navigation';
 export default function ManageSubscriptionsPage() {
 	const router = useRouter();
 	const queryClient = useQueryClient();
-	const [subscriptionToDelete, setSubscriptionToDelete] = React.useState<any>(null);
+	const [subscriptionToDelete, setSubscriptionToDelete] = React.useState<Subscription | null>(null);
 	const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
 	const [deleteSuccessMessage, setDeleteSuccessMessage] = React.useState<string | null>(null);
 	// Fetch subscriptions data
@@ -34,7 +36,6 @@ export default function ManageSubscriptionsPage() {
 		isLoading,
 		isError,
 		error,
-		refetch,
 	} = useQuery({
 		queryKey: ['subscriptions'],
 		queryFn: async () => {
@@ -78,10 +79,8 @@ export default function ManageSubscriptionsPage() {
 		},
 		onSuccess: () => {
 			// Invalidate and refetch subscriptions
-			queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
-			setDeleteSuccessMessage(
-				`Subscription "${subscriptionToDelete?.name}" deleted successfully`,
-			);
+			void invalidateFinanceQueries(queryClient);
+			setDeleteSuccessMessage(`Subscription "${subscriptionToDelete?.name}" deleted successfully`);
 			setIsDeleteDialogOpen(false);
 			setSubscriptionToDelete(null);
 
@@ -90,7 +89,7 @@ export default function ManageSubscriptionsPage() {
 		},
 	});
 
-	const handleDeleteClick = (subscription: any) => {
+	const handleDeleteClick = (subscription: Subscription) => {
 		setSubscriptionToDelete(subscription);
 		setIsDeleteDialogOpen(true);
 	};
@@ -119,9 +118,7 @@ export default function ManageSubscriptionsPage() {
 					</Button>
 					<div>
 						<h2 className='text-2xl font-semibold mb-2'>Manage Subscriptions</h2>
-						<p className='text-muted-foreground'>
-							View, edit, and organize your subscriptions
-						</p>
+						<p className='text-muted-foreground'>View, edit, and organize your subscriptions</p>
 					</div>
 				</div>
 				<Button asChild>
@@ -187,8 +184,8 @@ export default function ManageSubscriptionsPage() {
 							Delete Subscription
 						</DialogTitle>
 						<DialogDescription>
-							Are you sure you want to delete "{subscriptionToDelete?.name}"? This
-							action cannot be undone and will remove all associated data.
+							Are you sure you want to delete &quot;{subscriptionToDelete?.name}&quot;? This action
+							cannot be undone and will remove all associated data.
 						</DialogDescription>
 					</DialogHeader>
 					<DialogFooter>
@@ -198,7 +195,8 @@ export default function ManageSubscriptionsPage() {
 						<Button
 							variant='destructive'
 							onClick={handleDeleteConfirm}
-							disabled={deleteSubscriptionMutation.isPending}>
+							disabled={deleteSubscriptionMutation.isPending}
+						>
 							{deleteSubscriptionMutation.isPending ? 'Deleting...' : 'Delete'}
 						</Button>
 					</DialogFooter>
