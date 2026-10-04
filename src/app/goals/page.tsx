@@ -1,4 +1,5 @@
 'use client';
+import { invalidateFinanceQueries } from '@/lib/query-keys';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -61,8 +62,7 @@ export default function GoalsPage() {
 		setBusy(true);
 		try {
 			await operation();
-			await client.invalidateQueries({ queryKey: ['goals'] });
-			await client.invalidateQueries({ queryKey: ['goal'] });
+			await invalidateFinanceQueries(client);
 		} catch (e) {
 			setError(e instanceof Error ? e.message : 'Request failed');
 		} finally {

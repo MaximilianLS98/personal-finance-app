@@ -34,6 +34,7 @@ export function invalidateFinanceQueries(client: QueryClient) {
 					'projections',
 				].includes(root) ||
 				root.startsWith('subscription') ||
+				root.startsWith('goal') ||
 				root.startsWith('budget')
 			);
 		},
