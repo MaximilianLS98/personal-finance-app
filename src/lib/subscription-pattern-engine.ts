@@ -1,4 +1,5 @@
 import { currencyCode } from './money';
+import { hasRecentDetectedPayment } from './detected-subscription';
 /**
  * Subscription pattern detection and management engine
  * Integrates with existing categorization system for subscription detection
@@ -99,8 +100,7 @@ export class SubscriptionPatternEngine {
 			if (pattern.confidence >= 0.6) {
 				// Only suggest high-confidence patterns
 				const lastPayment = pattern.transactions[pattern.transactions.length - 1].date;
-				const cycleDays = { monthly: 31, quarterly: 92, annually: 366 }[pattern.billingFrequency];
-				const stale = Date.now() - lastPayment.getTime() > (cycleDays * 1.5 + 7) * 86400000;
+				const stale = !hasRecentDetectedPayment(lastPayment, pattern.billingFrequency);
 				const candidate: SubscriptionCandidate = {
 					activity: stale ? 'no_recent_payment' : 'recent',
 					lastPaymentDate: lastPayment.toISOString().slice(0, 10),

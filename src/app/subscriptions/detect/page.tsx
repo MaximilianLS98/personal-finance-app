@@ -297,7 +297,7 @@ export default function DetectSubscriptionsPage() {
 										<li>Identifies transactions with consistent amounts</li>
 										<li>Looks for regular payment intervals</li>
 										<li>Matches merchant names and descriptions</li>
-										<li>Considers date variations (±3 days)</li>
+										<li>Allows variation in payment dates</li>
 									</ul>
 								</div>
 								<div>
@@ -312,8 +312,8 @@ export default function DetectSubscriptionsPage() {
 							</div>
 							<div className='bg-blue-50 dark:bg-blue-950 p-4 rounded-lg'>
 								<p className='text-blue-800 dark:text-blue-200'>
-									<strong>Tip:</strong> Make sure you have uploaded recent transaction data for the
-									best detection results. The system works best with at least 3-6 months of data.
+									<strong>Tip:</strong> Import your available transaction history for the best
+									detection results. The system works best with at least 3-6 months of data.
 								</p>
 							</div>
 						</div>
