@@ -18,6 +18,8 @@ import type { ComponentProps } from 'react';
 const navigation = [
 	{ title: 'Home', url: '/home', icon: Home },
 	{ title: 'Dashboard', url: '/dashboard', icon: BarChart3 },
+	{ title: 'Accounts', url: '/accounts', icon: Wallet },
+	{ title: 'Statements', url: '/imports', icon: Receipt },
 	{
 		title: 'Transactions',
 		url: '/transactions',
@@ -25,7 +27,7 @@ const navigation = [
 		items: [
 			{ title: 'All Transactions', url: '/transactions' },
 			{ title: 'Categories', url: '/categories' },
-			{ title: 'Import CSV', url: '/home' },
+			{ title: 'Import CSV', url: '/imports' },
 		],
 	},
 	{

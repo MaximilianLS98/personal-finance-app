@@ -10,7 +10,16 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
-	{ ignores: ['.next/**', 'node_modules/**', 'coverage/**', '**/._*', 'next-env.d.ts'] },
+	{
+		ignores: [
+			'.next/**',
+			'.next-*/**',
+			'node_modules/**',
+			'coverage/**',
+			'**/._*',
+			'next-env.d.ts',
+		],
+	},
 	...compat.extends('next/core-web-vitals', 'next/typescript'),
 	{ rules: { '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }] } },
 	{ files: ['jest.config.js'], rules: { '@typescript-eslint/no-require-imports': 'off' } },

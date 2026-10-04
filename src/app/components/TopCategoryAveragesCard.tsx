@@ -1,4 +1,5 @@
 'use client';
+import { displayMoney } from '@/lib/money';
 
 import { useCurrencySettings } from '@/app/providers';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,10 +17,7 @@ const TopCategoryAveragesCard: React.FC = () => {
 		interval,
 	});
 
-	const formatCurrency = (amount: number) =>
-		new Intl.NumberFormat(appLocale, { style: 'currency', currency: appCurrency }).format(
-			Math.abs(amount),
-		);
+	const formatCurrency = (amount: number) => displayMoney(amount, appCurrency, appLocale);
 
 	if (isLoading) return null;
 

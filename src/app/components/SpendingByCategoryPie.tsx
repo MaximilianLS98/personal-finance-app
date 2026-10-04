@@ -1,4 +1,5 @@
 'use client';
+import { displayMoney } from '@/lib/money';
 
 import { useCurrencySettings } from '@/app/providers';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,10 +12,7 @@ const SpendingByCategoryPie: React.FC = () => {
 	const { dateRange, interval } = useDashboardFilters();
 	const { currency: appCurrency, locale: appLocale } = useCurrencySettings();
 
-	const formatCurrency = (amount: number) =>
-		new Intl.NumberFormat(appLocale, { style: 'currency', currency: appCurrency }).format(
-			Math.abs(amount),
-		);
+	const formatCurrency = (amount: number) => displayMoney(amount, appCurrency, appLocale);
 
 	const { data, isLoading } = useDashboardQuery({
 		from: dateRange.from,

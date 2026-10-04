@@ -3,6 +3,7 @@
  * Provides chart data for the dashboard including expense/income over time and category breakdown
  */
 
+import { currencyCode } from '@/lib/money';
 import { createTransactionRepository } from '@/lib/database';
 import type { ErrorResponse } from '@/lib/types';
 import {
@@ -64,7 +65,11 @@ export async function GET(
 		await transactionRepository.initialize();
 
 		// Get all transactions within date range
-		const transactions = await transactionRepository.findAll();
+		const allTransactions = await transactionRepository.findAll();
+		const currencies = [...new Set(allTransactions.map((t) => currencyCode(t.currency)))].sort();
+		const currency =
+			url.searchParams.get('currency') || (currencies.length === 1 ? currencies[0] : 'NOK');
+		const transactions = allTransactions.filter((t) => currencyCode(t.currency) === currency);
 
 		// Find the oldest transaction date for navigation limits
 		const oldestTransactionDate =
@@ -126,7 +131,7 @@ export async function GET(
 			if (transaction.type === 'income') {
 				existing.income += Math.abs(transaction.amount);
 			} else if (transaction.type === 'expense') {
-				existing.expenses += Math.abs(transaction.amount);
+				existing.expenses -= transaction.amount;
 			}
 
 			intervalData.set(dateKey, existing);
@@ -196,7 +201,7 @@ export async function GET(
 			.forEach((transaction) => {
 				const categoryId = transaction.categoryId!;
 				const existing = categoryData.get(categoryId) || { amount: 0, count: 0 };
-				existing.amount += Math.abs(transaction.amount);
+				existing.amount -= transaction.amount;
 				existing.count += 1;
 				categoryData.set(categoryId, existing);
 			});
@@ -259,6 +264,8 @@ export async function GET(
 		});
 
 		return NextResponse.json({
+			currency,
+			currencies,
 			expenseIncomeOverTime,
 			categoryBreakdown,
 			topCategoryAverages,

@@ -105,18 +105,21 @@ export function FinancialSummary({ summary, isLoading = false, error }: Financia
 			<div className='grid gap-4 md:grid-cols-2 lg:grid-cols-3'>
 				<SummaryCard
 					title='Total Income'
+					currency={summary.currency}
 					amount={summary.totalIncome}
 					description='Money coming in'
 					variant='income'
 				/>
 				<SummaryCard
 					title='Total Expenses'
+					currency={summary.currency}
 					amount={summary.totalExpenses}
 					description='Money going out'
 					variant='expense'
 				/>
 				<SummaryCard
 					title='Net Amount'
+					currency={summary.currency}
 					amount={summary.netAmount}
 					description='Income - Expenses'
 					variant='net'
@@ -128,6 +131,7 @@ export function FinancialSummary({ summary, isLoading = false, error }: Financia
 }
 
 interface SummaryCardProps {
+	currency?: string;
 	title: string;
 	amount: number;
 	description: string;
@@ -138,7 +142,14 @@ interface SummaryCardProps {
 /**
  * Individual summary card component for displaying financial metrics
  */
-function SummaryCard({ title, amount, description, variant, isNet = false }: SummaryCardProps) {
+function SummaryCard({
+	title,
+	amount,
+	description,
+	variant,
+	currency: recordedCurrency,
+	isNet = false,
+}: SummaryCardProps) {
 	const { currency, locale } = useCurrencySettings();
 	// Determine card styling based on variant
 	const getCardStyles = () => {
@@ -185,7 +196,7 @@ function SummaryCard({ title, amount, description, variant, isNet = false }: Sum
 			<CardContent>
 				<div className={`text-2xl font-bold ${getAmountColor()}`}>
 					{isNet && amount > 0 ? '+' : ''}
-					{formatCurrency(amount, currency, locale)}
+					{formatCurrency(amount, recordedCurrency || currency, locale)}
 				</div>
 			</CardContent>
 		</Card>

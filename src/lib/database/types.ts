@@ -146,6 +146,7 @@ export interface CreateManyResult {
  * Information about a duplicate transaction
  */
 export interface DuplicateInfo {
+	currency?: string;
 	/** Date of the duplicate transaction */
 	date: Date;
 	/** Description of the duplicate transaction */

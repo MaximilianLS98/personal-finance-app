@@ -3,6 +3,7 @@
  * Supports both English and Norwegian CSV formats
  */
 
+import Papa from 'papaparse';
 import { determineTransactionType } from './transaction-utils';
 import { Transaction } from './types';
 
@@ -38,7 +39,15 @@ const COLUMN_MAPPINGS: ColumnMapping = {
 /**
  * Result of CSV parsing operation
  */
+export interface ColumnIndices {
+	date: number;
+	description: number;
+	amount: number;
+	currency?: number;
+}
 export interface ParseResult {
+	sourceRowNumbers: number[];
+	columns?: ColumnIndices;
 	transactions: Transaction[];
 	errors: string[];
 	totalRows: number;
@@ -52,6 +61,7 @@ export interface ParseOptions {
 	delimiter?: string;
 	skipEmptyLines?: boolean;
 	trimWhitespace?: boolean;
+	columns?: Partial<ColumnIndices>;
 }
 
 /**
@@ -65,47 +75,88 @@ export function parseCSV(csvContent: string, options: ParseOptions = {}): ParseR
 
 	const result: ParseResult = {
 		transactions: [],
+		sourceRowNumbers: [],
 		errors: [],
 		totalRows: 0,
 		validRows: 0,
 	};
 
 	try {
-		// Split content into lines
-		const lines = csvContent
-			.split('\n')
-			.filter((line) => (skipEmptyLines ? line.trim().length > 0 : true));
-
-		if (lines.length === 0) {
+		const content = csvContent.replace(/^\uFEFF/, '');
+		const records: { cells: string[]; line: number; errors: string[] }[] = [];
+		let line = 1,
+			cursor = 0;
+		Papa.parse<string[]>(content, {
+			delimiter,
+			skipEmptyLines: false,
+			step(record) {
+				records.push({
+					cells: record.data.map((cell) => (trimWhitespace ? cell.trim() : cell)),
+					line,
+					errors: record.errors.map((error) => error.message),
+				});
+				line += (content.slice(cursor, record.meta.cursor).match(/\r\n|\n|\r/g) || []).length;
+				cursor = record.meta.cursor;
+			},
+		});
+		const nonempty = records.filter((record) => record.cells.some((cell) => cell.trim()));
+		if (!nonempty.length) {
 			result.errors.push('CSV file is empty');
 			return result;
 		}
-
-		// Parse header row
-		const headers = parseCSVRow(lines[0], delimiter, trimWhitespace);
-		const columnIndices = mapColumns(headers);
-
-		if (!columnIndices) {
+		const header = nonempty[0];
+		if (header.errors.length) {
+			result.errors.push(`Row ${header.line}: ${header.errors.join('; ')}`);
+			return result;
+		}
+		const headers = header.cells;
+		const automatic = mapColumns(headers);
+		const columnIndices = {
+			...automatic,
+			...Object.fromEntries(
+				Object.entries(options.columns || {}).filter(([, value]) => value !== undefined),
+			),
+		};
+		const required = ['date', 'description', 'amount'] as const;
+		if (
+			required.some(
+				(key) =>
+					!Number.isInteger(columnIndices[key]) ||
+					columnIndices[key]! < 0 ||
+					columnIndices[key]! >= headers.length,
+			)
+		) {
 			result.errors.push('Required columns not found. Expected: Date, Description, Amount');
 			return result;
 		}
-
-		// Parse data rows
-		for (let i = 1; i < lines.length; i++) {
+		if (
+			columnIndices.currency !== undefined &&
+			(!Number.isInteger(columnIndices.currency) ||
+				columnIndices.currency < 0 ||
+				columnIndices.currency >= headers.length)
+		) {
+			result.errors.push('Invalid currency column');
+			return result;
+		}
+		result.columns = columnIndices as ColumnIndices;
+		for (const record of records.slice(records.indexOf(header) + 1)) {
+			if (skipEmptyLines && !record.cells.some((cell) => cell.trim())) continue;
 			result.totalRows++;
-			const row = parseCSVRow(lines[i], delimiter, trimWhitespace);
-
-			if (row.length === 0) continue;
-
 			try {
-				const transaction = parseTransactionRow(row, columnIndices, i + 1);
+				if (record.errors.length) throw new Error(record.errors.join('; '));
+				if (record.cells.length !== headers.length)
+					throw new Error(
+						`Expected ${headers.length} columns, found ${record.cells.length}; quote fields containing delimiters`,
+					);
+				const transaction = parseTransactionRow(record.cells, result.columns, record.line);
 				if (transaction) {
 					result.transactions.push(transaction);
+					result.sourceRowNumbers.push(record.line);
 					result.validRows++;
 				}
 			} catch (error) {
 				result.errors.push(
-					`Row ${i + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+					`Row ${record.line}: ${error instanceof Error ? error.message : 'Unknown error'}`,
 				);
 			}
 		}
@@ -142,45 +193,6 @@ function detectDelimiter(csvContent: string): string {
 }
 
 /**
- * Parses a single CSV row, handling quoted values and delimiters
- */
-function parseCSVRow(row: string, delimiter: string, trimWhitespace: boolean): string[] {
-	const result: string[] = [];
-	let current = '';
-	let inQuotes = false;
-	let i = 0;
-
-	while (i < row.length) {
-		const char = row[i];
-		const nextChar = row[i + 1];
-
-		if (char === '"') {
-			if (inQuotes && nextChar === '"') {
-				// Escaped quote
-				current += '"';
-				i += 2;
-			} else {
-				// Toggle quote state
-				inQuotes = !inQuotes;
-				i++;
-			}
-		} else if (char === delimiter && !inQuotes) {
-			// End of field
-			result.push(trimWhitespace ? current.trim() : current);
-			current = '';
-			i++;
-		} else {
-			current += char;
-			i++;
-		}
-	}
-
-	// Add the last field
-	result.push(trimWhitespace ? current.trim() : current);
-	return result;
-}
-
-/**
  * Maps CSV headers to column indices based on known column mappings
  */
 function mapColumns(
@@ -208,11 +220,6 @@ function mapColumns(
 		}
 	}
 
-	// Validate required columns
-	if (indices.date === -1 || indices.description === -1 || indices.amount === -1) {
-		return null;
-	}
-
 	return {
 		date: indices.date,
 		description: indices.description,
@@ -237,6 +244,9 @@ function parseTransactionRow(
 		throw new Error('Missing required fields (date, description, or amount)');
 	}
 
+	if (/^(reservert|reserved|pending)$/i.test(dateStr.trim()))
+		throw new Error('Pending transaction has no booking date; import it after it is booked');
+
 	// Parse date (parseDate handles its own trimming)
 	const date = parseDate(dateStr);
 	if (!date) {
@@ -245,15 +255,17 @@ function parseTransactionRow(
 
 	// Parse amount (parseAmount handles its own trimming)
 	const amount = parseAmount(amountStr);
-	if (isNaN(amount)) {
+	if (!Number.isFinite(amount)) {
 		throw new Error(`Invalid amount format: ${amountStr}`);
 	}
 
 	// Optional currency column
 	const currency =
 		columnIndices.currency !== undefined && row[columnIndices.currency]
-			? row[columnIndices.currency].trim()
+			? row[columnIndices.currency].trim().toUpperCase()
 			: undefined;
+
+	if (currency && !/^[A-Z]{3}$/.test(currency)) throw new Error('Invalid currency code');
 
 	// Categorize transaction type using enhanced detection
 	const type = determineTransactionType(amount, description);
@@ -317,15 +329,20 @@ function parseDate(dateStr: string): Date | null {
 					break;
 			}
 
-			const date = new Date(year, month, day);
+			const date = new Date(Date.UTC(year, month, day));
 
 			// Validate the date is valid
-			if (date.getFullYear() === year && date.getMonth() === month && date.getDate() === day) {
+			if (
+				date.getUTCFullYear() === year &&
+				date.getUTCMonth() === month &&
+				date.getUTCDate() === day
+			) {
 				return date;
 			}
 		}
 	}
 
+	if (formats.some((format) => format.regex.test(cleaned))) return null;
 	// Try native Date parsing as fallback
 	const fallbackDate = new Date(cleaned);
 	return isNaN(fallbackDate.getTime()) ? null : fallbackDate;
@@ -336,38 +353,26 @@ function parseDate(dateStr: string): Date | null {
  * Supports formats: 1234.56, 1,234.56, 1 234,56, -1234.56, etc.
  */
 function parseAmount(amountStr: string): number {
-	// Remove currency symbols but keep spaces, commas, and dots for parsing
-	let cleaned = amountStr.trim().replace(/[^\d.,\-+\s]/g, ''); // Remove currency symbols
-
-	// Handle Norwegian format with spaces (1 234,56 -> 1234.56)
-	if (cleaned.includes(' ') && cleaned.includes(',')) {
-		cleaned = cleaned.replace(/\s/g, '').replace(',', '.');
-	}
-	// Handle format with comma as decimal separator (1234,56 -> 1234.56)
-	else if (cleaned.includes(',') && !cleaned.includes('.')) {
-		// Check if comma is likely decimal separator (last comma with 2 digits after)
-		const lastCommaIndex = cleaned.lastIndexOf(',');
-		const afterComma = cleaned.substring(lastCommaIndex + 1);
-		if (afterComma.length <= 2 && /^\d+$/.test(afterComma)) {
-			cleaned = cleaned.replace(',', '.');
-		} else {
-			// Multiple commas, treat as thousands separators
-			cleaned = cleaned.replace(/,/g, '');
-		}
-	}
-	// Handle thousands separators (1,234.56)
-	else if (cleaned.includes(',') && cleaned.includes('.')) {
-		// Remove commas that are thousands separators
-		const parts = cleaned.split('.');
-		if (parts.length === 2 && parts[1].length <= 2) {
-			cleaned = parts[0].replace(/,/g, '') + '.' + parts[1];
-		}
-	}
-
-	// Remove any remaining spaces
-	cleaned = cleaned.replace(/\s+/g, '');
-
-	return parseFloat(cleaned);
+	// Only remove recognized currency adornments. Arbitrary letters must never turn into money.
+	const adornment = '(?:[$€£¥]|NOK|USD|EUR|GBP|SEK|DKK|CHF|JPY|CAD|AUD|kr)';
+	let cleaned = amountStr.trim().replace(/\s/g, ' ');
+	const leadingSign = cleaned.match(/^[+-]/)?.[0] ?? '';
+	if (leadingSign) cleaned = cleaned.slice(1).trim();
+	cleaned = cleaned
+		.replace(new RegExp(`^${adornment}\\s*`, 'i'), '')
+		.replace(new RegExp(`\\s*${adornment}$`, 'i'), '')
+		.trim();
+	cleaned = leadingSign + cleaned;
+	if (/^[+-]?\d{1,3}(?: \d{3})+(?:[.,]\d{1,2})?$/.test(cleaned))
+		cleaned = cleaned.replace(/ /g, '').replace(',', '.');
+	else if (/^[+-]?\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?$/.test(cleaned))
+		cleaned = cleaned.replace(/,/g, '');
+	else if (/^[+-]?\d{1,3}(?:\.\d{3})+,\d{1,2}$/.test(cleaned))
+		cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+	else if (/^[+-]?\d+,\d{1,2}$/.test(cleaned)) cleaned = cleaned.replace(',', '.');
+	if (!/^[+-]?(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(cleaned)) return NaN;
+	const value = Number(cleaned);
+	return Number.isFinite(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER / 100 ? value : NaN;
 }
 
 /**

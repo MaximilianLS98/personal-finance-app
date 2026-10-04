@@ -182,6 +182,7 @@ export interface TransactionWithSubscription extends Transaction {
  * Aggregated financial data for summary display
  */
 export interface FinancialSummary {
+	currency?: string;
 	/** Total income amount for the period */
 	totalIncome: number;
 	/** Total expenses amount for the period */

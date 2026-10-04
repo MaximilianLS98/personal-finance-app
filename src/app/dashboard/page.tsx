@@ -5,7 +5,7 @@ import MonthlyIncomeVsExpensesChart from '@/app/components/MonthlyIncomeVsExpens
 import MonthlySpendingTrendsChart from '@/app/components/MonthlySpendingTrendsChart';
 import SpendingByCategoryPie from '@/app/components/SpendingByCategoryPie';
 import TopCategoryAveragesCard from '@/app/components/TopCategoryAveragesCard';
-import { useCurrencySettings } from '@/app/providers';
+import { CurrencyScope, useCurrencySettings } from '@/app/providers';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -18,6 +18,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@/components/ui/select';
+import { displayMoney } from '@/lib/money';
 import { useDashboardQuery } from '@/lib/queries';
 import { useDashboardFilters } from '@/lib/stores/filters';
 import {
@@ -45,7 +46,7 @@ import {
 	ChevronRight,
 	TrendingUp,
 } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 interface DateRange {
 	from: Date | undefined;
@@ -138,11 +139,9 @@ export default function DashboardPage() {
 
 	const { currency: appCurrency, locale: appLocale } = useCurrencySettings();
 
+	const [reportCurrency, setReportCurrency] = useState(appCurrency);
 	const formatCurrency = (amount: number, currencyOverride?: string) =>
-		new Intl.NumberFormat(appLocale, {
-			style: 'currency',
-			currency: currencyOverride ?? appCurrency,
-		}).format(Math.abs(amount));
+		displayMoney(amount, currencyOverride || reportCurrency, appLocale);
 
 	const {
 		data,
@@ -153,6 +152,7 @@ export default function DashboardPage() {
 		from: dateRange.from,
 		to: dateRange.to,
 		interval: interval,
+		currency: reportCurrency,
 	});
 
 	const oldestDataDate = data?.oldestDataDate ? new Date(data.oldestDataDate) : null;
@@ -225,241 +225,260 @@ export default function DashboardPage() {
 	}, [data]);
 
 	return (
-		<div className='max-w-7xl mx-auto space-y-6'>
-			{/* Header */}
-			<div className='flex items-center justify-between'>
-				<div>
-					<h2 className='text-2xl font-semibold mb-2'>Financial Dashboard</h2>
-					<p className='text-muted-foreground'>Visual insights into your financial data</p>
-				</div>
-			</div>
-
-			{/* Date Navigation */}
-			<div className='flex items-center justify-center gap-6 py-4'>
-				<Button
-					variant='ghost'
-					size='sm'
-					onClick={navigateToPreviousPeriod}
-					disabled={!canNavigatePrevious}
-					className='flex items-center gap-1 text-muted-foreground hover:text-foreground disabled:opacity-50'
-				>
-					<ChevronLeft className='h-4 w-4' />
-					Previous
-				</Button>
-
-				<div className='text-center'>
-					<h3 className='text-xl font-semibold'>{getDateRangeDisplay()}</h3>
-					<p className='text-xs text-muted-foreground'>
-						Grouped by {interval === 'day' ? 'Daily' : interval === 'week' ? 'Weekly' : 'Monthly'}
-					</p>
+		<CurrencyScope currency={reportCurrency}>
+			<div className='max-w-7xl mx-auto space-y-6'>
+				<label className='block mb-4'>
+					Report currency{' '}
+					<select
+						className='border rounded p-2 ml-2'
+						value={reportCurrency}
+						onChange={(e) => setReportCurrency(e.target.value)}
+					>
+						{[...new Set([reportCurrency, ...(data?.currencies || [])])].map((c) => (
+							<option key={c} value={c}>
+								{c === 'UNKNOWN' ? 'Unknown currency' : c}
+							</option>
+						))}
+					</select>
+					<span className='ml-2 text-sm text-muted-foreground'>
+						Only this currency is included; no conversion.
+					</span>
+				</label>
+				{/* Header */}
+				<div className='flex items-center justify-between'>
+					<div>
+						<h2 className='text-2xl font-semibold mb-2'>Financial Dashboard</h2>
+						<p className='text-muted-foreground'>Visual insights into your financial data</p>
+					</div>
 				</div>
 
-				<Button
-					variant='ghost'
-					size='sm'
-					onClick={navigateToNextPeriod}
-					disabled={!canNavigateNext}
-					className='flex items-center gap-1 text-muted-foreground hover:text-foreground disabled:opacity-50'
-				>
-					Next
-					<ChevronRight className='h-4 w-4' />
-				</Button>
-			</div>
+				{/* Date Navigation */}
+				<div className='flex items-center justify-center gap-6 py-4'>
+					<Button
+						variant='ghost'
+						size='sm'
+						onClick={navigateToPreviousPeriod}
+						disabled={!canNavigatePrevious}
+						className='flex items-center gap-1 text-muted-foreground hover:text-foreground disabled:opacity-50'
+					>
+						<ChevronLeft className='h-4 w-4' />
+						Previous
+					</Button>
 
-			{/* Date Range Filter */}
-			<Card>
-				<CardHeader>
-					<CardTitle className='flex items-center gap-2'>
-						<BarChart3 className='h-5 w-5' />
-						Date Range Filter
-					</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<div className='flex flex-wrap gap-4 items-center'>
-						{/* Preset Selector */}
-						<div className='flex items-center gap-2'>
-							<label className='text-sm font-medium'>Quick Select:</label>
-							<Select value={preset} onValueChange={handlePresetChange}>
-								<SelectTrigger className='w-48'>
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									{Object.entries(DATE_PRESETS).map(([key, p]) => (
-										<SelectItem key={key} value={key}>
-											{p.label}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						</div>
-
-						{/* Time Interval Selector */}
-						<div className='flex items-center gap-2'>
-							<label className='text-sm font-medium'>Group by:</label>
-							<Select value={interval} onValueChange={handleIntervalChange}>
-								<SelectTrigger className='w-32'>
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value='day'>Daily</SelectItem>
-									<SelectItem value='week'>Weekly</SelectItem>
-									<SelectItem value='month'>Monthly</SelectItem>
-								</SelectContent>
-							</Select>
-						</div>
-
-						{/* Custom Date Range */}
-						<div className='flex items-center gap-2'>
-							<label className='text-sm font-medium'>From:</label>
-							<Popover>
-								<PopoverTrigger asChild>
-									<Button variant='outline' className='w-48 justify-start text-left font-normal'>
-										<CalendarIcon className='mr-2 h-4 w-4' />
-										{dateRange.from ? format(dateRange.from, 'MMM dd, yyyy') : 'Pick a date'}
-									</Button>
-								</PopoverTrigger>
-								<PopoverContent className='w-auto p-0'>
-									<Calendar
-										mode='single'
-										selected={dateRange.from}
-										onSelect={(date) =>
-											handleDateRangeChange({
-												...dateRange,
-												from: date,
-												to: dateRange.to,
-											})
-										}
-										initialFocus
-									/>
-								</PopoverContent>
-							</Popover>
-						</div>
-
-						<div className='flex items-center gap-2'>
-							<label className='text-sm font-medium'>To:</label>
-							<Popover>
-								<PopoverTrigger asChild>
-									<Button variant='outline' className='w-48 justify-start text-left font-normal'>
-										<CalendarIcon className='mr-2 h-4 w-4' />
-										{dateRange.to ? format(dateRange.to, 'MMM dd, yyyy') : 'Pick a date'}
-									</Button>
-								</PopoverTrigger>
-								<PopoverContent className='w-auto p-0'>
-									<Calendar
-										mode='single'
-										selected={dateRange.to}
-										onSelect={(date) =>
-											handleDateRangeChange({
-												...dateRange,
-												to: date,
-												from: dateRange.from,
-											})
-										}
-										initialFocus
-									/>
-								</PopoverContent>
-							</Popover>
-						</div>
+					<div className='text-center'>
+						<h3 className='text-xl font-semibold'>{getDateRangeDisplay()}</h3>
+						<p className='text-xs text-muted-foreground'>
+							Grouped by {interval === 'day' ? 'Daily' : interval === 'week' ? 'Weekly' : 'Monthly'}
+						</p>
 					</div>
 
-					{/* Active Filters Display */}
-					{(dateRange.from || dateRange.to || preset !== 'all') && (
-						<div className='mt-4 flex flex-wrap gap-2'>
-							<span className='text-sm text-muted-foreground'>Active filters:</span>
-							{dateRange.from && (
-								<span className='text-sm bg-secondary px-2 py-1 rounded'>
-									From: {format(dateRange.from, 'MMM dd, yyyy')}
-								</span>
-							)}
-							{dateRange.to && (
-								<span className='text-sm bg-secondary px-2 py-1 rounded'>
-									To: {format(dateRange.to, 'MMM dd, yyyy')}
-								</span>
-							)}
-							<span className='text-sm bg-primary/10 text-primary px-2 py-1 rounded'>
-								Grouping:{' '}
-								{interval === 'day' ? 'Daily' : interval === 'week' ? 'Weekly' : 'Monthly'}
-							</span>
+					<Button
+						variant='ghost'
+						size='sm'
+						onClick={navigateToNextPeriod}
+						disabled={!canNavigateNext}
+						className='flex items-center gap-1 text-muted-foreground hover:text-foreground disabled:opacity-50'
+					>
+						Next
+						<ChevronRight className='h-4 w-4' />
+					</Button>
+				</div>
+
+				{/* Date Range Filter */}
+				<Card>
+					<CardHeader>
+						<CardTitle className='flex items-center gap-2'>
+							<BarChart3 className='h-5 w-5' />
+							Date Range Filter
+						</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<div className='flex flex-wrap gap-4 items-center'>
+							{/* Preset Selector */}
+							<div className='flex items-center gap-2'>
+								<label className='text-sm font-medium'>Quick Select:</label>
+								<Select value={preset} onValueChange={handlePresetChange}>
+									<SelectTrigger className='w-48'>
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										{Object.entries(DATE_PRESETS).map(([key, p]) => (
+											<SelectItem key={key} value={key}>
+												{p.label}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
+
+							{/* Time Interval Selector */}
+							<div className='flex items-center gap-2'>
+								<label className='text-sm font-medium'>Group by:</label>
+								<Select value={interval} onValueChange={handleIntervalChange}>
+									<SelectTrigger className='w-32'>
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value='day'>Daily</SelectItem>
+										<SelectItem value='week'>Weekly</SelectItem>
+										<SelectItem value='month'>Monthly</SelectItem>
+									</SelectContent>
+								</Select>
+							</div>
+
+							{/* Custom Date Range */}
+							<div className='flex items-center gap-2'>
+								<label className='text-sm font-medium'>From:</label>
+								<Popover>
+									<PopoverTrigger asChild>
+										<Button variant='outline' className='w-48 justify-start text-left font-normal'>
+											<CalendarIcon className='mr-2 h-4 w-4' />
+											{dateRange.from ? format(dateRange.from, 'MMM dd, yyyy') : 'Pick a date'}
+										</Button>
+									</PopoverTrigger>
+									<PopoverContent className='w-auto p-0'>
+										<Calendar
+											mode='single'
+											selected={dateRange.from}
+											onSelect={(date) =>
+												handleDateRangeChange({
+													...dateRange,
+													from: date,
+													to: dateRange.to,
+												})
+											}
+											initialFocus
+										/>
+									</PopoverContent>
+								</Popover>
+							</div>
+
+							<div className='flex items-center gap-2'>
+								<label className='text-sm font-medium'>To:</label>
+								<Popover>
+									<PopoverTrigger asChild>
+										<Button variant='outline' className='w-48 justify-start text-left font-normal'>
+											<CalendarIcon className='mr-2 h-4 w-4' />
+											{dateRange.to ? format(dateRange.to, 'MMM dd, yyyy') : 'Pick a date'}
+										</Button>
+									</PopoverTrigger>
+									<PopoverContent className='w-auto p-0'>
+										<Calendar
+											mode='single'
+											selected={dateRange.to}
+											onSelect={(date) =>
+												handleDateRangeChange({
+													...dateRange,
+													to: date,
+													from: dateRange.from,
+												})
+											}
+											initialFocus
+										/>
+									</PopoverContent>
+								</Popover>
+							</div>
 						</div>
-					)}
-				</CardContent>
-			</Card>
 
-			{/* Error Alert */}
-			{isError && (
-				<Alert variant='destructive'>
-					<AlertCircle className='h-4 w-4' />
-					<AlertDescription>
-						{(rqError as Error)?.message || 'Failed to load dashboard data'}
-					</AlertDescription>
-				</Alert>
-			)}
-
-			{/* Summary Stats */}
-			{!isLoading && data && (
-				<div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
-					<Card>
-						<CardContent className='p-6'>
-							<div className='flex items-center justify-between'>
-								<div>
-									<p className='text-sm font-medium text-muted-foreground'>Total Income</p>
-									<p className='text-2xl font-bold text-green-600'>
-										{formatCurrency(summaryStats.totalIncome)}
-									</p>
-								</div>
-								<TrendingUp className='h-8 w-8 text-green-600' />
+						{/* Active Filters Display */}
+						{(dateRange.from || dateRange.to || preset !== 'all') && (
+							<div className='mt-4 flex flex-wrap gap-2'>
+								<span className='text-sm text-muted-foreground'>Active filters:</span>
+								{dateRange.from && (
+									<span className='text-sm bg-secondary px-2 py-1 rounded'>
+										From: {format(dateRange.from, 'MMM dd, yyyy')}
+									</span>
+								)}
+								{dateRange.to && (
+									<span className='text-sm bg-secondary px-2 py-1 rounded'>
+										To: {format(dateRange.to, 'MMM dd, yyyy')}
+									</span>
+								)}
+								<span className='text-sm bg-primary/10 text-primary px-2 py-1 rounded'>
+									Grouping:{' '}
+									{interval === 'day' ? 'Daily' : interval === 'week' ? 'Weekly' : 'Monthly'}
+								</span>
 							</div>
-						</CardContent>
-					</Card>
-					<Card>
-						<CardContent className='p-6'>
-							<div className='flex items-center justify-between'>
-								<div>
-									<p className='text-sm font-medium text-muted-foreground'>Total Expenses</p>
-									<p className='text-2xl font-bold text-red-600'>
-										{formatCurrency(summaryStats.totalExpenses)}
-									</p>
-								</div>
-								<TrendingUp className='h-8 w-8 text-red-600 rotate-180' />
-							</div>
-						</CardContent>
-					</Card>
-					<Card>
-						<CardContent className='p-6'>
-							<div className='flex items-center justify-between'>
-								<div>
-									<p className='text-sm font-medium text-muted-foreground'>Net Amount</p>
-									<p
-										className={`text-2xl font-bold ${summaryStats.netAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}
-									>
-										{formatCurrency(summaryStats.netAmount)}
-									</p>
-								</div>
-								<TrendingUp
-									className={`h-8 w-8 ${summaryStats.netAmount >= 0 ? 'text-green-600' : 'text-red-600 rotate-180'}`}
-								/>
-							</div>
-						</CardContent>
-					</Card>
-				</div>
-			)}
+						)}
+					</CardContent>
+				</Card>
 
-			{/* Top Category Averages */}
-			<TopCategoryAveragesCard />
+				{/* Error Alert */}
+				{isError && (
+					<Alert variant='destructive'>
+						<AlertCircle className='h-4 w-4' />
+						<AlertDescription>
+							{(rqError as Error)?.message || 'Failed to load dashboard data'}
+						</AlertDescription>
+					</Alert>
+				)}
 
-			{/* Charts */}
-			{data ? (
+				{/* Summary Stats */}
+				{!isLoading && data && (
+					<div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
+						<Card>
+							<CardContent className='p-6'>
+								<div className='flex items-center justify-between'>
+									<div>
+										<p className='text-sm font-medium text-muted-foreground'>Total Income</p>
+										<p className='text-2xl font-bold text-green-600'>
+											{formatCurrency(summaryStats.totalIncome)}
+										</p>
+									</div>
+									<TrendingUp className='h-8 w-8 text-green-600' />
+								</div>
+							</CardContent>
+						</Card>
+						<Card>
+							<CardContent className='p-6'>
+								<div className='flex items-center justify-between'>
+									<div>
+										<p className='text-sm font-medium text-muted-foreground'>Total Expenses</p>
+										<p className='text-2xl font-bold text-red-600'>
+											{formatCurrency(summaryStats.totalExpenses)}
+										</p>
+									</div>
+									<TrendingUp className='h-8 w-8 text-red-600 rotate-180' />
+								</div>
+							</CardContent>
+						</Card>
+						<Card>
+							<CardContent className='p-6'>
+								<div className='flex items-center justify-between'>
+									<div>
+										<p className='text-sm font-medium text-muted-foreground'>Net Amount</p>
+										<p
+											className={`text-2xl font-bold ${summaryStats.netAmount >= 0 ? 'text-green-600' : 'text-red-600'}`}
+										>
+											{formatCurrency(summaryStats.netAmount)}
+										</p>
+									</div>
+									<TrendingUp
+										className={`h-8 w-8 ${summaryStats.netAmount >= 0 ? 'text-green-600' : 'text-red-600 rotate-180'}`}
+									/>
+								</div>
+							</CardContent>
+						</Card>
+					</div>
+				)}
+
+				{/* Top Category Averages */}
+				<TopCategoryAveragesCard />
+
+				{/* Charts */}
+				{data ? (
+					<div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
+						<IncomeExpensesOverTimeChart />
+						<SpendingByCategoryPie />
+					</div>
+				) : null}
+
+				{/* Additional Monthly Charts (independent of Group by) */}
 				<div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
-					<IncomeExpensesOverTimeChart />
-					<SpendingByCategoryPie />
+					<MonthlySpendingTrendsChart />
+					<MonthlyIncomeVsExpensesChart />
 				</div>
-			) : null}
-
-			{/* Additional Monthly Charts (independent of Group by) */}
-			<div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
-				<MonthlySpendingTrendsChart />
-				<MonthlyIncomeVsExpensesChart />
 			</div>
-		</div>
+		</CurrencyScope>
 	);
 }

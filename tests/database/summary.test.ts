@@ -32,11 +32,11 @@ describe('/api/summary', () => {
 
 	describe('GET', () => {
 		it('should return empty summary when no transaction data exists', async () => {
-			const response = await GET();
+			const response = await GET(new Request('http://localhost/api/summary'));
 			const data = await response.json();
 
 			expect(response.status).toBe(200);
-			expect(data).toEqual({
+			expect(data).toMatchObject({
 				success: true,
 				data: {
 					totalIncome: 0,
@@ -84,12 +84,12 @@ describe('/api/summary', () => {
 			await storeTransactions(testTransactions);
 
 			// Act
-			const response = await GET();
+			const response = await GET(new Request('http://localhost/api/summary'));
 			const data = await response.json();
 
 			// Assert
 			expect(response.status).toBe(200);
-			expect(data).toEqual({
+			expect(data).toMatchObject({
 				success: true,
 				data: {
 					totalIncome: 5800, // 5000 + 800
@@ -122,12 +122,12 @@ describe('/api/summary', () => {
 			await storeTransactions(testTransactions);
 
 			// Act
-			const response = await GET();
+			const response = await GET(new Request('http://localhost/api/summary'));
 			const data = await response.json();
 
 			// Assert
 			expect(response.status).toBe(200);
-			expect(data.data).toEqual({
+			expect(data.data).toMatchObject({
 				totalIncome: 3500,
 				totalExpenses: 0,
 				netAmount: 3500,
@@ -157,12 +157,12 @@ describe('/api/summary', () => {
 			await storeTransactions(testTransactions);
 
 			// Act
-			const response = await GET();
+			const response = await GET(new Request('http://localhost/api/summary'));
 			const data = await response.json();
 
 			// Assert
 			expect(response.status).toBe(200);
-			expect(data.data).toEqual({
+			expect(data.data).toMatchObject({
 				totalIncome: 0,
 				totalExpenses: 1200, // 1000 + 200 (absolute values)
 				netAmount: -1200, // 0 - 1200
@@ -185,12 +185,12 @@ describe('/api/summary', () => {
 			await storeTransactions(testTransactions);
 
 			// Act
-			const response = await GET();
+			const response = await GET(new Request('http://localhost/api/summary'));
 			const data = await response.json();
 
 			// Assert
 			expect(response.status).toBe(200);
-			expect(data.data).toEqual({
+			expect(data.data).toMatchObject({
 				totalIncome: 2500,
 				totalExpenses: 0,
 				netAmount: 2500,
