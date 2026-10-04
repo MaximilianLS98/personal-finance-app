@@ -128,14 +128,29 @@ function importRows(db: Database, content: string, options: ImportOptions) {
 		const exact = db.query('SELECT id FROM transactions WHERE source_key = ?').get(key);
 		const legacy = db
 			.query(
-				'SELECT COUNT(*) AS n FROM transactions WHERE account_id IS ? AND currency IS ? AND date=? AND description=? AND amount=? AND source_key IS NULL',
+				`SELECT COUNT(*) AS n FROM transactions WHERE
+ ((account_id=? AND currency=?) OR (account_id IS NULL AND (currency IS NULL OR currency='' OR currency=?)))
+ AND (CASE WHEN substr(date,12,8)='00:00:00' THEN substr(date,1,10) ELSE date(date,'localtime') END)=?
+ AND description=? AND amount=? AND source_key IS NULL`,
 			)
-			.get(account.id, currency, t.date.toISOString(), t.description, t.amount) as { n: number };
+			.get(
+				account.id,
+				currency,
+				currency,
+				t.date.toISOString().slice(0, 10),
+				t.description,
+				t.amount,
+			) as { n: number };
 		// Description-only transfer guesses are presented as ordinary cash flows until both sides are matched.
 		return {
 			rowNumber: parsed.sourceRowNumbers[index],
 			key,
 			duplicate: !!exact || occurrence <= legacy.n,
+			duplicateReason: exact
+				? 'Already imported'
+				: occurrence <= legacy.n
+					? 'Matches existing history; assign unassigned records in Accounts'
+					: undefined,
 			transaction: {
 				...t,
 				currency,

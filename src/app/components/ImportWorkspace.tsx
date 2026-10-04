@@ -18,6 +18,7 @@ type Preview = {
 	rows: {
 		rowNumber: number;
 		duplicate: boolean;
+		duplicateReason?: string;
 		transaction: { date: string; description: string; amount: number; currency: string };
 	}[];
 };
@@ -310,7 +311,9 @@ export default function ImportWorkspace() {
 													<td className='p-2 whitespace-nowrap'>
 														{displayMoney(r.transaction.amount, r.transaction.currency)}
 													</td>
-													<td className='p-2'>{r.duplicate ? 'Possible duplicate' : 'New'}</td>
+													<td className='p-2'>
+														{r.duplicate ? r.duplicateReason || 'Possible duplicate' : 'New'}
+													</td>
 												</tr>
 											))}
 										</tbody>
