@@ -1,4 +1,5 @@
 'use client';
+import LegacyAssignment from '@/app/components/LegacyAssignment';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getJson, postJson, deleteJson } from '@/lib/api';
@@ -288,6 +289,7 @@ export default function AccountsPage() {
 					))}
 				</CardContent>
 			</Card>
+			<LegacyAssignment accounts={accounts} />
 		</div>
 	);
 }
