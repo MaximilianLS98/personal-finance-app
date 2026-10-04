@@ -13,6 +13,7 @@ export class ScenariosRepository {
 	 */
 	async createBudgetScenario(
 		scenario: Omit<BudgetScenario, 'id' | 'budgets' | 'totalBudgeted' | 'createdAt' | 'updatedAt'>,
+		copyFromScenarioId?: string,
 	): Promise<BudgetScenario> {
 		try {
 			const db = this.context.connection();
@@ -25,6 +26,11 @@ export class ScenariosRepository {
 			`);
 
 			db.transaction(() => {
+				if (
+					copyFromScenarioId &&
+					!db.query('SELECT 1 FROM budget_scenarios WHERE id=?').get(copyFromScenarioId)
+				)
+					throw new Error('Source scenario not found');
 				if (scenario.isActive) db.prepare('UPDATE budget_scenarios SET is_active = 0').run();
 				stmt.run(
 					id,
@@ -34,18 +40,24 @@ export class ScenariosRepository {
 					now,
 					now,
 				);
+				if (copyFromScenarioId) {
+					const sourceBudgets = db
+						.query('SELECT id FROM budgets WHERE scenario_id=?')
+						.all(copyFromScenarioId) as { id: string }[];
+					for (const source of sourceBudgets) {
+						const budgetId = crypto.randomUUID();
+						db.query(
+							`INSERT INTO budgets(id,name,description,category_id,amount,currency,period,start_date,end_date,is_active,alert_thresholds,scenario_id,created_at,updated_at)
+                          SELECT ?,name || ' (Copy)',description,category_id,amount,currency,period,start_date,end_date,is_active,alert_thresholds,?,?,? FROM budgets WHERE id=?`,
+						).run(budgetId, id, now, now, source.id);
+						db.query(
+							'INSERT INTO budget_cycle_settings(budget_id,payday,rollover) SELECT ?,payday,rollover FROM budget_cycle_settings WHERE budget_id=?',
+						).run(budgetId, source.id);
+					}
+				}
 			})();
 
-			return {
-				id,
-				name: scenario.name,
-				description: scenario.description,
-				isActive: scenario.isActive,
-				budgets: [],
-				totalBudgeted: 0,
-				createdAt: new Date(now),
-				updatedAt: new Date(now),
-			};
+			return (await this.findBudgetScenarioById(id))!;
 		} catch (error) {
 			throw new DatabaseConnectionError(
 				DatabaseErrorType.TRANSACTION_FAILED,

@@ -111,6 +111,7 @@ export interface TransactionRepository {
 	// Budget scenario management
 	createBudgetScenario(
 		scenario: Omit<BudgetScenario, 'id' | 'budgets' | 'totalBudgeted' | 'createdAt' | 'updatedAt'>,
+		copyFromScenarioId?: string,
 	): Promise<BudgetScenario>;
 	findAllBudgetScenarios(): Promise<BudgetScenario[]>;
 	findBudgetScenarioById(id: string): Promise<BudgetScenario | null>;

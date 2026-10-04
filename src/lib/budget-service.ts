@@ -331,18 +331,10 @@ export class BudgetService {
 		copyFromScenarioId?: string,
 	): Promise<BudgetScenario> {
 		try {
-			const scenario = await this.repository.createBudgetScenario({
-				name,
-				description,
-				isActive: false, // New scenarios start inactive
-			});
-
-			// Copy budgets from existing scenario if requested
-			if (copyFromScenarioId) {
-				await this.copyBudgetsToScenario(copyFromScenarioId, scenario.id);
-			}
-
-			return scenario;
+			return await this.repository.createBudgetScenario(
+				{ name, description, isActive: false },
+				copyFromScenarioId,
+			);
 		} catch (error) {
 			throw new Error(
 				`Failed to create budget scenario: ${
@@ -403,38 +395,6 @@ export class BudgetService {
 			await this.createInitialAlerts(budget);
 		} catch (error) {
 			console.warn(`Failed to update alerts for budget ${budget.id}:`, error);
-		}
-	}
-
-	/**
-	 * Copy budgets from one scenario to another
-	 */
-	private async copyBudgetsToScenario(
-		sourceScenarioId: string,
-		targetScenarioId: string,
-	): Promise<void> {
-		try {
-			const sourceBudgets = await this.repository.findBudgetsByScenario(sourceScenarioId);
-
-			const copyPromises = sourceBudgets.map((budget) =>
-				this.repository.createBudget({
-					name: `${budget.name} (Copy)`,
-					description: budget.description,
-					categoryId: budget.categoryId,
-					amount: budget.amount,
-					currency: budget.currency,
-					period: budget.period,
-					startDate: budget.startDate,
-					endDate: budget.endDate,
-					isActive: budget.isActive,
-					alertThresholds: budget.alertThresholds,
-					scenarioId: targetScenarioId,
-				}),
-			);
-
-			await Promise.all(copyPromises);
-		} catch (error) {
-			console.warn(`Failed to copy budgets to scenario ${targetScenarioId}:`, error);
 		}
 	}
 }
