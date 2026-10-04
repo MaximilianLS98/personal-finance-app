@@ -1,5 +1,6 @@
 'use client';
 
+import { BaseColorProvider } from './base-color-provider';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { ThemeProvider as NextThemesProvider } from 'next-themes';
@@ -93,7 +94,9 @@ export function Providers({ children }: ProvidersProps) {
 				disableTransitionOnChange
 				storageKey='pf-theme'
 			>
-				<CurrencyContext.Provider value={currencyValue}>{children}</CurrencyContext.Provider>
+				<BaseColorProvider>
+					<CurrencyContext.Provider value={currencyValue}>{children}</CurrencyContext.Provider>
+				</BaseColorProvider>
 				<ReactQueryDevtools initialIsOpen={false} />
 			</NextThemesProvider>
 		</QueryClientProvider>

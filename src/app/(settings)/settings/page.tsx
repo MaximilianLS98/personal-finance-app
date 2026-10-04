@@ -15,13 +15,8 @@ import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
-// Extensible registry for base color themes. Keys should map to CSS var sets in globals.css
-const BASE_COLOR_THEMES = [
-	{ key: 'neutral', label: 'Neutral' },
-	{ key: 'tangerine', label: 'Tangerine' },
-	{ key: 'candy', label: 'Candy' },
-	{ key: 'soft-pop', label: 'Soft Pop' },
-] as const;
+import { BASE_COLOR_THEMES } from '@/lib/base-color';
+import { useBaseColor } from '@/app/base-color-provider';
 
 const CURRENCIES = [
 	{ code: 'NOK', label: 'Norwegian Krone (NOK)' },
@@ -30,32 +25,13 @@ const CURRENCIES = [
 	{ code: 'GBP', label: 'British Pound (GBP)' },
 ] as const;
 
-const THEME_STORAGE_KEY = 'pf-base-color';
-
 export default function SettingsPage() {
 	const { theme, setTheme, resolvedTheme } = useTheme();
 	const { currency, setCurrency } = useCurrencySettings();
 
 	const [mounted, setMounted] = useState(false);
-	const [baseColor, setBaseColor] = useState('neutral');
-	useEffect(() => {
-		try {
-			const saved = localStorage.getItem(THEME_STORAGE_KEY);
-			if (BASE_COLOR_THEMES.some((item) => item.key === saved)) setBaseColor(saved!);
-		} catch {
-			/* Keep the default when storage is unavailable. */
-		}
-		setMounted(true);
-	}, []);
-	useEffect(() => {
-		if (!mounted) return;
-		document.documentElement.setAttribute('data-theme', baseColor);
-		try {
-			localStorage.setItem(THEME_STORAGE_KEY, baseColor);
-		} catch {
-			/* Session-only preference. */
-		}
-	}, [baseColor, mounted]);
+	const { baseColor, setBaseColor } = useBaseColor();
+	useEffect(() => setMounted(true), []);
 
 	return (
 		<div className='container mx-auto max-w-4xl space-y-6 p-4'>
