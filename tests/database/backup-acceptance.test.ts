@@ -1,3 +1,4 @@
+import { setTransferClassification } from '../../src/lib/transfer-classification';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { SQLiteConnectionManager } from '../../src/lib/database/connection';
 import { SQLiteTransactionRepository } from '../../src/lib/database/repository';
@@ -107,6 +108,7 @@ async function seedEveryFeature() {
 	const purchase = rows.find((row) => row.description === 'Synthetic purchase')!;
 	const refund = rows.find((row) => row.description === 'Synthetic refund')!;
 	const coffee = rows.find((row) => row.description === 'Synthetic coffee')!;
+	setTransferClassification(db, { id: coffee.id, decision: 'cashflow', remember: true });
 	const reviewed = applyReview(db, {
 		ids: [coffee.id],
 		categoryId: 'cat_dining',
@@ -231,6 +233,8 @@ describe('complete feature backup acceptance', () => {
 			'accounts',
 			'import_batches',
 			'transfer_matches',
+			'transfer_rules',
+			'transfer_decisions',
 			'transactions',
 			'categories',
 			'category_rules',
@@ -252,7 +256,7 @@ describe('complete feature backup acceptance', () => {
 		];
 		expect(Object.keys(backup.tables).sort()).toEqual(requiredTables.sort());
 		for (const table of requiredTables) expect(backup.tables[table].rows.length).toBeGreaterThan(0);
-		expect(backup.schemaVersion).toBe(12);
+		expect(backup.schemaVersion).toBe(13);
 		const history = readSubscriptionHistory(db);
 		const before = {
 			accounts: listAccounts(db),

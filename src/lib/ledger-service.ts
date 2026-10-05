@@ -1,6 +1,12 @@
 import type { Database } from 'bun:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
 import Papa from 'papaparse';
+import {
+	classifyKnownTransfers,
+	suggestedClassification,
+	eligibleTransferSql,
+	recordTransferDecision,
+} from './transfer-classification';
 import { parseCSV, type ParseOptions } from './csv-parser';
 import { money, validCurrency } from './money';
 
@@ -169,9 +175,19 @@ function importRows(db: Database, content: string, options: ImportOptions) {
 				t.description,
 				t.amount,
 			) as { n: number };
-		// Description-only transfer guesses are presented as ordinary cash flows until both sides are matched.
+		const classification = suggestedClassification(db, {
+			...t,
+			date: t.date.toISOString(),
+			account_id: account.id,
+			currency,
+			category_id: null,
+			source_format: parsed.format,
+			source_type: parsed.sourceMetadata?.[index]?.type,
+			source_fee: parsed.sourceMetadata?.[index]?.fee,
+		});
 		return {
 			rowNumber: parsed.sourceRowNumbers[index],
+			classification,
 			source: parsed.sourceMetadata?.[index],
 			key,
 			duplicate: !!exact || occurrence <= legacy.n,
@@ -183,7 +199,12 @@ function importRows(db: Database, content: string, options: ImportOptions) {
 			transaction: {
 				...t,
 				currency,
-				type: t.amount >= 0 ? ('income' as const) : ('expense' as const),
+				type:
+					classification?.decision === 'transfer'
+						? ('transfer' as const)
+						: t.amount >= 0
+							? ('income' as const)
+							: ('expense' as const),
 			},
 		};
 	});
@@ -242,25 +263,44 @@ export function commitImport(
 			]),
 		);
 		const insert = db.query(
-			'INSERT INTO transactions(id,date,description,amount,type,currency,account_id,import_id,source_key,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+			'INSERT INTO transactions(id,date,description,amount,type,currency,account_id,import_id,source_key,created_at,updated_at,source_format,source_type,source_product,source_fee) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
 		);
 		for (const row of selected) {
 			const t = row.transaction;
+			const transactionId = randomUUID();
 			insert.run(
-				randomUUID(),
+				transactionId,
 				t.date.toISOString(),
 				t.description,
 				t.amount,
-				t.type,
+				t.amount < 0 ? 'expense' : 'income',
 				t.currency,
 				options.accountId,
 				id,
 				row.duplicate ? row.key + ':manual:' + randomUUID() : row.key,
 				now,
 				now,
+				preview.format ?? null,
+				row.source?.type ?? null,
+				row.source?.product ?? null,
+				row.source?.fee ?? null,
 			);
 		}
+		// Reimporting an overlapping statement can recover source evidence for old imports.
+		for (const row of preview.rows.filter((row) => row.duplicate && !exclude.has(row.rowNumber))) {
+			db.query(
+				'UPDATE transactions SET source_format=?,source_type=?,source_product=?,source_fee=? WHERE source_key=?',
+			).run(
+				preview.format ?? null,
+				row.source?.type ?? null,
+				row.source?.product ?? null,
+				row.source?.fee ?? null,
+				row.key,
+			);
+		}
+		const detection = detectTransfers(db);
 		return {
+			detection,
 			id,
 			created: selected.length,
 			skipped: preview.rows.length - selected.length + preview.skippedRows.length,
@@ -293,6 +333,9 @@ export function undoImport(db: Database, id: string) {
 	})();
 }
 interface TransferRow {
+	source_format: string | null;
+	source_type: string | null;
+	source_fee: number | null;
 	id: string;
 	date: string;
 	description: string;
@@ -305,7 +348,7 @@ interface TransferRow {
 export function transferCandidates(db: Database) {
 	const rows = db
 		.query(
-			`SELECT t.*,a.name AS account_name FROM transactions t JOIN accounts a ON a.id=t.account_id WHERE t.type!='transfer' AND NOT EXISTS(SELECT 1 FROM transfer_matches m WHERE t.id=m.incoming_id OR t.id=m.outgoing_id) ORDER BY t.date DESC`,
+			`SELECT t.*,a.name AS account_name FROM transactions t JOIN accounts a ON a.id=t.account_id WHERE t.type!='transfer' AND ${eligibleTransferSql} AND NOT EXISTS(SELECT 1 FROM transfer_decisions d WHERE d.transaction_id=t.id AND d.decision='cashflow') ORDER BY t.date DESC`,
 		)
 		.all() as TransferRow[];
 	return rows
@@ -318,11 +361,10 @@ export function transferCandidates(db: Database) {
 						t.account_id !== outgoing.account_id &&
 						t.currency === outgoing.currency &&
 						Math.abs(t.amount + outgoing.amount) < 0.005 &&
-						Math.abs(Date.parse(t.date) - Date.parse(outgoing.date)) <= 3 * 86400000,
+						transferDateDistance(t.date, outgoing.date) <= 3,
 				)
 				.map((incoming) => ({ outgoing, incoming })),
-		)
-		.slice(0, 200);
+		);
 }
 export function matchTransfer(db: Database, outgoingId: string, incomingId: string) {
 	return db.transaction(() => {
@@ -341,7 +383,7 @@ export function matchTransfer(db: Database, outgoingId: string, incomingId: stri
 			outgoing.amount >= 0 ||
 			incoming.amount <= 0 ||
 			Math.abs(outgoing.amount + incoming.amount) > 0.005 ||
-			Math.abs(Date.parse(outgoing.date) - Date.parse(incoming.date)) > 3 * 86400000
+			transferDateDistance(outgoing.date, incoming.date) > 3
 		)
 			throw new Error(
 				'Select equal opposite payments in different accounts in the same currency within three days',
@@ -371,7 +413,7 @@ export function matchTransfer(db: Database, outgoingId: string, incomingId: stri
 		return { id };
 	})();
 }
-export function unmatchTransfer(db: Database, id: string) {
+export function unmatchTransfer(db: Database, id: string, reject = false) {
 	return db.transaction(() => {
 		const p = db.query('SELECT * FROM transfer_matches WHERE id=?').get(id) as {
 			outgoing_id: string;
@@ -381,6 +423,16 @@ export function unmatchTransfer(db: Database, id: string) {
 		} | null;
 		if (!p) throw new Error('Transfer not found');
 		db.query('DELETE FROM transfer_matches WHERE id=?').run(id);
+		if (reject)
+			for (const transactionId of [p.outgoing_id, p.incoming_id]) {
+				recordTransferDecision(
+					db,
+					transactionId,
+					'cashflow',
+					'manual',
+					'You unmatched this transfer; automatic matching is disabled for this transaction',
+				);
+			}
 	})();
 }
 export function reconcileAccount(db: Database, id: string, asOf: string, statementBalance: number) {
@@ -407,4 +459,34 @@ export function reconcileAccount(db: Database, id: string, asOf: string, stateme
 		currency: account.currency,
 		asOf,
 	};
+}
+
+function transferDateDistance(a: string, b: string) {
+	return Math.abs(Date.parse(a.slice(0, 10)) - Date.parse(b.slice(0, 10))) / 86400000;
+}
+export function detectTransfers(db: Database) {
+	return db.transaction(() => {
+		const classified = classifyKnownTransfers(db);
+		const candidates = transferCandidates(db);
+		const occurrences = new Map<string, number>();
+		for (const pair of candidates)
+			for (const row of [pair.outgoing, pair.incoming])
+				occurrences.set(row.id, (occurrences.get(row.id) ?? 0) + 1);
+		let matched = 0;
+		for (const { outgoing, incoming } of candidates) {
+			// A shared amount is insufficient evidence. Only unambiguous bank top-ups qualify.
+			if (occurrences.get(outgoing.id) !== 1 || occurrences.get(incoming.id) !== 1) continue;
+			if (
+				!/^Revolut\*\*\d+\*$/i.test(outgoing.description) ||
+				!/^(?:Top-up by|Apple Pay deposit by) \*\d+$/i.test(incoming.description) ||
+				incoming.source_format !== 'revolut' ||
+				incoming.source_type !== 'Deposit' ||
+				incoming.source_fee !== 0
+			)
+				continue;
+			matchTransfer(db, outgoing.id, incoming.id);
+			matched++;
+		}
+		return { classified, matched };
+	})();
 }

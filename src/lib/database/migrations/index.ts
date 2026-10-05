@@ -24,6 +24,8 @@ import { migration011 } from './011_planning';
 
 import { migration012 } from './012_subscription_history';
 
+import { migration013 } from './013_transfer_classification';
+
 export const migrations: Migration[] = [
 	migration001,
 	migration002,
@@ -37,6 +39,7 @@ export const migrations: Migration[] = [
 	migration010,
 	migration011,
 	migration012,
+	migration013,
 ];
 
 /**

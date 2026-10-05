@@ -5,7 +5,7 @@ import { createFinanceBackup, validateFinanceBackup } from '../../src/lib/financ
 import { readSubscriptionHistory } from '../../src/lib/subscription-history';
 
 let db: Database;
-const versions = Array.from({ length: 12 }, (_, i) => i + 1);
+const versions = Array.from({ length: 13 }, (_, i) => i + 1);
 beforeEach(() => {
 	db = new Database(':memory:');
 	db.exec('PRAGMA foreign_keys=ON');
@@ -52,23 +52,23 @@ describe('migration registry and version-eight upgrade acceptance', () => {
 		expect(createFinanceBackup(db).tables).toEqual(first.tables);
 		expect(db.query('PRAGMA foreign_key_check').all()).toEqual([]);
 	});
-	it('upgrades populated version eight to twelve without losing records or guessing unknown currencies', async () => {
+	it('upgrades populated version eight to thirteen without losing records or guessing unknown currencies', async () => {
 		seedVersionEight();
 		const before = createFinanceBackup(db);
 		expect(before.schemaVersion).toBe(8);
 		const runner = new MigrationRunner(db);
 		expect(runner.getAppliedMigrations()).toEqual(versions.slice(0, 8));
-		expect(runner.getPendingMigrations().map((m) => m.version)).toEqual([9, 10, 11, 12]);
+		expect(runner.getPendingMigrations().map((m) => m.version)).toEqual([9, 10, 11, 12, 13]);
 		await runner.runPendingMigrations();
 		const after = createFinanceBackup(db);
-		expect(after.schemaVersion).toBe(12);
+		expect(after.schemaVersion).toBe(13);
 		for (const [name, table] of Object.entries(before.tables)) {
 			const afterTable = after.tables[name];
 			const positions = table.columns.map((column) => afterTable.columns.indexOf(column));
 			const oldColumnsAfter = afterTable.rows.map((row) =>
 				positions.map((position) => row[position]),
 			);
-			// Existing metadata records are also preserved while versions 9–12 are appended.
+			// Existing metadata records are also preserved while versions 9–13 are appended.
 			expect(oldColumnsAfter).toEqual(expect.arrayContaining(table.rows));
 			if (name !== 'schema_metadata') expect(afterTable.rows.length).toBe(table.rows.length);
 		}

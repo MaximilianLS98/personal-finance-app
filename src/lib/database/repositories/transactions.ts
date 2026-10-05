@@ -3,6 +3,7 @@ import { DatabaseConnectionError } from '../connection';
 import type { RepositoryContext } from '../repository-context';
 import type { CreateManyResult, DuplicateInfo, PaginatedResult, PaginationOptions } from '../types';
 import { DatabaseErrorType } from '../types';
+import { recordTransferDecision } from '../../transfer-classification';
 
 export class TransactionsRepository {
 	constructor(private readonly context: RepositoryContext) {}
@@ -579,7 +580,7 @@ export class TransactionsRepository {
 
 			// Build dynamic update query based on provided fields
 			const updateFields = [];
-			const params = [];
+			const params: (string | number | null)[] = [];
 
 			if (updates.date !== undefined) {
 				updateFields.push('date = ?');
@@ -615,7 +616,18 @@ export class TransactionsRepository {
 				WHERE id = ?
 			`);
 
-			stmt.run(...params);
+			db.transaction(() => {
+				stmt.run(...params);
+				if (updates.type !== undefined) {
+					recordTransferDecision(
+						db,
+						id,
+						updates.type === 'transfer' ? 'transfer' : 'cashflow',
+						'manual',
+						'Your explicit transaction type edit',
+					);
+				}
+			})();
 
 			// Return the updated transaction
 			return await this.findById(id);
