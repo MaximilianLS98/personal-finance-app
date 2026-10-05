@@ -6,7 +6,7 @@ Only `COMPLETED` rows are eligible. Pending, reverted, declined, failed, and can
 
 A statement containing several products must be imported one product at a time into separate accounts, such as Current, Savings, and Pocket. Choose the product and preview again. Other products are listed as excluded rows for that batch. Currency must match the selected account; use separate currency exports/accounts rather than relabeling amounts.
 
-The ledger date is **Completed Date**, including its time. Explicit timezone offsets are honored. When the CSV has no timezone, its clock is stored without applying the computer's local timezone; no original timezone is inferred. Started Date, source Type, Product, Amount, and Fee inform the preview and duplicate identity. Imported descriptions stay unchanged. Source `Transfer` labels alone do not establish that both accounts belong to you; use Accounts to match the two sides of your own transfers.
+The ledger date is **Completed Date**, including its time. Explicit timezone offsets are honored. When the CSV has no timezone, its clock is stored without applying the computer's local timezone; no original timezone is inferred. Started Date, source Type, Product, Amount, and Fee inform the preview and duplicate identity. Imported descriptions stay unchanged. Explicit pocket movements and fee-free currency exchanges are excluded from income and spending automatically. Recognizable, unambiguous bank top-ups are matched across accounts. Source `Transfer` labels alone do not exclude payments to other people. See [transfer detection and remembered rules](transfers.md) for manual controls and older imports.
 
 ## Fees
 
