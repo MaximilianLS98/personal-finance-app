@@ -15,6 +15,7 @@ import { useCategoriesQuery } from '@/lib/queries';
 import { invalidateFinanceQueries } from '@/lib/query-keys';
 import { currencyCode, displayMoney } from '@/lib/money';
 import type { transactionDetails } from '@/lib/transaction-ledger';
+import TransferClassification from './TransferClassification';
 
 type Details = ReturnType<typeof transactionDetails>;
 export async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
@@ -73,9 +74,9 @@ export default function TransactionDetails({ id }: { id: string }) {
 			</DialogTrigger>
 			<DialogContent className='max-h-[85vh] overflow-y-auto'>
 				<DialogHeader>
-					<DialogTitle>Purchase details</DialogTitle>
+					<DialogTitle>Transaction details</DialogTitle>
 					<DialogDescription>
-						Split expenses or link a refund or reimbursement to its purchase.
+						Manage transfers, split expenses or link a refund to its purchase.
 					</DialogDescription>
 				</DialogHeader>
 				{query.isPending ? (
@@ -89,6 +90,7 @@ export default function TransactionDetails({ id }: { id: string }) {
 								{data.transaction.description} ·{' '}
 								{displayMoney(data.transaction.amount, currencyCode(data.transaction.currency))}
 							</p>
+							<TransferClassification details={data} />
 							{data.transaction.type === 'expense' && (
 								<>
 									<h3 className='font-semibold'>Category split</h3>

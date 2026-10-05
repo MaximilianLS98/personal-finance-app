@@ -2,6 +2,7 @@ import type { Database } from 'bun:sqlite';
 import { financeDb } from './finance-db';
 import { currencyCode } from './money';
 import type { Transaction } from './types';
+import { transferDecision } from './transfer-classification';
 
 export interface LedgerRow {
 	id: string;
@@ -107,6 +108,15 @@ export function transactionDetails(db: Database, id: string) {
 	if (!transaction) throw new Error('Transaction not found');
 	return {
 		transaction,
+		account: transaction.account_id
+			? (db.query('SELECT name FROM accounts WHERE id=?').get(transaction.account_id) as {
+					name: string;
+				} | null)
+			: null,
+		transferDecision: transferDecision(db, id),
+		transferMatch: db
+			.query('SELECT id FROM transfer_matches WHERE outgoing_id=? OR incoming_id=?')
+			.get(id, id) as { id: string } | null,
 		allocations: db
 			.query(
 				'SELECT category_id categoryId,amount FROM transaction_allocations WHERE transaction_id=?',

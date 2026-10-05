@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import Link from 'next/link';
+import type { listTransferRules } from '@/lib/transfer-classification';
 type Transfer = {
 	id: string;
 	description: string;
@@ -19,6 +20,7 @@ type Transfer = {
 	currency: string;
 };
 type Transfers = {
+	rules: ReturnType<typeof listTransferRules>;
 	candidates: { outgoing: Transfer; incoming: Transfer }[];
 	matches: {
 		id: string;
@@ -34,7 +36,7 @@ export default function AccountsPage() {
 		queryKey: ['accounts'],
 		queryFn: () => getJson<Account[]>('/api/accounts'),
 	});
-	const { data: transfers } = useQuery({
+	const { data: transfers, error: transferError } = useQuery({
 		queryKey: ['transfers'],
 		queryFn: () => getJson<Transfers>('/api/transfers'),
 	});
@@ -49,6 +51,7 @@ export default function AccountsPage() {
 	const [reconcileId, setReconcileId] = useState(''),
 		[asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10)),
 		[statement, setStatement] = useState('');
+	const [detectionResult, setDetectionResult] = useState('');
 	async function act(fn: () => Promise<unknown>) {
 		setError('');
 		setBusy(true);
@@ -89,6 +92,52 @@ export default function AccountsPage() {
 					</Card>
 				))}
 			</div>
+			<Card>
+				<CardHeader>
+					<CardTitle>Transfer detection</CardTitle>
+				</CardHeader>
+				<CardContent className='space-y-3'>
+					<p className='text-sm text-muted-foreground'>
+						New imports automatically exclude recognized Revolut pocket movements and fee-free
+						currency exchanges, apply your saved rules, and match unambiguous bank top-ups. Run
+						detection to check existing history.
+					</p>
+					<p className='text-sm'>
+						For other transfers, open{' '}
+						<Link className='underline' href='/transactions'>
+							Transactions → Details
+						</Link>{' '}
+						to exclude a payment and remember the choice. You can also choose to count it as income
+						or spending.
+					</p>
+					<Button
+						disabled={busy}
+						onClick={() =>
+							act(async () => {
+								const r = await postJson<{ classified: number; matched: number }, unknown>(
+									'/api/transfers',
+									{ action: 'detect' },
+								);
+								setDetectionResult(
+									`${r.classified} transactions classified; ${r.matched} transfer pairs matched. Individual overrides were preserved.`,
+								);
+							})
+						}
+					>
+						Detect transfers in existing history
+					</Button>
+					{detectionResult && (
+						<p role='status' className='text-sm'>
+							{detectionResult}
+						</p>
+					)}
+					{transferError && (
+						<p role='alert' className='text-destructive'>
+							{transferError.message}
+						</p>
+					)}
+				</CardContent>
+			</Card>
 			<Card>
 				<CardHeader>
 					<CardTitle>Add account</CardTitle>
@@ -242,6 +291,10 @@ export default function AccountsPage() {
 									{p.outgoing.date.slice(0, 10)} · {p.outgoing.description} ·{' '}
 									{displayMoney(-p.outgoing.amount, p.outgoing.currency)}
 								</p>
+								<p className='text-sm'>
+									{p.incoming.date.slice(0, 10)} · {p.incoming.description} ·{' '}
+									{displayMoney(p.incoming.amount, p.incoming.currency)}
+								</p>
 							</div>
 							<Button
 								disabled={busy}
@@ -290,6 +343,47 @@ export default function AccountsPage() {
 				</CardContent>
 			</Card>
 			<LegacyAssignment accounts={accounts} />
+			<Card>
+				<CardHeader>
+					<CardTitle>Remembered transfer rules</CardTitle>
+				</CardHeader>
+				<CardContent className='space-y-3'>
+					<p className='text-sm text-muted-foreground'>
+						Rules match the exact description, account, currency and direction. Removing a rule
+						stops future application; existing classifications can be changed in transaction
+						details.
+					</p>
+					{!transfers?.rules?.length && (
+						<p>No saved rules yet. Save one from transaction details.</p>
+					)}
+					{transfers?.rules?.map((rule) => (
+						<div key={rule.id} className='flex flex-wrap justify-between gap-3 border rounded p-3'>
+							<div>
+								<p>{rule.description}</p>
+								<p className='text-sm text-muted-foreground'>
+									{rule.account_name} · {rule.currency} ·{' '}
+									{rule.direction === 'in' ? 'Incoming' : 'Outgoing'} ·{' '}
+									{rule.decision === 'transfer' ? 'Exclude as transfer' : 'Count in totals'}
+								</p>
+							</div>
+							<Button
+								variant='outline'
+								disabled={busy}
+								onClick={() =>
+									act(() =>
+										deleteJson('/api/transfers', {
+											headers: { 'Content-Type': 'application/json' },
+											body: JSON.stringify({ action: 'rule', id: rule.id }),
+										}),
+									)
+								}
+							>
+								Remove rule
+							</Button>
+						</div>
+					))}
+				</CardContent>
+			</Card>
 		</div>
 	);
 }

@@ -21,6 +21,7 @@ type Preview = {
 	validRows: number;
 	rows: {
 		rowNumber: number;
+		classification?: { decision: string; reason: string } | null;
 		source?: { product: string; type: string; fee: number; originalAmount: number };
 		duplicate: boolean;
 		duplicateReason?: string;
@@ -84,7 +85,9 @@ export default function ImportWorkspace() {
 			const body = await response.json();
 			if (!response.ok) throw new Error(body.message);
 			if (commit) {
-				setMessage(`Imported ${body.created} transactions; skipped ${body.skipped}.`);
+				setMessage(
+					`Imported ${body.created} transactions; skipped ${body.skipped}.${body.detection ? ` Transfer detection: ${body.detection.classified} classifications, ${body.detection.matched} matched pairs.` : ''}`,
+				);
 				setPreview(null);
 				setFile(null);
 				await invalidateFinanceQueries(client);
@@ -392,6 +395,14 @@ export default function ImportWorkspace() {
 													</td>
 													<td className='p-2'>
 														{r.transaction.description}
+														{r.classification && (
+															<p className='text-xs font-medium'>
+																{r.classification.decision === 'transfer'
+																	? 'Excluded from income and spending'
+																	: 'Included in totals'}{' '}
+																· {r.classification.reason}
+															</p>
+														)}
 														{r.source && (
 															<p className='text-xs text-muted-foreground'>
 																{r.source.product} · {r.source.type} · Amount{' '}
